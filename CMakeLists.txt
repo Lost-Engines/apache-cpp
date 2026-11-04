@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
-project(apache VERSION 0.1.0 LANGUAGES CXX)
+project(apache VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -7,6 +7,8 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 include(CTest)
 
 add_library(apache_core
+  src/audio/engine.cpp src/audio/engine.h
+  src/audio/effects.cpp src/audio/effects.h src/audio/stream.cpp src/audio/stream.h
   src/frontend/score_menu.cpp
   src/frontend/score_menu.h
   src/simulation/quick_start.h
@@ -234,17 +236,30 @@ target_compile_options(apache_core PRIVATE
 )
 
 include(cmake/dependencies.cmake)
+add_library(pcm_device STATIC src/platform/miniaudio_implementation.c)
+target_include_directories(pcm_device SYSTEM PUBLIC "${miniaudio_SOURCE_DIR}")
+target_compile_definitions(pcm_device PUBLIC MA_NO_ENGINE MA_NO_RESOURCE_MANAGER MA_NO_NODE_GRAPH MA_NO_ENCODING MA_NO_GENERATION MA_NO_DECODING MA_NO_NULL)
+target_link_libraries(pcm_device PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+if(UNIX)
+  target_link_libraries(pcm_device PRIVATE m)
+endif()
+if(APPLE)
+  set_source_files_properties(src/platform/miniaudio_implementation.c PROPERTIES LANGUAGE OBJC)
+endif()
+target_link_libraries(apache_core PUBLIC Threads::Threads)
 add_executable(apache
+  src/platform/audio_output.cpp
+  src/platform/audio_output.h
   src/main.cpp
   src/platform/key_map.cpp
   src/platform/key_map.h
   src/platform/window.cpp
   src/platform/window.h
 )
-target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL)
+target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL pcm_device)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
-add_executable(apache_inspect src/inspect_menu.cpp src/inspect_menu.h src/inspect_debrief.cpp src/inspect_debrief.h src/inspect_logbook.cpp src/inspect_logbook.h src/inspect_session.cpp src/inspect_session.h src/inspect_cameras.cpp src/inspect_cameras.h src/inspect_sensors.cpp src/inspect_sensors.h src/inspect_targeting.cpp src/inspect_targeting.h src/inspect_player_weapons.cpp src/inspect_controls.cpp src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h src/inspect_seekers.cpp src/inspect_seekers.h src/inspect_projectiles.cpp src/inspect_projectiles.h src/inspect_projectile_pool.cpp src/inspect_projectile_pool.h src/inspect_targets.cpp src/inspect_targets.h src/inspect_tracking.cpp src/inspect_tracking.h src/inspect_countermeasures.cpp src/inspect_countermeasures.h src/inspect_damage.cpp src/inspect_damage.h src/inspect_blasts.cpp src/inspect_blasts.h src/inspect_combat_effects.cpp src/inspect_combat_effects.h src/inspect_mission_combat.cpp src/inspect_mission_targets.cpp src/inspect_mission_spatial.cpp src/inspect_mission_radar.cpp src/inspect_mission_scenery.cpp src/inspect_combat_update.cpp src/inspect_war_grid.cpp src/inspect_battles.cpp src/inspect_patrol.cpp src/inspect_actor_targeting.cpp src/inspect_target_search.cpp src/inspect_actor_reactions.cpp src/inspect_actor_firing.cpp src/inspect_firing.cpp src/inspect_firing.h)
+add_executable(apache_inspect src/inspect_audio.cpp src/inspect_audio.h src/inspect_menu.cpp src/inspect_menu.h src/inspect_debrief.cpp src/inspect_debrief.h src/inspect_logbook.cpp src/inspect_logbook.h src/inspect_session.cpp src/inspect_session.h src/inspect_cameras.cpp src/inspect_cameras.h src/inspect_sensors.cpp src/inspect_sensors.h src/inspect_targeting.cpp src/inspect_targeting.h src/inspect_player_weapons.cpp src/inspect_controls.cpp src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h src/inspect_seekers.cpp src/inspect_seekers.h src/inspect_projectiles.cpp src/inspect_projectiles.h src/inspect_projectile_pool.cpp src/inspect_projectile_pool.h src/inspect_targets.cpp src/inspect_targets.h src/inspect_tracking.cpp src/inspect_tracking.h src/inspect_countermeasures.cpp src/inspect_countermeasures.h src/inspect_damage.cpp src/inspect_damage.h src/inspect_blasts.cpp src/inspect_blasts.h src/inspect_combat_effects.cpp src/inspect_combat_effects.h src/inspect_mission_combat.cpp src/inspect_mission_targets.cpp src/inspect_mission_spatial.cpp src/inspect_mission_radar.cpp src/inspect_mission_scenery.cpp src/inspect_combat_update.cpp src/inspect_war_grid.cpp src/inspect_battles.cpp src/inspect_patrol.cpp src/inspect_actor_targeting.cpp src/inspect_target_search.cpp src/inspect_actor_reactions.cpp src/inspect_actor_firing.cpp src/inspect_firing.cpp src/inspect_firing.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)

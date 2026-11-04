@@ -85,7 +85,7 @@ void mission_frontend::select(int const row) {
   selected = row == selected || row < 0 || static_cast<size_t>(row) >= listed.size() ? -1 : row;
   interface.named("_mission_selection_list").selected_line = selected;
   visible("_mission_select_background", selected >= 0); visible("_mission_selection_load_button", selected >= 0);
-  if(selected >= 0) { interface.named("_mission_selection_info_text").text = text(definitions[listed[static_cast<size_t>(selected)]], "Description"); interface.named("_mission_selection_info_text").start_line = 0; }
+  if(selected >= 0) { interface.named("_mission_selection_info_text").text = text(definitions[listed[static_cast<size_t>(selected)]], "Description"); interface.named("_mission_selection_info_text").start_line = 0; if(speak) speak(flow == 2 ? 10 : flow == 3 ? 6 : 3, flow, zone, static_cast<int>(pilot().campaign.level), selected + 1); }
 }
 void mission_frontend::prepare(int const id) {
   auto choice{options};
@@ -103,6 +103,7 @@ void mission_frontend::prepare(int const id) {
   interface.named("_map_briefing_subtitle_text").text = text(definition, "Description");
   interface.named("_map_briefing_subtitle_text").start_line = 0;
   subtitles(true); map(); interface.show("_map_screen");
+  if(flow == 4 && speak) speak(3, flow, zone, definition.level, id);
 }
 void mission_frontend::subtitles(bool const expanded) {
   int const height{expanded ? 210 : 50};
@@ -150,6 +151,7 @@ void mission_frontend::campaign(bool const fresh) {
   if(campaign_mission == -3) { pilot().victories[static_cast<size_t>(zone - 1)] = true; pilot().campaign = {}; }
   else if(campaign_mission == -2) pilot().campaign = {};
   logs.save(); interface.show("_situation_screen");
+  if(speak) speak(fresh ? 2 : campaign_mission == -3 ? 5 : campaign_mission == -2 || last_result == 2 ? 4 : 1, 4, zone, static_cast<int>(pilot().campaign.level), 0);
 }
 std::unique_ptr<mission_session> mission_frontend::takeoff() {
   if(!departing) return {};
@@ -201,6 +203,7 @@ void mission_frontend::log_result(bool const keep) {
 void mission_frontend::back() {
   if(interface.dismiss_popup()) return;
   auto const current{interface.current()};
+  if(stop_speech && (current == "_map_screen" || current == "_mission_select_screen" || current == "_situation_screen")) stop_speech();
   if(current == "_preferences_screen") {
     settings.save(); apply_preferences();
     if(first_launch) { first_launch = false; first_quick = true; invincible_quick = true; zone = preferences.zone; launch_quick(); return; }
@@ -252,7 +255,11 @@ bool mission_frontend::activate(widget &object, int const line) {
   else if(action == "notify_debrief_retry_mission_button_") { if(prepared) prepare(prepared->briefing.id); }
   else if(action == "notify_preferences_exit_" || action == "notify_promotion_exit_button_" || action == "notify_exit_log_screen_" || action == "notify_mission_select_exit_button_" || action == "notify_map_exit_button_" || action == "notify_debrief_exit_button_" || action == "notify_situation_exit_button_") back();
   else if(action == "notify_briefing_subtitle_min_max_button_") { auto const &area{interface.named("_map_briefing_subtitle_box").area}; subtitles(area.bottom - area.top < 51); }
-  else if(action == "notify_briefing_button_") visible("_map_briefing_subtitle_box", !(interface.named("_map_briefing_subtitle_box").flags & 1));
+  else if(action == "notify_briefing_button_") {
+    bool const show{!(interface.named("_map_briefing_subtitle_box").flags & 1)};
+    visible("_map_briefing_subtitle_box", show);
+    if(show && !result && prepared && speak && (!speech_playing || !speech_playing())) speak(flow == 2 ? 10 : flow == 3 ? 6 : 3, flow, zone, prepared->briefing.level, flow == 4 ? prepared->briefing.id : selected + 1);
+  }
   else return false;
   return true;
 }

@@ -25,6 +25,8 @@ class mission_session {
   uint32_t library_random{1};
   unsigned int keyboard_remainder{0};
   size_t frame_number{0};
+  int32_t next_radio{6000};
+  std::array<unsigned int, 54> radio_effects;
   int32_t last_delta{0};
   double frame_time{0.05};
   std::vector<uint16_t> commands;
@@ -54,6 +56,7 @@ public:
   bool paused{false}, finished{false}, night_vision{false};
   unsigned int accelerated_time{1};
   std::function<void(unsigned int, int32_t, int32_t)> play_sound;
+  std::function<void(simulation::flight_event)> flight_sound;
   mission_session(resources::data_store const &data, int mission_id, mission_options options = {});
   mission_session(resources::data_store const &data, resources::mission_briefing briefing, mission_options options = {});
   static resources::mission_briefing quick_start(resources::data_store const &data, int zone);

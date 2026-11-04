@@ -89,10 +89,24 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     auto const sample{next_random() % 3 + 1};
     if(play_sound) play_sound(sample, sound.volume, sound.pan);
   };
+  runtime.events.impact_sound = [this](bool heavy){
+    if(heavy) { auto const sample{next_random() % 3 + 1}; if(play_sound) play_sound(sample, 63, 32768); }
+    else if(play_sound) play_sound(6, 60, 32768);
+  };
+  resources::reader radio{runtime.executable.at(0x446960, radio_effects.size() * 4), "Radio effect choices"};
+  for(auto &id : radio_effects) id = radio.u32();
+  runtime.events.player_weapon_update = [this](){
+    if(briefing.flow != 2 && accelerated_time == 1 && runtime.timing.now >= next_radio) {
+      auto const id{radio_effects[static_cast<size_t>(runtime.weapon_random.next() % 54)]};
+      if(runtime.events.sound) runtime.events.sound(id, false);
+      next_radio = math::add(runtime.timing.now, runtime.weapon_random.next() % 6000);
+    }
+  };
   runtime.events.missile_camera = [this](size_t i){ views->context.latest_weapon = i; };
   runtime.events.flight = [this](simulation::flight_step_result const &result){
     if(result.landing) records.add({{12, 0, 0, 0, 0, result.landing->grade}});
     using enum simulation::flight_event;
+    for(auto event : result.events) { if(flight_sound) flight_sound(event); }
     for(auto event : result.events) switch(event) {
       case fuel_exhausted: communications.add("OUT OF FUEL", 3, 2000); break;
       case hover_on: communications.add("AUTO HOVER ON", 3, 600); break;

@@ -4,4 +4,4 @@ Apache C++ is part of the [Lost Engines](https://github.com/Lost-Engines) projec
 
 Original game binaries, installation media and audiovisual assets are not included. Supply an installation or extracted CD directory separately.
 
-The window presentation follows our TFX C++ and Darker C++ implementations. GLFW is licensed under the zlib/libpng licence; its copyright and licence remain with the dependency.
+The window presentation follows our TFX C++ and Darker C++ implementations. GLFW is licensed under the zlib/libpng licence. PCM playback uses miniaudio under its MIT licence. Their copyright notices and licences remain with the dependencies.

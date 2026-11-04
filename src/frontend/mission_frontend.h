@@ -34,6 +34,9 @@ class mission_frontend {
   void log_result(bool keep);
   bool activate(widget &object, int line);
 public:
+  std::function<void(int, int, int, int, int)> speak;
+  std::function<void()> stop_speech;
+  std::function<bool()> speech_playing;
   menu interface;
   mission_options options;
   configuration::settings settings;

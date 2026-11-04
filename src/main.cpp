@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 #include "frontend/mission_frontend.h"
+#include "audio/engine.h"
+#include "platform/audio_output.h"
 #include "frontend/mission_session.h"
 #include "platform/key_map.h"
 #include "platform/window.h"
@@ -36,6 +38,7 @@ int main(int const argc, char const *const argv[]) try {
   std::string capture;
   std::string pressed;
   unsigned int scale{0}, frame_limit{0};
+  bool no_audio{false};
   bool quick{false}, override_model{false}, override_detail{false}, override_video{false};
   int mission_id{0};
   apache::frontend::mission_options mission_options;
@@ -51,6 +54,7 @@ int main(int const argc, char const *const argv[]) try {
                    "  --data-dir DIRECTORY  Original installation or extracted CD contents\n"
                    "  --save-dir DIRECTORY  Pilot and preference storage\n"
                    "  --scale N             Integer scale, or 0 for automatic sizing\n"
+                   "  --no-audio            Disable the playback device\n"
                    "Development checks:\n"
                    "  --menu NAME           Select an original frontend screen\n"
                    "  --capture FILE.ppm    Render one menu frame without opening a window\n"
@@ -72,6 +76,7 @@ int main(int const argc, char const *const argv[]) try {
     else if(key == "--menu") selected_menu = "_" + std::string{value()} + "_screen";
     else if(key == "--capture") capture = value();
     else if(key == "--press") pressed = value();
+    else if(key == "--no-audio") no_audio = true;
     else if(key == "--quick") quick = true;
     else if(key == "--mission") mission_id = static_cast<int>(number(value()));
     else if(key == "--realistic") { mission_options.arcade = false; override_model = true; }
@@ -106,6 +111,34 @@ int main(int const argc, char const *const argv[]) try {
   if(mission_id) mission = std::make_unique<apache::frontend::mission_session>(data, mission_id, frontend.options);
   if(!mission_id && selected_menu == "_main_screen" && !quick && pressed.empty()) frontend.startup();
   apache::platform::window window{scale};
+  std::unique_ptr<apache::audio::engine> sound;
+  std::unique_ptr<apache::platform::audio_output> audio_device;
+  if(!no_audio) {
+    sound = std::make_unique<apache::audio::engine>(data);
+    sound->configure(frontend.settings);
+    try {
+      audio_device = std::make_unique<apache::platform::audio_output>([](void *context, std::span<float> buffer) noexcept {
+        try { static_cast<apache::audio::engine*>(context)->render(buffer); }
+        catch(...) { std::ranges::fill(buffer, 0); }
+      }, sound.get());
+    } catch(std::exception const &error) { std::cerr << "Audio unavailable: " << error.what() << '\n'; sound.reset(); }
+  }
+  if(sound) {
+    frontend.speak = [&](int kind, int flow, int zone, int level, int id){ sound->speech(kind, flow, zone, level, id); };
+    frontend.stop_speech = [&](){ sound->stop_speech(); };
+    frontend.speech_playing = [&](){ return sound->speaking(); };
+  }
+  auto const connect_audio{[&](){
+    if(!sound || !mission) return;
+    sound->mission(true);
+    mission->play_sound = [&](auto id, auto volume, auto pan){ sound->play(id, volume, pan); };
+    mission->flight_sound = [&](auto event){ sound->flight(event); };
+    mission->runtime.events.sound = [&](auto id, bool cockpit){ sound->voice(id, cockpit); };
+    mission->runtime.events.launch_sound = [&](auto type){ sound->play(type + 8, 30); };
+    mission->runtime.events.incoming_sound = [&](){ sound->play(14, 30); };
+    mission->runtime.events.gun_sound = [&](bool active){ sound->gun(active); };
+  }};
+  connect_audio();
   events input;
   glfwSetWindowUserPointer(window.get(), &input);
   glfwSetKeyCallback(window.get(), [](GLFWwindow *const handle, int const key, int, int const action, int const modifiers){
@@ -132,8 +165,10 @@ int main(int const argc, char const *const argv[]) try {
       tick_fraction += std::chrono::duration<double>(now - previous_time).count() * 200; previous_time = now;
       auto const ticks{static_cast<unsigned int>(std::min(tick_fraction, 200.0))};
       if(ticks) { tick_fraction -= ticks; mission->step(ticks); mission->draw(); }
+      if(sound) sound->pause(mission->paused);
       window.present(mission->frame);
       if(mission->finished) {
+        if(sound) sound->mission(false);
         if(launched_from_menu) frontend.complete(std::move(mission));
         else { mission.reset(); menu.show("_main_screen"); }
         window.title("Apache C++");
@@ -160,10 +195,11 @@ int main(int const argc, char const *const argv[]) try {
       for(size_t i{0}; i != values.size(); ++i) if(axes && i < static_cast<size_t>(count)) values[i] = static_cast<int32_t>(std::lround((std::clamp(axes[i], -1.0f, 1.0f) + 1.0f) * 127.5f));
       frontend.preferences.calibration(values, hat && hats ? *hat : 0u);
     }
+    if(sound) sound->configure(frontend.settings);
     menu.render(frame);
     window.present(frame);
     if(auto launched{frontend.takeoff()}) {
-      mission = std::move(launched); launched_from_menu = true;
+      mission = std::move(launched); launched_from_menu = true; connect_audio();
       mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title);
       previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
     }

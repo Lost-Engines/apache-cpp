@@ -146,6 +146,7 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
   if(player_armament) { player_armament->synchronize_countermeasures(false); player_armament->warnings.begin(); }
   if(weapons) weapons->update({now, delta, dt, smoke_radius, smoke_lifetime, smoke_density});
   if(player_armament) { player_armament->synchronize_countermeasures(true); player_armament->finish_update(now); }
+  if(events.player_weapon_update) events.player_weapon_update();
   combat.update(); actors.synchronize_models();
   if(sensors && pilot && player_armament) { sensors->update(actors.units[*timing.player].object.world, pilot->readings().angles[0], spatial.mobile_id(*timing.player), player_armament->control_mode, pilot->faults()); synchronize_player_target(); }
   if(sensors && pilot) {

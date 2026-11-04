@@ -25,7 +25,7 @@ struct mission_runtime_events {
   std::function<void(bool)> impact_sound;
   std::function<void(unsigned int)> radar_toggle;
   std::function<void(unsigned int)> launch_sound;
-  std::function<void()> cycle_target, incoming_sound;
+  std::function<void()> cycle_target, incoming_sound, player_weapon_update;
   std::function<void(bool)> gun_sound;
   std::function<void(size_t, bool, std::string_view)> warning_message;
   std::function<void(size_t)> missile_camera;

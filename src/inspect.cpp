@@ -40,6 +40,7 @@
 #include "inspect_weapons.h"
 #include "inspect_navigation.h"
 #include "inspect_collisions.h"
+#include "inspect_seekers.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
 #include "simulation/actor_movement.h"
@@ -133,7 +134,9 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "collisions") {
+  if(command == "seekers") {
+    inspect_seekers(std::cin, std::cout, data);
+  } else if(command == "collisions") {
     inspect_collisions(std::cin, std::cout, data);
   } else if(command == "briefings") {
     if(argc != 4) throw std::runtime_error{"briefings requires a bundle resource"};

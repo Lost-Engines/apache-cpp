@@ -49,8 +49,9 @@ mission_runtime::mission_runtime(resources::data_store const &data, std::string 
   targets.additional_state = [this](uint32_t id){ mobile_target_state state; if(auto i{spatial.actor_index(id)}) state.damage = combat.attention[*i].damage; if(pilot) state.player_airspeed = pilot->readings().airspeed; return state; };
   if(armed) {
     mission_weapon_callbacks callbacks;
+    callbacks.incoming = [this](size_t round, unsigned int weapon, int32_t arrival){ if(player_armament) player_armament->warnings.incoming(round, weapon, arrival); };
     callbacks.launched = [this](size_t i, auto const &round){ if(events.launched) events.launched(i, round); };
-    callbacks.event = [this](size_t i, auto &round, auto const &info){ if(events.projectile) events.projectile(i, round, info); if(damage) damage->impact(round, info); };
+    callbacks.event = [this](size_t i, auto &round, auto const &info){ if(events.projectile) events.projectile(i, round, info); if(damage) damage->impact(round, info); if(player_armament && info.kind == projectile_event::removed) player_armament->removed(i, round.state.weapon); };
     weapons = std::make_unique<mission_weapons>(mission, actors, spatial, targets, combat, models, terrain, structures, mobiles, trig, tables, random, weapon_random, difficulty, callbacks);
   }
   if(hurt) {
@@ -66,7 +67,7 @@ mission_runtime::mission_runtime(resources::data_store const &data, std::string 
   actors.synchronize_models();
 }
 void mission_runtime::start_player(size_t const index, mission_flight_settings const &settings) {
-  player_damage.reset(); timing.player = index;
+  player_armament.reset(); player_damage.reset(); timing.player = index;
   pilot = std::make_unique<mission_flight>(mission, actors, spatial, models, terrain, trig, environment.surface, index, settings);
   combat.player_position = pilot->readings().position.position; combat.player_heading = pilot->readings().angles[0];
   if(damage) {
@@ -79,6 +80,24 @@ void mission_runtime::start_player(size_t const index, mission_flight_settings c
     callbacks.impact_sound = [this](bool heavy){ if(events.impact_sound) events.impact_sound(heavy); };
     player_damage = std::make_unique<mission_player_damage>(*pilot, actors, spatial, targets, combat, models, callbacks);
   }
+}
+void mission_runtime::equip_player(std::array<int32_t, 9> const &loadout) {
+  if(!pilot || !weapons || !timing.player) throw std::runtime_error{"Player armament requires a running player mission"};
+  player_armament_events callbacks;
+  callbacks.cockpit_sound = [this](unsigned int id){ if(events.sound) events.sound(id, true); };
+  callbacks.launch_sound = [this](unsigned int id){ if(events.launch_sound) events.launch_sound(id); };
+  callbacks.incoming_sound = [this](){ if(events.incoming_sound) events.incoming_sound(); };
+  callbacks.gun_sound = [this](bool active){ if(events.gun_sound) events.gun_sound(active); };
+  callbacks.warning_message = [this](size_t slot, bool added, std::string_view text){ if(events.warning_message) events.warning_message(slot, added, text); };
+  callbacks.cycle_target = [this](){ if(events.cycle_target) events.cycle_target(); };
+  callbacks.missile_camera = [this](size_t i){ if(events.missile_camera) events.missile_camera(i); };
+  player_armament = std::make_unique<mission_player_weapons>(*timing.player, actors, spatial, targets, combat, *weapons, *pilot, models, executable, trig, loadout, callbacks);
+  player_armament->inventory.infinite = mission.infinite_weapons;
+}
+bool mission_runtime::fire_player(int32_t const now, double const dt, uint16_t const key) {
+  if(!player_armament) return false;
+  combat.set_time(now, timing.delta, static_cast<uint32_t>(frame));
+  return player_armament->fire(now, dt, key);
 }
 void mission_runtime::advance(int32_t const now, int32_t const delta, flight_input const &input, std::function<unsigned int()> const &flight_random) {
   int32_t const elapsed{math::subtract(now, previous_time)};
@@ -102,7 +121,9 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
       }
     }
   }
+  if(player_armament) { player_armament->synchronize_countermeasures(false); player_armament->warnings.begin(); }
   if(weapons) weapons->update({now, delta, dt, 2048, 400, 2});
+  if(player_armament) { player_armament->synchronize_countermeasures(true); player_armament->finish_update(now); }
   combat.update(); actors.synchronize_models();
   if(damage) damage->marks.advance();
   if(weapons) weapons->visuals.advance(delta, terrain);

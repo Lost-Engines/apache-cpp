@@ -27,10 +27,11 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     if(t.kind == simulation::target_kind::fixed) { output << " -1"; for(auto v : target->position) output << ' ' << v; }
     else output << ' ' << identity(t) << " 0 0 0";
   }};
+  bool drawing{false};
   auto &events{runtime.events};
   events.fire = [&](size_t i){ output << "fire " << frame << ' ' << i; reference(combat.armaments[i].target.get()); output << '\n'; };
   events.ground_fire = [&](auto const &source, auto const &target, unsigned int id){ output << "groundfire " << frame << ' ' << id; reference(&source); reference(&target); output << '\n'; };
-  events.sound = [&](unsigned int sound, bool cockpit){ output << "sound " << frame << ' ' << sound << ' ' << cockpit << '\n'; };
+  events.sound = [&](unsigned int sound, bool cockpit){ output << "sound " << (drawing && frame ? frame - 1 : frame) << ' ' << sound << ' ' << cockpit << '\n'; };
   events.message = [&](std::string_view text){ output << "message " << frame << ' ' << std::quoted(std::string{text}) << '\n'; };
   events.launched = [&](size_t i, auto const &round){ output << "launch " << frame << ' ' << i << ' ' << round.state.weapon << '\n'; };
   events.projectile = [&](size_t i, auto &, auto const &info){ output << "event " << frame << ' ' << i << ' ' << static_cast<unsigned int>(info.kind); for(auto v : info.position) output << ' ' << v; output << ' ' << (info.target ? identity(*info.target) : 0) << '\n'; };
@@ -39,7 +40,22 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
   events.collision = [&](auto const &id){ output << "collisionkill " << frame << ' ' << identity(id) << '\n'; };
   events.impact_sound = [&](bool heavy){ if(heavy) output << "explosion_sound " << frame << " 63 32768\n"; else output << "metal_sound " << frame << '\n'; };
   events.radar_toggle = [&](unsigned int value){ output << "radar-toggle " << frame << ' ' << value << '\n'; };
+  events.launch_sound = [&](unsigned int id){ output << "launch-sound " << frame << ' ' << id << '\n'; };
+  events.incoming_sound = [&](){ output << "incoming-sound " << frame << '\n'; };
+  events.gun_sound = [&](bool active){ output << "gun-sound " << frame << ' ' << active << '\n'; };
+  events.warning_message = [&](size_t slot, bool added, std::string_view text){ output << "incoming-message " << frame << ' ' << slot << ' ' << added << ' ' << std::quoted(std::string{text}) << '\n'; };
+  events.cycle_target = [&](){ output << "cycle-target " << frame << '\n'; };
+  events.missile_camera = [&](size_t index){ output << "missile-camera " << frame << ' ' << index << '\n'; };
   auto const snapshot{[&](){
+    if(runtime.player_armament) {
+      auto const &state{*runtime.player_armament}; auto const &inventory{state.inventory};
+      output << "armament " << inventory.current << ' ' << inventory.helmet_mode << ' ' << inventory.armed << ' ' << inventory.gun_fired;
+      for(auto const &p : inventory.pylons) output << ' ' << p.weapon << ' ' << p.ammunition;
+      for(auto v : inventory.ammunition) output << ' ' << v; for(auto v : inventory.selected) output << ' ' << v; for(auto v : inventory.deadlines) output << ' ' << v;
+      output << ' ' << state.impacts.entries.size(); for(auto const &v : state.impacts.entries) output << ' ' << v.round << ' ' << v.deadline;
+      auto const *mount{actors.units[*timing.player].object.children[0].get()}; auto const *barrel{mount ? mount->children[0].get() : nullptr};
+      output << ' ' << state.gun_fired_last << ' ' << (barrel && !barrel->children.empty() && barrel->children[0] ? barrel->children[0]->id : 0) << '\n';
+    }
     if(pilot) {
       if(check_collisions) output << "contact " << pilot->collision_model << ' ' << (pilot->hit_actor ? static_cast<int64_t>(*pilot->hit_actor) : -1) << '\n';
       auto const &readings{pilot->readings()}; output << "flight " << pilot->on_carrier() << ' ' << pilot->landed() << ' ' << pilot->death() << ' ' << (pilot->arcade.power.faults | pilot->realistic.dynamics.power.faults);
@@ -111,6 +127,14 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     else if(command == "pilot") {
       size_t index{0}; simulation::mission_flight_settings settings; input >> index >> settings.arcade >> settings.fuel >> settings.flow >> settings.faults; for(auto &id : settings.pods) input >> id;
       runtime.start_player(index, settings);
+    }
+    else if(command == "loadout") { std::array<int32_t, 9> loadout; for(auto &v : loadout) input >> v; runtime.equip_player(loadout); }
+    else if(command == "player-target") { size_t index{0}; input >> index; *runtime.player_armament->target = *spatial.targets.at(index); }
+    else if(command == "player-weapon") { input >> runtime.player_armament->inventory.current >> runtime.player_armament->inventory.armed; }
+    else if(command == "player-fire") { int32_t now{0}; double dt{0}; unsigned int key{0}; input >> now >> dt >> key; bool result{runtime.fire_player(now, dt, static_cast<uint16_t>(key))}; output << "player-fired " << frame << ' ' << result << '\n'; }
+    else if(command == "player-aim") {
+      int32_t now{0}, delta{0}, hydra{0}; input >> now >> delta >> hydra; auto &state{*runtime.player_armament}; for(auto &v : state.helmet) input >> v;
+      drawing = true; state.prepare(now, delta, hydra); drawing = false; output << "player-aim " << state.mounts.hydra_elevation << ' ' << state.mounts.hydras_locked << ' ' << state.sight.status << '\n';
     }
     else if(command == "player-damage-state") {
       if(!player_damage) throw std::runtime_error{"Player damage is not active"};

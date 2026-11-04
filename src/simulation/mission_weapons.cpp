@@ -38,6 +38,14 @@ void mission_weapons::launch(size_t const index) {
   rounds.launch(index, environment.now);
   if(events.launched) events.launched(index, rounds.at(index));
 }
+std::optional<size_t> mission_weapons::launch_player(projectile_request const &request, bool const untracked) {
+  auto const index{construct(request)};
+  if(index) { launch(*index); if(untracked) rounds.at(*index).state.body.motion.flags |= 4; }
+  return index;
+}
+bool mission_weapons::player_line_of_sight(target_reference const &source, target_reference const &target) const {
+  return line_reaches_target(targets.world.position(source), targets.world.position(target), source.identity, target.identity, terrain, scenery, mobiles, models, trig);
+}
 bool mission_weapons::fire(size_t const index) {
   auto &actor{actors.units.at(index)}; auto &armament{combat.armaments.at(index)};
   if(!armament.target) return false;
@@ -70,19 +78,19 @@ bool mission_weapons::decoy(size_t const index, unsigned int const id) {
   *decoys[index].targets[id - 7] = target_reference{{target_kind::mobile, 0, *rounds.at(*round).mobile}, {}, 0};
   return true;
 }
-void mission_weapons::incoming(projectile_record &round) {
+void mission_weapons::incoming(size_t const round_index, projectile_record &round) {
   auto const *target{adjusted_projectile_target(round, targets.world, {})};
   if(!target || target->identity.kind != target_kind::mobile) return;
   auto const index{spatial.actor_index(target->identity.index)}; if(!index) return;
   auto &actor{actors.units[*index]}; auto &decoys{this->decoys[*index]};
   countermeasure_actor state{static_cast<int32_t>(actor.classification), spatial.player == index, actor.object.world.position, actor.conditions, actor.random, actor.retreat_until, decoys.deadlines[0], decoys.deadlines[1]};
-  countermeasure_callbacks callbacks; callbacks.launch = [&](unsigned int id){ return decoy(*index, id); }; callbacks.warning = events.incoming;
+  countermeasure_callbacks callbacks; callbacks.launch = [&](unsigned int id){ return decoy(*index, id); }; callbacks.warning = [&](int32_t arrival){ if(events.incoming) events.incoming(round_index, round.state.weapon, arrival); };
   notify_incoming_missile(state, player_countermeasures, weapons.at(round.state.weapon), round.state.body.pose.position, round.state.body.motion.speed, environment.now, tables.skill(difficulty), war_random.global_seed, callbacks);
   actor.conditions = state.conditions; actor.random = state.random; actor.retreat_until = state.retreat_until; decoys.deadlines = {state.chaff_at, state.flare_at};
 }
 void mission_weapons::event(size_t const index, projectile_record &round, projectile_event_info const &info) {
   if(events.event) events.event(index, round, info);
-  if(info.kind == projectile_event::notify) incoming(round);
+  if(info.kind == projectile_event::notify) incoming(index, round);
   if(info.kind == projectile_event::removed && round.source.identity.kind == target_kind::mobile) if(auto actor{spatial.actor_index(round.source.identity.index)}) {
     auto &state{decoys[*actor]}; auto const id{round.state.weapon};
     if((id == 7 || id == 8) && round.mobile && state.targets[id - 7]->identity.kind == target_kind::mobile && state.targets[id - 7]->identity.index == *round.mobile) { *state.targets[id - 7] = {}; state.deadlines[id - 7] = 0; }

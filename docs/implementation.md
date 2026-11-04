@@ -60,6 +60,7 @@ Current implementation:
 - Player construction, shared flight/AI position, carrier takeoff and landing, collision response and carrier slot reservations.
 - Shared mission update runtime with live flight, AI, projectiles, combat damage and player subsystem failures.
 - Original keyboard ramps and view routing, control-device configuration and calibrated joystick response.
+- Player weapon selection and safing, rack ammunition and launch transforms, gun/Hydra aiming, lock indications, missile impact estimates, muzzle flash and incoming-missile warnings.
 
 Validation completed:
 
@@ -193,7 +194,13 @@ Validation completed:
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: connect player weapons and live sensors, bring the shared mission runtime into the frontend, and complete campaign interaction, audio and persistence. Full journey tests and CI follow once the game is connected.
+- Player weapon control matches 12,000 original cases and 679,852 fields, including allocation failures, empty stores, alternating pylons and cooperative input routing.
+- Player racks, chain-gun aiming, Hydra elevation and all eight launch transforms match 6,000 original cases and 768,000 fields. Firing solutions and the impact-time queue match another 10,000 cases and 26,039 fields.
+- Incoming missile warnings match 1,500 frames, 8,369 notifications and 139,352 fields, including original message ordering and sound transitions.
+- Eight connected player-firing traces match 3,047,894 fields over 3,200 mission updates. They include 1,326 player-launched rounds, live guidance, rack depletion, gun flash/sound transitions, impact estimates, collision, combat damage and player subsystem faults. Target choice, missile-camera selection, random radio chatter and frontend/debrief handling remain boundaries in this suite.
+- All player weapon, mount, firing-solution, warning and connected launch comparisons pass in normal and AddressSanitizer/UndefinedBehaviorSanitizer builds. Reports live in the sibling analysis workspace under `analysis/checks/cpp/player-{weapons,mounts,sight,warnings,launches}` and their `-sanitize` directories.
+
+Next: connect live sensors, bring the shared mission runtime into the frontend, and complete campaign interaction, audio and persistence. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

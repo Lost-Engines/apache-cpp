@@ -8,7 +8,7 @@ struct mission_weapon_callbacks {
   std::function<void(size_t, projectile_record const &)> launched;
   std::function<void(size_t, projectile_record &, projectile_event_info const &)> event;
   std::function<void()> bomb_released;
-  std::function<void(int32_t)> incoming;
+  std::function<void(size_t, unsigned int, int32_t)> incoming;
 };
 struct actor_decoys {
   std::array<int32_t, 2> deadlines{};
@@ -36,7 +36,7 @@ class mission_weapons {
   void launch(size_t index);
   void event(size_t index, projectile_record &round, projectile_event_info const &event);
   bool decoy(size_t actor, unsigned int weapon);
-  void incoming(projectile_record &round);
+  void incoming(size_t index, projectile_record &round);
 public:
   tracking_environment environment;
   bool night{false};
@@ -48,6 +48,8 @@ public:
   ~mission_weapons();
   mission_weapons(mission_weapons const &) = delete;
   mission_weapons &operator=(mission_weapons const &) = delete;
+  std::optional<size_t> launch_player(projectile_request const &request, bool untracked);
+  bool player_line_of_sight(target_reference const &source, target_reference const &target) const;
   bool fire(size_t actor);
   firing_status fire_ground(target_reference const &source, target_reference const &target, unsigned int weapon);
   shared_target target_slot(uint32_t mobile, simulation::target_slot slot) const;

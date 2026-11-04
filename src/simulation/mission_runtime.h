@@ -2,6 +2,7 @@
 #include "mission_damage.h"
 #include "mission_flight.h"
 #include "mission_player_damage.h"
+#include "mission_player_weapons.h"
 #include "resources/features.h"
 
 namespace apache::simulation {
@@ -17,6 +18,11 @@ struct mission_runtime_events {
   std::function<void(explosion_audio const &)> explosion_sound;
   std::function<void(bool)> impact_sound;
   std::function<void(unsigned int)> radar_toggle;
+  std::function<void(unsigned int)> launch_sound;
+  std::function<void()> cycle_target, incoming_sound;
+  std::function<void(bool)> gun_sound;
+  std::function<void(size_t, bool, std::string_view)> warning_message;
+  std::function<void(size_t)> missile_camera;
   std::function<void(flight_step_result const &)> flight;
   std::function<void(landing_result const &)> landing;
 };
@@ -53,6 +59,7 @@ public:
   std::unique_ptr<mission_damage> damage;
   std::unique_ptr<mission_flight> pilot;
   std::unique_ptr<mission_player_damage> player_damage;
+  std::unique_ptr<mission_player_weapons> player_armament;
   movement_time timing;
   size_t frame{0};
   bool check_collisions{true}, subdivide_flight{true};
@@ -61,6 +68,8 @@ public:
   mission_runtime(mission_runtime const &) = delete;
   mission_runtime &operator=(mission_runtime const &) = delete;
   void start_player(size_t index, mission_flight_settings const &settings);
+  void equip_player(std::array<int32_t, 9> const &loadout);
+  bool fire_player(int32_t now, double dt, uint16_t key);
   void advance(int32_t now, int32_t delta, flight_input const &input, std::function<unsigned int()> const &flight_random);
 };
 } // namespace apache::simulation

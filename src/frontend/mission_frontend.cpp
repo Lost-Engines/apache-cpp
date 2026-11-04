@@ -30,6 +30,7 @@ mission_frontend::mission_frontend(resources::data_store const &data, mission_op
   : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, planner{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings} {
   interface.link_scroll("_map_briefing_subtitle_text", "_map_briefing_subtitle_scrollbar");
   interface.link_scroll("_situation_text", "_situation_scroll_bar");
+  interface.number_changed = [this](widget &object, bool final){ planner.number_changed(object, final); };
   interface.finish = [this](render::framebuffer &target){ planner.finish(target); };
   interface.pointer = [this](widget &object, pointer_action action, int x, int y){ return prepared && planner.pointer(object, action, x, y); };
   interface.activated = [this](widget &object, int line){ return activate(object, line); };
@@ -142,7 +143,12 @@ void mission_frontend::campaign(bool const fresh) {
 }
 std::unique_ptr<mission_session> mission_frontend::takeoff() {
   if(!departing) return {};
-  departing = false; planner.close(); return std::move(prepared);
+  departing = false;
+  if(prepared && planner.editor.modified) {
+    auto const definition{prepared->runtime.mission}; auto const briefing{prepared->briefing}; auto const choice{prepared->launch_options()};
+    planner.close(); prepared = std::make_unique<mission_session>(data, briefing, choice, &definition);
+  }
+  planner.close(); return std::move(prepared);
 }
 void mission_frontend::complete(std::unique_ptr<mission_session> mission) {
   if(mission->briefing.flow == 1) {

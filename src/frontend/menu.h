@@ -8,6 +8,7 @@
 #include <vector>
 #include "render/framebuffer.h"
 #include "render/menu_font.h"
+#include "render/instrument_font.h"
 #include "resources/data_store.h"
 #include "widget.h"
 
@@ -16,6 +17,13 @@ enum class pointer_action { move, left_down, left_up, right_down, right_up };
 class menu {
   resources::data_store const &data;
   render::menu_font font;
+  render::instrument_font number_font;
+  int number_capture{-1}, number_click{3};
+  bool number_moved{false};
+  double number_clock{0};
+  int64_t number_repeat{0};
+  void number_push(size_t index, bool on);
+  void number_adjust(size_t index, int delta);
   std::vector<widget> widgets{initial_widgets()};
   std::map<std::string, resources::indexed_image, std::less<>> images;
   std::map<std::string, resources::indexed_image, std::less<>> sprites;
@@ -48,6 +56,8 @@ class menu {
 public:
   menu(resources::data_store const &data);
   std::function<bool(widget &, int)> activated;
+  std::function<void(widget &, bool)> number_changed;
+  void tick(double seconds);
   std::function<void(render::framebuffer &, widget const &)> paint;
   std::function<void(render::framebuffer &)> finish;
   std::function<bool(widget &, pointer_action, int, int)> pointer;

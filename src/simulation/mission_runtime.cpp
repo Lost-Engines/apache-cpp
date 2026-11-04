@@ -39,8 +39,8 @@ mission_combat_callbacks mission_runtime::combat_callbacks() {
 movement_callbacks mission_runtime::movement_events() {
   return {.check_air_target{[this](size_t i){ combat.check_air_lock(i); }}, .target{[this](size_t i){ return combat.movement_aim(i); }}, .kill{[this](size_t i){ combat.kill(i); }}, .fire_at_waypoint{[this](size_t i){ combat.fire_at_waypoint(i); }}, .place{[this](size_t i){ spatial.place(i); }}, .unplace{[this](size_t i){ spatial.unplace(i); }}, .weapon{[this](size_t i){ return combat.weapon(i); }}};
 }
-mission_runtime::mission_runtime(resources::data_store const &data, std::string const &zone, std::string const &path, bool const armed, bool const hurt, int const difficulty, mission_random_state const seeds)
-  : mission{load_mission(data, path)}, executable{data}, terrain{data.read(zone + ".WZ/GRIDPOST.BIN")}, models{load_models(data, executable)},
+mission_runtime::mission_runtime(resources::data_store const &data, std::string const &zone, std::string const &path, bool const armed, bool const hurt, int const difficulty, mission_random_state const seeds, resources::mission_definition const *edited)
+  : mission{edited ? *edited : load_mission(data, path)}, executable{data}, terrain{data.read(zone + ".WZ/GRIDPOST.BIN")}, models{load_models(data, executable)},
     scene{mission, resources::read_scenery(data.read(zone + ".WZ/GNDOBJS.BIN")), terrain, models, map_number(zone)}, features{data, zone, false}, super_features{data, zone, true}, trig{data}, formations{resources::read_formations(executable)},
     environment{.height{[this](int32_t x, int32_t y){ return terrain.elevation(x, y); }}, .surface{[this](int32_t x, int32_t y){ return resources::surface_type(features, super_features, x, y); }}, .relocate{}},
     random{1, seeds.global}, actors{make_actors(map_number(zone))}, mobiles{models}, spatial{mission, scene, actors, mobiles, terrain}, structures{models, trig, scene.base, scene.extra},

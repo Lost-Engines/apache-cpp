@@ -2,6 +2,7 @@
 #include "frontend/map_routes.h"
 #include "frontend/map_layers.h"
 #include "frontend/map_camera.h"
+#include "frontend/map_editor.h"
 #include "frontend/mission_session.h"
 #include <fstream>
 #include <istream>
@@ -9,8 +10,34 @@
 #include <stdexcept>
 
 bool inspect_briefing(apache::resources::data_store const &data, std::string_view const command, std::istream &input, std::ostream &output, std::string_view const dump) {
-  if(command != "map-view" && command != "map-routes" && command != "map-overlay" && command != "map-camera") return false;
+  if(command != "map-view" && command != "map-routes" && command != "map-overlay" && command != "map-camera" && command != "map-editor") return false;
   apache::math::trigonometry trig{data}; apache::frontend::map_view view;
+  if(command == "map-editor") {
+    apache::resources::mission_task task; apache::frontend::map_editor editor; std::string operation;
+    while(input >> operation) {
+      if(operation == "init") {
+        size_t count; input >> count; if(count > 100) throw std::runtime_error{"Too many test groups"}; task.actors.resize(count);
+        for(auto &actor : task.actors) { input >> actor.start_time >> count; if(count > 40) throw std::runtime_error{"Too many test waypoints"}; actor.waypoints.resize(count); for(auto &p : actor.waypoints) { input >> p.type; for(auto &v : p.position) input >> v; input >> p.speed; } }
+        editor.attach(task, 0);
+      } else if(operation == "view") { input >> view.position.x >> view.position.y >> view.position.zoom >> view.position.rotation; }
+      else if(operation == "click" || operation == "drag") { int32_t x, y; input >> x >> y; if(operation == "click") editor.click(x, y, view, trig); else editor.drag(x, y, view.position.zoom); }
+      else if(operation == "select") { size_t number; input >> number; editor.select(number); }
+      else if(operation == "insert") editor.insert();
+      else if(operation == "erase") editor.erase();
+      else if(operation == "type") editor.cycle_type();
+      else if(operation == "position") { int32_t x, y, z; input >> x >> y >> z; editor.position(x, y, z); }
+      else if(operation == "speed" || operation == "time") { int32_t value; input >> value; if(operation == "speed") editor.speed(value); else editor.time(value); }
+      else throw std::runtime_error{"Unknown map editor operation"};
+      if(!input) throw std::runtime_error{"Incomplete map editor operation"};
+      output << editor.group << ' ' << editor.selected << ' ' << editor.display_type();
+      for(auto const &actor : task.actors) {
+        auto const letters{apache::frontend::waypoint_letters(actor.waypoints)}; output << ' ' << actor.start_time << ' ' << actor.waypoints.size();
+        for(size_t i{0}; i < actor.waypoints.size(); ++i) { auto const &p{actor.waypoints[i]}; output << ' ' << p.type; for(auto v : p.position) output << ' ' << v; output << ' ' << p.time << ' ' << p.speed << ' ' << p.interval << ' ' << p.distance << ' ' << static_cast<unsigned int>(letters[i]); }
+      }
+      output << '\n';
+    }
+    return true;
+  }
   if(command == "map-camera") {
     apache::frontend::map_camera camera; std::string operation;
     while(input >> operation) {

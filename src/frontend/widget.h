@@ -29,6 +29,8 @@ struct widget {
   int selected_line{0};
   unsigned int start_line{0};
   int item{0};
+  int number_divisor{1}, number_min{0}, number_max{0};
+  int *number{nullptr};
 };
 std::vector<widget> initial_widgets();
 } // namespace apache::frontend

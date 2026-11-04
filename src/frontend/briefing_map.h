@@ -1,6 +1,7 @@
 #pragma once
 #include "map_layers.h"
 #include "map_camera.h"
+#include "map_editor.h"
 #include "map_routes.h"
 #include "menu.h"
 #include "mission_session.h"
@@ -26,6 +27,11 @@ class briefing_map {
   render::vertex2 cursor_world;
   void visible(std::string_view name, bool show);
   void show(std::string_view name);
+  size_t task_index{0};
+  std::array<int, 5> number_values{};
+  void route_controls();
+  void route_information();
+  void routes();
   void fit();
   void refresh();
   void payload();
@@ -33,12 +39,14 @@ class briefing_map {
   uint32_t cursor_angle() const;
 public:
   map_view view;
+  map_editor editor;
+  void number_changed(widget &object, bool final);
   map_camera preview_camera;
   void tick(double seconds);
   std::pair<size_t, size_t> preview_issues() const { return preview_world ? std::pair{preview_world->missing_normals, preview_world->invalid_texture_samples} : std::pair<size_t, size_t>{}; }
   briefing_map(resources::data_store const &data, menu &interface, configuration::settings &settings);
   void open(mission_session &session);
-  void close() { mission = nullptr; dragging = 0; preview_world.reset(); }
+  void close() { mission = nullptr; dragging = 0; preview_world.reset(); editor.detach(); }
   void paint(render::framebuffer &target, widget const &object);
   void finish(render::framebuffer &target);
   bool activate(widget &object);

@@ -58,7 +58,8 @@ public:
   std::function<void(unsigned int, int32_t, int32_t)> play_sound;
   std::function<void(simulation::flight_event)> flight_sound;
   mission_session(resources::data_store const &data, int mission_id, mission_options options = {});
-  mission_session(resources::data_store const &data, resources::mission_briefing briefing, mission_options options = {});
+  mission_session(resources::data_store const &data, resources::mission_briefing briefing, mission_options options = {}, resources::mission_definition const *edited = nullptr);
+  mission_options const &launch_options() const { return settings; }
   static resources::mission_briefing quick_start(resources::data_store const &data, int zone);
   mission_session(mission_session const &) = delete;
   mission_session &operator=(mission_session const &) = delete;

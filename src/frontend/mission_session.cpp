@@ -41,9 +41,9 @@ resources::mission_briefing mission_session::quick_start(resources::data_store c
 }
 mission_session::mission_session(resources::data_store const &data, int const mission_id, mission_options const options)
   : mission_session{data, find_mission(data, mission_id), options} {}
-mission_session::mission_session(resources::data_store const &data, resources::mission_briefing definition, mission_options const options)
+mission_session::mission_session(resources::data_store const &data, resources::mission_briefing definition, mission_options const options, resources::mission_definition const *edited)
   : settings{options}, initial_seeds{weapon_seeds()}, briefing{std::move(definition)}, zone{warzone(briefing.zone)},
-    runtime{data, zone, mission_path(briefing), true, true, options.difficulty, initial_seeds},
+    runtime{data, zone, mission_path(briefing), true, true, options.difficulty, initial_seeds, edited},
     daylight{runtime.executable, runtime.mission.time_of_day}, world{data, zone}, panels{data, options.video_mode},
     avionics{panels, runtime.trig, runtime.executable}, frame{options.video_mode ? 640u : 320u, options.video_mode ? 480u : 240u} {
   auto const player{std::ranges::find_if(runtime.actors.units, [this](auto const &actor){ return runtime.mission.tasks[actor.location.task].user && actor.location.group == 0 && actor.location.member == 0; })};

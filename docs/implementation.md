@@ -246,7 +246,13 @@ Map navigation matches 5,082 original operations and 23,652 state fields. The ro
 
 The live 3D preview supports satellite, orbit and fly-to-point views, and its window can be resized. Camera movement matches 9,956 original operations and 199,120 fields. Twenty captured window gestures match 320 original bounds fields. Fourteen preview frames, including enlarged windows, match 840,966 indexed and RGB pixels across four warzones. Another eighteen reference frames contain the already identified invalid model-normal reads and are excluded from exact image comparisons. All fifty payload combinations match 3,465,500 RGB pixels; a final launch verifies their weapon and ammunition assignments. Normal and sanitizer builds pass these comparisons.
 
-Next: route editing, scripted briefings, remaining frontend screens and game journeys. CI follows once integration is finished.
+Waypoint planning now includes route selection, dragging, insertion, deletion, waypoint types, coordinates, altitude, speed and departure time. It keeps fixed endpoints and the original append/insert limits. The numeric controls support expanded arrows, held-button repeat and digit menus. Edited routes and payloads initialize the live mission at takeoff; source mission files stay unchanged.
+
+The editor matches 3,050 original operations and 2,618,694 state fields. Thirty populated window frames match 2,498,460 indexed and RGB pixels, covering waypoint selection, type changes, insertion/deletion, resizing and numeric edits. Thirty route snapshots and the launched navigation route match as well. Normal and sanitizer builds pass. Existing mission/campaign journeys, map/weather/payload frames and CTest checks remain green.
+
+The briefing audit covers all 149 shipped mission text/bundle files, including the English, French and German bundles. None contains a `:Briefing` section or brace commands. The executable retains a camera-tour parser, but the supplied game uses descriptions and recorded speech. There is no scripted tour to connect for this data set.
+
+Next: remaining frontend screens, joystick buttons/hat, movie playback and complete game journeys. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

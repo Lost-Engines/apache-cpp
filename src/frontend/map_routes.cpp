@@ -1,4 +1,5 @@
 #include "map_routes.h"
+#include "map_editor.h"
 #include <stdexcept>
 
 namespace apache::frontend {
@@ -9,14 +10,11 @@ std::vector<map_route_command> map_route_commands(resources::mission_task const 
     for(size_t i{0}; i != route.size(); ++i) emit(i ? 2u : 1u, route[i]);
   }};
   auto const symbols{[&](std::span<resources::route_waypoint const> route, bool clear, bool labels){
-    uint8_t normal{'A'}, attack{'X'};
+    auto const letters{waypoint_letters(route)};
     for(size_t i{0}; i != route.size(); ++i) {
       auto const &point{route[i]}; bool const objective{point.type == 4 || point.type == 6};
       emit((i ? (objective ? 3u : 4u) : 5u) + (clear ? 3u : 0u), point);
-      uint8_t letter{0};
-      if(objective) { letter = attack++; if(attack == '[') attack = 'x'; }
-      else if(point.type >= 0 && point.type <= 8 && point.type != 5) { letter = normal++; if(normal == 'T') normal = 'a'; }
-      if(labels) out.push_back({9, letter});
+      if(labels) out.push_back({9, letters[i]});
     }
   }};
   if(others) {

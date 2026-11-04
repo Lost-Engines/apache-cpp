@@ -77,7 +77,7 @@ public:
   unsigned int smoke_density{2};
   fragments debris;
   craters collision_marks;
-  mission_runtime(resources::data_store const &data, std::string const &zone, std::string const &path, bool armed = true, bool hurt = true, int difficulty = 0, mission_random_state seeds = {});
+  mission_runtime(resources::data_store const &data, std::string const &zone, std::string const &path, bool armed = true, bool hurt = true, int difficulty = 0, mission_random_state seeds = {}, resources::mission_definition const *edited = nullptr);
   mission_runtime(mission_runtime const &) = delete;
   mission_runtime &operator=(mission_runtime const &) = delete;
   void start_player(size_t index, mission_flight_settings const &settings);

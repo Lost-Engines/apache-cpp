@@ -1,9 +1,10 @@
 #include "menu.h"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace apache::frontend {
-menu::menu(resources::data_store const &data) : data{data}, font{resources::read_iff(data.read("FONTS/11X15.LBM"))} {
+menu::menu(resources::data_store const &data) : data{data}, font{resources::read_iff(data.read("FONTS/11X15.LBM"))}, number_font{resources::executable_data{data}, true} {
   for(size_t i{0}; i != widgets.size(); ++i) for(auto const &name : widgets[i].globals) globals[name] = i;
   clips.resize(widgets.size());
   show("_main_screen");
@@ -58,7 +59,7 @@ void menu::show(std::string_view const global) {
   screens.push_back(index);
   for(auto &object : widgets) if(object.parent == 0) object.flags &= ~1u;
   widgets[index].flags |= 1;
-  hovered = pressed = pointer_capture = moving_box = resizing_widget = -1;
+  hovered = pressed = pointer_capture = moving_box = resizing_widget = number_capture = -1;
 }
 void menu::back() {
   if(dismiss_popup()) return;
@@ -74,7 +75,7 @@ void menu::back() {
   auto const index{screens.back()};
   for(auto &object : widgets) if(object.parent == 0) object.flags &= ~1u;
   widgets[index].flags |= 1;
-  hovered = pressed = pointer_capture = moving_box = resizing_widget = -1;
+  hovered = pressed = pointer_capture = moving_box = resizing_widget = number_capture = -1;
 }
 void menu::popup(std::vector<std::pair<std::string, int>> choices, std::function<void(int)> selected) {
   if(choices.empty()) return;
@@ -150,6 +151,15 @@ void menu::draw_widget(render::framebuffer &target, widget const &object) {
       if(object.shadow) font.draw(target, lines[i], r.left + padding + 1, y + 1, 0);
       font.draw(target, lines[i], r.left + padding, y, object.text_colour);
     }
+  }
+  if(object.type == 15 && object.number) {
+    target.fill(r, object.colour); target.surround(r, object.on);
+    if(object.on) {
+      if(number_click != 0) target.surround({r.left, r.top, r.right, r.top + 9});
+      if(number_click != 1) target.surround({r.left, r.bottom - 9, r.right, r.bottom});
+    }
+    auto const code{static_cast<uint8_t>('0' + (*object.number / object.number_divisor) % 10)};
+    number_font.character(target, code, r.left + 3, r.top + (object.on ? 12 : 3), 251);
   }
   if(object.type == 13) {
     if(!clear) target.fill(r, 249);
@@ -258,6 +268,14 @@ void menu::move(int const x, int const y) {
     p.hovered = p.area.contains(x, y) && y >= p.area.top + 2 && y < p.area.bottom - 1 ? (y - p.area.top - 2) / 19 : -1;
     return;
   }
+  if(number_capture >= 0) {
+    auto const &object{widgets[static_cast<size_t>(number_capture)]};
+    if(hit(x, y) != number_capture) number_click = 3;
+    else if(y < object.area.top + 9) number_click = 0;
+    else if(y > object.area.bottom - 9) number_click = 1;
+    else if(number_click != 2) number_click = 3;
+    return;
+  }
   if(resizing_widget >= 0) {
     auto const parent{widgets[static_cast<size_t>(resizing_widget)].parent};
     auto const area{widgets[static_cast<size_t>(parent)].area};
@@ -292,6 +310,37 @@ void menu::button(bool const down, unsigned int const button) {
   if(button > 1) return;
   if(active_popup) {
     if(!down) { auto selected{std::move(active_popup->selected)}; auto const line{active_popup->hovered}; auto choices{std::move(active_popup->choices)}; active_popup.reset(); if(line >= 0 && static_cast<size_t>(line) < choices.size()) selected(choices[static_cast<size_t>(line)].second); }
+    return;
+  }
+  if(number_capture >= 0) {
+    if(!down && !button) {
+      auto const index{static_cast<size_t>(number_capture)}; auto &object{widgets[index]};
+      number_capture = -1;
+      if(number_moved && number_changed) number_changed(object, true);
+      if(hit(cursor_x, cursor_y) != static_cast<int>(index) || number_click == 3) number_push(index, false);
+      number_click = 3;
+    }
+    return;
+  }
+  if(hovered >= 0 && widgets[static_cast<size_t>(hovered)].type == 15 && widgets[static_cast<size_t>(hovered)].number) {
+    if(!down) return;
+    auto const index{static_cast<size_t>(hovered)}; auto &object{widgets[index]};
+    if(button) {
+      number_push(index, false); number_click = 3;
+      std::vector<std::pair<std::string, int>> choices; for(int i{0}; i != 10; ++i) choices.emplace_back(std::to_string(i), i);
+      popup(std::move(choices), [this, index](int digit){
+        auto &o{widgets[index]}; auto const value{*o.number};
+        *o.number = std::clamp(value - ((value / o.number_divisor) % 10) * o.number_divisor + digit * o.number_divisor, o.number_min, o.number_max);
+        if(number_changed) { number_changed(o, false); number_changed(o, true); }
+      });
+    } else {
+      number_capture = hovered; number_repeat = static_cast<int64_t>(number_clock) + 100; number_moved = false;
+      if(!object.on) number_click = 2;
+      else if(cursor_y < object.area.top + 9) { number_click = 0; number_adjust(index, object.number_divisor); }
+      else if(cursor_y > object.area.bottom - 9) { number_click = 1; number_adjust(index, -object.number_divisor); }
+      else number_click = 1;
+      number_push(index, true);
+    }
     return;
   }
   if(resizing_widget >= 0) { if(!down && !button) { widgets[static_cast<size_t>(resizing_widget)].on = false; resizing_widget = -1; } return; }
@@ -338,6 +387,25 @@ void menu::button(bool const down, unsigned int const button) {
     }
     pressed = -1;
   }
+}
+void menu::number_push(size_t const index, bool const on) {
+  for(size_t i{0}; i != widgets.size(); ++i) {
+    auto &object{widgets[i]}; if(object.type != 15 || object.parent != widgets[index].parent) continue;
+    bool const active{on && i == index}; if(active == object.on) continue;
+    object.on = active; object.area.top += active ? -9 : 9; object.area.bottom += active ? 9 : -9;
+  }
+}
+void menu::number_adjust(size_t const index, int const delta) {
+  auto &object{widgets[index]};
+  *object.number = static_cast<int>(std::clamp(int64_t{*object.number} + delta, int64_t{object.number_min}, int64_t{object.number_max}));
+  number_moved = true; if(number_changed) number_changed(object, false);
+}
+void menu::tick(double const seconds) {
+  number_clock += std::clamp(seconds, 0.0, 0.5) * 200;
+  if(number_capture < 0 || number_repeat >= static_cast<int64_t>(number_clock)) return;
+  number_repeat = static_cast<int64_t>(number_clock) + 20;
+  auto const index{static_cast<size_t>(number_capture)};
+  if(number_click == 0 || number_click == 1) number_adjust(index, widgets[index].number_divisor * (number_click ? -1 : 1));
 }
 void menu::activate(size_t const index) {
   auto &object{widgets[index]};

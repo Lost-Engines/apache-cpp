@@ -178,6 +178,7 @@ int main(int const argc, char const *const argv[]) try {
       continue;
     }
     auto const now{std::chrono::steady_clock::now()};
+    frontend.interface.tick(std::chrono::duration<double>(now - previous_time).count());
     frontend.planner.tick(std::chrono::duration<double>(now - previous_time).count());
     previous_time = now; tick_fraction = 0;
     auto const cursor{window.cursor_position()};

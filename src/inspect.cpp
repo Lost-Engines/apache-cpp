@@ -54,6 +54,7 @@
 #include "inspect_actor_reactions.h"
 #include "inspect_target_search.h"
 #include "inspect_actor_targeting.h"
+#include "inspect_patrol.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
 #include "simulation/actor_movement.h"
@@ -147,6 +148,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(command == "patrol") { inspect_patrol(std::cin, std::cout, data); return 0; }
   if(command == "actor-targeting") { inspect_actor_targeting(std::cin, std::cout, data); return 0; }
   if(command == "target-search") { inspect_target_search(std::cin, std::cout); return 0; }
   if(command == "actor-reactions") { inspect_actor_reactions(std::cin, std::cout, data); return 0; }

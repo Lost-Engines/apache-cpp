@@ -21,6 +21,18 @@ bool effects::add_smoke(math::vector3 const &position, int32_t const radius, int
   next_smoke = (next_smoke + 1) % smoke_puffs.size();
   return true;
 }
+void effects::add_trail(math::vector3 const &start, math::vector3 const &end, int32_t const radius, int32_t const lifetime, unsigned int const density, uint32_t &random_seed) {
+  if(density > 10 || lifetime < 1 || lifetime > INT32_MAX - 200) throw std::runtime_error{"Invalid smoke trail density or lifetime"};
+  check_radius(radius);
+  math::vector3 step, position{start};
+  for(size_t i{0}; i != 3; ++i) step[i] = math::subtract(end[i], start[i]) >> density;
+  for(unsigned int i{0}; i != (1u << density); ++i) {
+    random_seed = random_seed * 0x41c64e6du + 0x3039u;
+    auto const jitter{math::multiply_q31(static_cast<int32_t>(random_seed & 0x7fff0000), 200)};
+    add_smoke(position, radius, lifetime + jitter, random_seed);
+    for(size_t j{0}; j != 3; ++j) position[j] = math::add(position[j], step[j]);
+  }
+}
 bool effects::add_ground_explosion(math::vector3 const &position, int32_t const radius, resources::terrain const &terrain) {
   if(!inside(position)) return false;
   check_radius(radius);

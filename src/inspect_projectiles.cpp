@@ -1,6 +1,7 @@
 #include "inspect_projectiles.h"
 #include "resources/terrain.h"
 #include "simulation/projectile_dynamics.h"
+#include "simulation/projectile_launch.h"
 #include <istream>
 #include <ostream>
 #include <stdexcept>
@@ -10,11 +11,29 @@ void inspect_projectiles(std::istream &input, std::ostream &output, apache::reso
   using namespace apache;
   math::trigonometry const trig{data}; auto const weapons{simulation::weapon_definitions()};
   std::optional<resources::terrain> terrain;
+  auto const models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
   auto const point{[&](){ math::vector3 v; for(auto &x : v) input >> x; return v; }};
   auto const print{[&](auto const &v){ for(auto x : v) output << x << ' '; }};
   std::string command;
   while(input >> command) {
-    if(command == "terrain") {
+    if(command == "launch") {
+      simulation::projectile_launch_state round; simulation::projectile_launch_inputs state;
+      unsigned int id{0}; uint32_t random{0}, weapon_random{0}; int32_t now{0};
+      input >> id >> random >> weapon_random >> round.launched_at >> now;
+      state.pose.position = point(); for(auto &v : state.pose.rotation) input >> v;
+      state.source.position = point(); state.source.direction = point(); input >> state.source.speed >> state.has_target >> state.simple_value;
+      simulation::construct_projectile(round, id, weapons.at(id), state, trig, [&](int32_t x, int32_t y){ return terrain->elevation(x, y); }, random, weapon_random);
+      simulation::launch_projectile(round, now);
+      output << round.weapon << ' ' << round.body.motion.distance << ' ' << round.launched_at << ' ' << round.body.motion.speed << ' ' << round.random << ' ' << round.body.motion.flags << ' ';
+      print(round.body.pose.position); print(round.body.pose.rotation); print(round.body.previous); print(round.body.angles);
+      output << round.body.seeker.flags << ' ' << round.body.seeker.retry_time << ' ' << round.impact_at << ' ' << round.simple_value << ' '; print(round.impact);
+      output << random << ' ' << weapon_random << ' ';
+      if(weapons.at(id).movement_class != 3) {
+        auto object{simulation::projectile_model(round, weapons.at(id), models)};
+        output << object.id << ' ' << object.flags << ' ' << object.children.size(); for(auto const &child : object.children) output << ' ' << (child ? child->id : 0);
+      } else output << "0 0 0";
+      output << '\n';
+    } else if(command == "terrain") {
       std::string zone; input >> zone; terrain.emplace(data.read(zone + ".WZ/GRIDPOST.BIN"));
     } else if(command == "bound") {
       auto const start{point()}, move{point()};

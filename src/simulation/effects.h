@@ -28,6 +28,7 @@ public:
   std::array<explosion, 128> explosions;
   void reset();
   bool add_smoke(math::vector3 const &position, int32_t radius, int32_t lifetime, uint32_t &random_seed);
+  void add_trail(math::vector3 const &start, math::vector3 const &end, int32_t radius, int32_t lifetime, unsigned int density, uint32_t &random_seed);
   bool add_ground_explosion(math::vector3 const &position, int32_t radius, resources::terrain const &terrain);
   bool add_air_explosion(math::vector3 const &position, int32_t radius, math::vector3 const &velocity = {0, 0, 0});
   void advance(int32_t delta_time, resources::terrain const &terrain);

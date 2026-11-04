@@ -1,5 +1,7 @@
 #include "inspect_collisions.h"
 #include "simulation/collisions.h"
+#include "simulation/target_visibility.h"
+#include <map>
 #include "simulation/actor_movement.h"
 #include <algorithm>
 #include <istream>
@@ -26,7 +28,23 @@ void inspect_collisions(std::istream &input, std::ostream &output, apache::resou
   }};
   std::string command;
   while(input >> command) {
-    if(command == "reset") {
+    if(command == "los") {
+      auto const start{point()}, end{point()}; unsigned int precision{0}; bool weighted{false}; int32_t maximum{0}; size_t count{0};
+      input >> precision >> weighted >> maximum >> count;
+      std::map<std::array<int32_t, 2>, int32_t> heights;
+      for(size_t i{0}; i != count; ++i) { auto const p{point()}; heights[{p[0], p[1]}] = p[2]; }
+      std::vector<std::array<int32_t, 2>> queries;
+      auto const result{simulation::terrain_visibility(start, end, precision, weighted, maximum, [&](int32_t x, int32_t y){ queries.push_back({x, y}); auto const it{heights.find({x, y})}; return it == heights.end() ? 0 : it->second; })};
+      output << result.clear << ' ' << result.last_visible.has_value() << ' ';
+      for(auto v : result.last_visible.value_or(math::vector3{})) output << v << ' ';
+      output << queries.size(); for(auto const &q : queries) output << ' ' << q[0] << ' ' << q[1]; output << '\n';
+    } else if(command == "visible") {
+      auto const start{point()}, end{point()}; simulation::target_identity source, target;
+      for(auto *item : {&source, &target}) { unsigned int kind{0}; input >> kind >> item->layer >> item->index; item->kind = static_cast<simulation::target_kind>(kind); }
+      output << simulation::line_reaches_target(start, end, source, target, *terrain, *collisions, mobiles, models, trig) << '\n';
+    } else if(command == "maximum-height") {
+      output << terrain->maximum_height() << '\n';
+    } else if(command == "reset") {
       std::string zone; input >> zone;
       scenery = resources::read_scenery(data.read(zone + ".WZ/GNDOBJS.BIN")); extra.clear();
       collisions = std::make_unique<simulation::scenery_collisions>(models, trig, scenery, extra);

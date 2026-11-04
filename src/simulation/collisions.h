@@ -1,5 +1,6 @@
 #pragma once
 #include "craters.h"
+#include <stdexcept>
 #include "math/trigonometry.h"
 #include "render/mobile_scene.h"
 
@@ -18,6 +19,8 @@ class scenery_collisions {
   std::array<std::array<std::vector<size_t>, 4096>, 2> sectors;
 public:
   int32_t tallest_object{0};
+  bool contains(size_t layer, size_t index) const { return layer < layers.size() && index < layers[layer].size(); }
+  resources::scenery_placement const &at(size_t layer, size_t index) const { if(!contains(layer, index)) throw std::out_of_range{"Unavailable scenery target"}; return layers[layer][index]; }
   scenery_collisions(resources::model_archive const &objects, math::trigonometry const &angles, std::span<resources::scenery_placement const> scenery, std::span<resources::scenery_placement const> extra = {});
   std::optional<scenery_hit> point(math::vector3 const &position, std::optional<std::array<size_t, 2>> ignored = {}) const;
   std::optional<scenery_hit> line(math::vector3 const &start, math::vector3 const &end, std::optional<std::array<size_t, 2>> ignored = {}) const;

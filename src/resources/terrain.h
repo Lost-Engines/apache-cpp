@@ -25,11 +25,13 @@ struct scenery_placement {
 };
 class terrain {
   std::vector<terrain_post> posts;
+  int32_t maximum{0};
 
 public:
   terrain(std::span<uint8_t const> data);
   terrain_post const &post(unsigned int x, unsigned int y) const;
   int32_t elevation(int32_t x, int32_t y) const;
+  int32_t maximum_height() const { return maximum; }
 };
 void initialise_scenery(std::span<scenery_placement> placements);
 std::vector<scenery_placement> read_scenery(std::span<uint8_t const> data);

@@ -15,6 +15,7 @@ terrain::terrain(std::span<uint8_t const> const data) {
     value.flags = input.u8();
     value.textures = {input.u8(), input.u8()};
     posts.push_back(value);
+    maximum = std::max(maximum, int32_t{value.height} * 256);
   }
 }
 terrain_post const &terrain::post(unsigned int const x, unsigned int const y) const {

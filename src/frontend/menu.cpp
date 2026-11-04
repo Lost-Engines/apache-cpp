@@ -8,10 +8,35 @@ menu::menu(resources::data_store const &data) : data{data}, font{resources::read
   clips.resize(widgets.size());
   show("_main_screen");
 }
+widget &menu::named(std::string_view const global) {
+  auto const found{globals.find(global)};
+  if(found == globals.end()) throw std::runtime_error{"Unknown menu widget: " + std::string{global}};
+  return widgets[found->second];
+}
+std::string_view menu::current() const {
+  return screens.empty() ? std::string_view{} : widgets[screens.back()].globals.front();
+}
 resources::indexed_image const &menu::image(std::string const &name) {
   auto found{images.find(name)};
   if(found == images.end()) found = images.emplace(name, resources::read_iff(data.read(name))).first;
   return found->second;
+}
+void menu::link_scroll(std::string_view const text, std::string_view const scrollbar) {
+  scroll_links.emplace_back(globals.at(std::string{text}), globals.at(std::string{scrollbar}));
+}
+void menu::scroll_changed(size_t const index) {
+  for(auto const &[text, bar] : scroll_links) if(bar == index) widgets[text].start_line = static_cast<unsigned int>(std::max(0, widgets[bar].range[2]));
+}
+void menu::bounds(std::string_view const global, render::rectangle const area) {
+  auto const index{globals.at(std::string{global})};
+  auto const old{widgets[index].area};
+  int const dx{area.left - old.left}, dy{area.top - old.top};
+  for(size_t i{index + 1}; i < widgets.size(); ++i) {
+    int parent{widgets[i].parent};
+    while(parent >= 0 && static_cast<size_t>(parent) != index) parent = widgets[static_cast<size_t>(parent)].parent;
+    if(parent >= 0) { auto &r{widgets[i].area}; r.left += dx; r.right += dx; r.top += dy; r.bottom += dy; }
+  }
+  widgets[index].area = area;
 }
 void menu::show(std::string_view const global) {
   auto const found{globals.find(global)};
@@ -95,10 +120,24 @@ void menu::draw_widget(render::framebuffer &target, widget const &object) {
     }
   }
   if(object.type == 12 && object.font_height) {
-    if(object.flags & 0x10) target.fill({r.left, r.top, r.right, r.top + static_cast<int>(object.font_height) - 4}, 248);
     int const padding{(object.flags & 0x20000) ? 3 : 0};
-    if(object.shadow) font.draw(target, object.text, r.left + padding + 1, r.top + 1, 0, static_cast<int>(object.font_height + 1));
-    font.draw(target, object.text, r.left + padding, r.top, object.text_colour, static_cast<int>(object.font_height + 1));
+    auto const lines{font.lines(object.text, r.right - r.left - padding, (object.flags & 0x100000) != 0)};
+    int y{r.top};
+    for(size_t i{object.start_line}; i < lines.size() && y <= r.bottom; ++i, y += static_cast<int>(object.font_height + 1)) {
+      if((object.flags & 0x10) && static_cast<int>(i) == object.selected_line) target.fill({r.left, y, r.right, y + static_cast<int>(object.font_height) - 4}, 248);
+      if(object.shadow) font.draw(target, lines[i], r.left + padding + 1, y + 1, 0);
+      font.draw(target, lines[i], r.left + padding, y, object.text_colour);
+    }
+  }
+  if(object.type == 13) {
+    if(!clear) target.fill(r, 249);
+    target.surround(r);
+    int const length{r.bottom - r.top - 4};
+    int const denominator{std::max(1, object.range[1] - object.range[0] + 1)};
+    int top{r.top + 2 + (object.range[2] - object.range[0]) * length / denominator};
+    int bottom{top + std::max(12, object.range[3] * length / denominator)};
+    if(bottom > r.bottom - 2) { bottom = r.bottom - 2; if(top + 12 > bottom) top = r.bottom - 14; }
+    target.surround({r.left + 2, top, r.right - 2, bottom}, object.on);
   }
   if(object.type == 14) {
     if(!clear) target.fill(r, 249);
@@ -132,6 +171,11 @@ void menu::draw_widget(render::framebuffer &target, widget const &object) {
   }
 }
 void menu::render(render::framebuffer &target) {
+  for(auto const &[text, bar] : scroll_links) {
+    auto const &object{widgets[text]};
+    auto const count{font.lines(object.text, object.area.right - object.area.left - ((object.flags & 0x20000) ? 3 : 0), (object.flags & 0x100000) != 0).size()};
+    widgets[bar].range = {0, std::max(0, static_cast<int>(count) - 1), static_cast<int>(object.start_line), (object.area.bottom - object.area.top) / static_cast<int>(object.font_height + 1)};
+  }
   target.reset_clip();
   auto const screen_clip{target.clip};
   target.clear();
@@ -144,6 +188,7 @@ void menu::render(render::framebuffer &target) {
     if(clips[i].left > clips[i].right || clips[i].top > clips[i].bottom) continue;
     target.clip = clips[i];
     draw_widget(target, object);
+    if(paint) paint(target, object);
   }
   // Original UI palette, shared by every menu and independent of the backdrop.
   resources::palette &palette{target.image.colours};
@@ -156,18 +201,42 @@ int menu::hit(int const x, int const y) const {
   return -1;
 }
 void menu::move(int const x, int const y) {
+  cursor_y = y;
+  if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 13 && scroll_direction == 0) {
+    auto &bar{widgets[static_cast<size_t>(pressed)]};
+    bar.range[2] = std::clamp(drag_position + (y - drag_y) * (bar.range[1] - bar.range[0] + 1) / std::max(1, bar.area.bottom - bar.area.top - 4), bar.range[0], bar.range[1]);
+    scroll_changed(static_cast<size_t>(pressed));
+  }
   hovered = hit(x, y);
   for(size_t i{0}; i != widgets.size(); ++i) if(widgets[i].type == 9) widgets[i].on = static_cast<int>(i) == hovered;
 }
 void menu::button(bool const down) {
-  if(down) pressed = hovered;
-  else {
-    if(pressed >= 0 && pressed == hovered) activate(static_cast<size_t>(pressed));
+  if(down) {
+    pressed = hovered;
+    if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 13) {
+      auto &bar{widgets[static_cast<size_t>(pressed)]}; auto const &r{bar.area};
+      int const length{r.bottom - r.top - 4}, denominator{std::max(1, bar.range[1] - bar.range[0] + 1)};
+      int top{r.top + 2 + (bar.range[2] - bar.range[0]) * length / denominator};
+      int bottom{top + std::max(12, bar.range[3] * length / denominator)};
+      if(bottom > r.bottom - 2) { bottom = r.bottom - 2; if(top + 12 > bottom) top = r.bottom - 14; }
+      scroll_direction = cursor_y < top ? -1 : cursor_y > bottom ? 1 : 0;
+      drag_y = cursor_y; drag_position = bar.range[2]; bar.on = scroll_direction == 0;
+    }
+  } else {
+    if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 13) {
+      auto &bar{widgets[static_cast<size_t>(pressed)]};
+      if(pressed == hovered && scroll_direction) bar.range[2] = std::clamp(bar.range[2] + scroll_direction * bar.range[3], bar.range[0], bar.range[1]);
+      bar.on = false; scroll_changed(static_cast<size_t>(pressed));
+    } else if(pressed >= 0 && pressed == hovered) activate(static_cast<size_t>(pressed));
     pressed = -1;
   }
 }
 void menu::activate(size_t const index) {
-  auto const action{widgets[index].action};
+  auto &object{widgets[index]};
+  if(object.type == 4 && object.parent >= 0) { widgets[static_cast<size_t>(object.parent)].flags &= ~1u; return; }
+  int const line{(cursor_y - object.area.top) / static_cast<int>(object.font_height + 1) + static_cast<int>(object.start_line)};
+  if(activated && activated(object, line)) return;
+  auto const action{object.action};
   if(action == "notify_quit_game_button_") quitting = true;
   else if(action == "notify_cancel_quit_game_" || action == "notify_exit_button_" || action == "notify_preferences_exit_") back();
   else if(action == "notify_quick_start_button_") toggle_quick(true);

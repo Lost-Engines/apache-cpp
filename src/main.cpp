@@ -1,4 +1,7 @@
 #include <charconv>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -6,7 +9,9 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "frontend/menu.h"
+#include "frontend/mission_frontend.h"
+#include "frontend/mission_session.h"
+#include "platform/key_map.h"
 #include "platform/window.h"
 #include "resources/data_store.h"
 
@@ -18,7 +23,8 @@ unsigned int number(std::string_view const text) {
   return result;
 }
 struct events {
-  std::vector<int> keys;
+  struct key { int value, modifiers; bool down; };
+  std::vector<key> keys;
   std::vector<bool> clicks;
 };
 } // namespace
@@ -30,6 +36,8 @@ int main(int const argc, char const *const argv[]) try {
   std::string pressed;
   unsigned int scale{0}, frame_limit{0};
   bool quick{false};
+  int mission_id{0};
+  apache::frontend::mission_options mission_options;
   for(int i{1}; i < argc; ++i) {
     std::string_view const key{argv[i]};
     auto const value{[&]()->std::string_view{
@@ -46,6 +54,10 @@ int main(int const argc, char const *const argv[]) try {
                    "  --capture FILE.ppm    Render one menu frame without opening a window\n"
                    "  --press NAME          Show a pressed menu button\n"
                    "  --quick               Show the Quickstart choices\n"
+                   "  --mission ID          Start a mission directly\n"
+                   "  --realistic           Use the realistic flight model\n"
+                   "  --video-mode N        Original 320 (0) or 640 (1) mode\n"
+                   "  --detail N            Original detail level, 0 to 9\n"
                    "  --frames N            Close after N window frames\n";
       return EXIT_SUCCESS;
     }
@@ -58,41 +70,81 @@ int main(int const argc, char const *const argv[]) try {
     else if(key == "--capture") capture = value();
     else if(key == "--press") pressed = value();
     else if(key == "--quick") quick = true;
+    else if(key == "--mission") mission_id = static_cast<int>(number(value()));
+    else if(key == "--realistic") mission_options.arcade = false;
+    else if(key == "--detail") mission_options.detail = number(value());
+    else if(key == "--video-mode") mission_options.video_mode = number(value());
     else throw std::runtime_error{"Unknown option: " + std::string{key}};
   }
   apache::resources::data_store const data{directory};
-  apache::frontend::menu menu{data};
+  std::unique_ptr<apache::frontend::mission_session> mission;
+  if(mission_id) mission = std::make_unique<apache::frontend::mission_session>(data, mission_id, mission_options);
+  apache::frontend::mission_frontend frontend{data, mission_options};
+  auto &menu{frontend.interface};
+  bool launched_from_menu{false};
   menu.show(selected_menu);
   menu.toggle_quick(quick);
   if(!pressed.empty()) menu.press_named(pressed);
   apache::render::framebuffer frame{640, 480};
   menu.render(frame);
   if(!capture.empty()) {
-    apache::resources::write_ppm(capture, frame.image);
+    if(mission) { for(unsigned int i{0}; i != std::max(frame_limit, 1u); ++i) { mission->step(10); mission->draw(); } }
+    apache::resources::write_ppm(capture, mission ? mission->frame.image : frame.image);
     return EXIT_SUCCESS;
   }
   apache::platform::window window{scale};
   events input;
   glfwSetWindowUserPointer(window.get(), &input);
-  glfwSetKeyCallback(window.get(), [](GLFWwindow *const handle, int const key, int, int const action, int){
-    if(action == GLFW_PRESS) static_cast<events*>(glfwGetWindowUserPointer(handle))->keys.push_back(key);
+  glfwSetKeyCallback(window.get(), [](GLFWwindow *const handle, int const key, int, int const action, int const modifiers){
+    if(action != GLFW_REPEAT) static_cast<events*>(glfwGetWindowUserPointer(handle))->keys.push_back({key, modifiers, action == GLFW_PRESS});
   });
   glfwSetMouseButtonCallback(window.get(), [](GLFWwindow *const handle, int const button, int const action, int){
     if(button == GLFW_MOUSE_BUTTON_LEFT) static_cast<events*>(glfwGetWindowUserPointer(handle))->clicks.push_back(action == GLFW_PRESS);
   });
   unsigned int frames{0};
+  auto previous_time{std::chrono::steady_clock::now()};
+  double tick_fraction{0};
+  if(mission) { mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title); }
   while(window.poll() && !menu.quit_requested()) {
+    if(mission) {
+      for(auto const &key : input.keys) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
+      input.keys.clear(); input.clicks.clear();
+      if(!window.focused()) { mission->controls.held.fill(false); mission->controls.counts.fill(0); }
+      if(mission->controls.configuration.input_type != 1) {
+        int count{0}; auto const *axes{glfwGetJoystickAxes(GLFW_JOYSTICK_1, &count)};
+        for(size_t i{0}; i != mission->controls.joystick.size(); ++i) mission->controls.joystick[i].value = axes && i < static_cast<size_t>(count) ? static_cast<int32_t>(std::lround((std::clamp(axes[i], -1.0f, 1.0f) + 1.0f) * 127.5f)) : 128;
+      }
+      auto const now{std::chrono::steady_clock::now()};
+      tick_fraction += std::chrono::duration<double>(now - previous_time).count() * 200; previous_time = now;
+      auto const ticks{static_cast<unsigned int>(std::min(tick_fraction, 200.0))};
+      if(ticks) { tick_fraction -= ticks; mission->step(ticks); mission->draw(); }
+      window.present(mission->frame);
+      if(mission->finished) {
+        if(launched_from_menu) frontend.complete(std::move(mission));
+        else { mission.reset(); menu.show("_main_screen"); }
+        window.title("Apache C++");
+      }
+      if(frame_limit && ++frames == frame_limit) break;
+      continue;
+    }
+    previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
     auto const cursor{window.cursor_position()};
     menu.move(cursor ? static_cast<int>(cursor->x) : -1, cursor ? static_cast<int>(cursor->y) : -1);
     for(bool const click : input.clicks) menu.button(click);
     input.clicks.clear();
-    for(int const key : input.keys) {
-      if(key == GLFW_KEY_ESCAPE) menu.back();
-      else if(key == GLFW_KEY_F1) menu.show("_help_screen");
+    for(auto const &key : input.keys) {
+      if(!key.down) continue;
+      if(key.value == GLFW_KEY_ESCAPE) frontend.back();
+      else if(key.value == GLFW_KEY_F1) menu.show("_help_screen");
     }
     input.keys.clear();
     menu.render(frame);
     window.present(frame);
+    if(auto launched{frontend.takeoff()}) {
+      mission = std::move(launched); launched_from_menu = true;
+      mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title);
+      previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
+    }
     if(frame_limit && ++frames == frame_limit) break;
   }
   return EXIT_SUCCESS;

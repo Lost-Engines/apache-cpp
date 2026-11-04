@@ -67,7 +67,7 @@ std::string_view landscape::draw_flir(framebuffer &target, model_instance &objec
   // The isolated-target path keeps the colour remap left by the preceding
   // scene render. The central gunner display uses this same path.
   drawer.draw(object, camera);
-  missing_normals = drawer.missing_normals; invalid_texture_samples = drawer.invalid_texture_samples;
+  missing_normals += drawer.missing_normals; invalid_texture_samples += drawer.invalid_texture_samples;
   return definition.name;
 }
 void landscape::draw(framebuffer &target, math::pose camera, landscape_options const &configuration) {

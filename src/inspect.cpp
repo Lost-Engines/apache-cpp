@@ -1,3 +1,7 @@
+#include "inspect_menu.h"
+#include "inspect_session.h"
+#include "inspect_logbook.h"
+#include "inspect_debrief.h"
 #include "inspect_cameras.h"
 #include "inspect_flight.h"
 #include "inspect_controls.h"
@@ -162,6 +166,13 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(command == "frontend") { inspect_frontend(data, std::cin, std::cout); return 0; }
+  if(command == "menu") {
+    inspect_menu(data, std::cin, std::cout); return 0;
+  } else if(command == "debrief") { inspect_debrief(std::cin, std::cout); return 0; }
+  if(command == "logbook") { inspect_logbook(data, std::cin, std::cout); return 0; }
+  if(command == "communications") { inspect_communications(std::cin, std::cout); return 0; }
+  if(command == "session") { if(argc < 6) throw std::runtime_error{"session requires mission, video mode and flight model"}; inspect_session(data, std::stoi(argv[3]), static_cast<unsigned int>(std::stoul(argv[4])), std::stoi(argv[5]) == 2, std::cin, std::cout); return 0; }
   if(command == "mission-sensors") { if(argc < 5) throw std::runtime_error{"mission-sensors requires a warzone and mission path"}; inspect_sensors(data, argv[3], argv[4], std::cin, std::cout); return 0; }
   if(command == "cameras") { inspect_cameras(data, std::cin, std::cout); return 0; }
   if(command == "targeting") { inspect_targeting(data, std::cin, std::cout); return 0; }

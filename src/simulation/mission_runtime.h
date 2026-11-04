@@ -6,8 +6,10 @@
 #include "player_sensors.h"
 #include "player_route.h"
 #include "resources/features.h"
+#include "fragments.h"
 
 namespace apache::simulation {
+struct mission_random_state { uint32_t global{1}, weapons{1}, damage{1}; };
 struct mission_runtime_events {
   std::function<void(size_t)> fire;
   std::function<void(size_t)> waypoint;
@@ -18,6 +20,7 @@ struct mission_runtime_events {
   std::function<void(target_identity const &)> collision;
   std::function<void(unsigned int, bool)> sound;
   std::function<void(std::string_view)> message;
+  std::function<void(std::string_view, int32_t, int32_t)> notice;
   std::function<void(explosion_audio const &)> explosion_sound;
   std::function<void(bool)> impact_sound;
   std::function<void(unsigned int)> radar_toggle;
@@ -68,9 +71,12 @@ public:
   player_route route;
   movement_time timing;
   size_t frame{0};
-  bool check_collisions{true}, subdivide_flight{true};
+  bool check_collisions{true}, subdivide_flight{true}, flight_active{true};
+  int32_t smoke_radius{2048}, smoke_lifetime{400};
+  unsigned int smoke_density{2};
+  fragments debris;
   craters collision_marks;
-  mission_runtime(resources::data_store const &data, std::string const &zone, std::string const &path, bool armed = true, bool hurt = true, int difficulty = 0);
+  mission_runtime(resources::data_store const &data, std::string const &zone, std::string const &path, bool armed = true, bool hurt = true, int difficulty = 0, mission_random_state seeds = {});
   mission_runtime(mission_runtime const &) = delete;
   mission_runtime &operator=(mission_runtime const &) = delete;
   void start_player(size_t index, mission_flight_settings const &settings);

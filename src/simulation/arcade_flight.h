@@ -24,6 +24,8 @@ struct arcade_flight {
   bool landed{false}, on_carrier{false}, reset_altitude{true};
   bool infinite_fuel{false}, invulnerable{false}, no_crashes{false};
   unsigned int death{0};
+  std::function<void()> died;
+  void request_death(unsigned int cause);
   void initialise(flight_start const &start, math::trigonometry const &trig, arcade_environment const &environment = {});
   flight_step_result advance(double dt, flight_input const &input, arcade_environment const &environment, math::trigonometry const &trig);
   void transfer_from_carrier(int32_t speed, uint32_t carrier_heading, math::trigonometry const &trig);

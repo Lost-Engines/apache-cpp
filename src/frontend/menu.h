@@ -1,5 +1,7 @@
 #pragma once
+#include <functional>
 #include <map>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,6 +22,10 @@ class menu {
   std::vector<render::rectangle> clips;
   int hovered{-1};
   int pressed{-1};
+  int cursor_y{0};
+  int drag_y{0}, drag_position{0}, scroll_direction{0};
+  std::vector<std::pair<size_t, size_t>> scroll_links;
+  void scroll_changed(size_t index);
   bool quitting{false};
   resources::indexed_image const &image(std::string const &name);
   void draw_widget(render::framebuffer &target, widget const &object);
@@ -28,7 +34,14 @@ class menu {
 
 public:
   menu(resources::data_store const &data);
+  std::function<bool(widget &, int)> activated;
+  std::function<void(render::framebuffer &, widget const &)> paint;
+  widget &named(std::string_view global);
+  std::span<widget> objects() { return widgets; }
+  std::string_view current() const;
   void show(std::string_view global);
+  void link_scroll(std::string_view text, std::string_view scrollbar);
+  void bounds(std::string_view global, render::rectangle area);
   void back();
   void move(int x, int y);
   void button(bool down);

@@ -27,6 +27,27 @@ int menu_font::width(std::string_view const text) const {
   for(unsigned char const c : text) width += static_cast<int>(advances[c]);
   return width;
 }
+std::vector<std::string_view> menu_font::lines(std::string_view const text, int const limit, bool const wrap) const {
+  std::vector<std::string_view> result;
+  size_t start{0}, space{0}; int used{0};
+  for(size_t i{0}; i < text.size(); ++i) {
+    if(text[i] == '\n') {
+      result.push_back(text.substr(start, i - start)); start = i + 1; space = start; used = 0;
+      continue;
+    }
+    used += static_cast<int>(advances[static_cast<unsigned char>(text[i])]);
+    if(text[i] == ' ') space = i + 1;
+    if(wrap && used > limit) {
+      // The original buffers a word until its preceding space can be wrapped.
+      // Break an overlong word at the boundary instead of walking beyond the box.
+      size_t const end{space > start ? space : std::max(start + 1, i)};
+      result.push_back(text.substr(start, end - start)); start = end; space = start;
+      used = width(text.substr(start, i + 1 - start));
+    }
+  }
+  result.push_back(text.substr(start));
+  return result;
+}
 void menu_font::draw(framebuffer &target, std::string_view const text, int x, int y, uint8_t const colour, int const line_height) const {
   int const start{x};
   for(unsigned char const c : text) {

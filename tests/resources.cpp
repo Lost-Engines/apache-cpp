@@ -14,6 +14,7 @@
 #include "resources/terrain.h"
 #include "resources/texture.h"
 #include "simulation/effects.h"
+#include "simulation/pilot_log.h"
 
 namespace {
 void require(bool const condition, char const *const message) {
@@ -42,6 +43,21 @@ int main() try {
   require(options.integer("Big") == 2147483647, "oversized preferences are bounded");
   auto const serialised{options.serialise()};
   require(serialised.starts_with("Big="), "new preference prepends");
+  apache::simulation::pilot_log pilot;
+  pilot.name = "Boundary pilot";
+  auto pilot_bytes{pilot.encode()};
+  for(size_t length{0}; length + 4 < pilot_bytes.size(); ++length)
+    rejects([&]{ apache::simulation::pilot_log::decode(std::span{pilot_bytes}.first(length)); }, "truncated pilot record rejected");
+  auto legacy_pilot{pilot_bytes}; legacy_pilot.resize(legacy_pilot.size() - 4);
+  require(apache::simulation::pilot_log::decode(legacy_pilot).name == pilot.name, "older logs may omit the victory list");
+  pilot_bytes.push_back(0);
+  rejects([&]{ apache::simulation::pilot_log::decode(pilot_bytes); }, "trailing pilot data rejected");
+  rejects([]{ apache::simulation::pilot_log::decode(apache::resources::bytes(64, 'A')); }, "unterminated pilot name rejected");
+  pilot.campaign = {1, 1, 4, 1, {{1, apache::simulation::mission_result::outstanding}}};
+  std::array<apache::resources::mission_briefing, 1> const missions{{{1, 4, 1, 1, "Completed", {}}}};
+  require(pilot.next_mission(missions) == 1, "outstanding campaign missions remain valid without reading an unset original local");
+  pilot.campaign.missions.resize(65);
+  rejects([&]{ pilot.encode(); }, "campaign history uses its actual 64-entry capacity");
   apache::resources::bytes const packed{128, 2, 1, 2, 3, 254, 7};
   apache::resources::reader stream{packed};
   require(apache::resources::read_byterun(stream, 6) == apache::resources::bytes{1, 2, 3, 7, 7, 7}, "ByteRun literals, repeat and no-op");

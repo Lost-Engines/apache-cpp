@@ -12,7 +12,7 @@ mission_player_weapons::mission_player_weapons(size_t const index, mission_actor
   inventory.events.cycle_target = [this](){ if(events.cycle_target) events.cycle_target(); };
   inventory.events.launch_pose = [this](auto id, auto slot){
     auto description{target->identity.kind != target_kind::none ? std::optional{targets.describe(*target).movement} : std::nullopt};
-    if(id == 1) mounts.position_gun(weapons.environment.now, inventory.current, body(), description, helmet);
+    if(id == 1) mounts.position_gun(weapons.environment.now, inventory.current, body(), description, aiming_direction());
     return mounts.launch_pose(id, slot, inventory.pylons[slot].ammunition, body());
   };
   inventory.events.launch = [this](auto const &shot){ return launch(shot); };
@@ -48,18 +48,25 @@ std::optional<size_t> mission_player_weapons::launch(player_shot const &shot) {
 bool mission_player_weapons::fire(int32_t const now, double const dt, uint16_t const key) { weapons.environment.now = now; return inventory.fire(key, context(now, dt)); }
 bool mission_player_weapons::select(int32_t const now, uint16_t const key) { return inventory.select(key, context(now, 0)); }
 void mission_player_weapons::prepare(int32_t const now, int32_t const delta, int32_t const hydra_input) {
+  update_hydra(now, delta, hydra_input); evaluate_sight(now);
+}
+void mission_player_weapons::update_hydra(int32_t const now, int32_t const delta, int32_t const hydra_input) {
   std::optional<target_description> selected;
   if(target->identity.kind != target_kind::none) selected = targets.describe(*target);
   mounts.update_hydra(now, delta, hydra_input, body().world, selected ? std::optional{selected->movement.position} : std::nullopt, selected && selected->model < models.size() && models[selected->model] ? models[selected->model]->height : 0);
+}
+void mission_player_weapons::evaluate_sight(int32_t const now) {
+  std::optional<target_description> selected;
+  if(target->identity.kind != target_kind::none) selected = targets.describe(*target);
   weapon_sight_inputs input; input.weapon = inventory.current; input.weather = static_cast<unsigned int>(weapons.environment.weather); input.armed = inventory.armed; input.hydras_locked = mounts.hydras_locked; input.cloud_bottom = weapons.environment.cloud_bottom; input.cloud_top = weapons.environment.cloud_top; input.body = body().world; input.target = *target;
   if(selected) { input.target_position = selected->movement.position; input.target_classification = selected->movement.classification; }
   weapon_sight_callbacks callbacks;
   callbacks.visible = [this](){ return weapons.player_line_of_sight(*spatial.targets[player], *target); };
-  callbacks.position_gun = [this, now, &selected](){ return mounts.position_gun(now, inventory.current, body(), selected ? std::optional{selected->movement} : std::nullopt, helmet); };
+  callbacks.position_gun = [this, now, &selected](){ return mounts.position_gun(now, inventory.current, body(), selected ? std::optional{selected->movement} : std::nullopt, aiming_direction()); };
   callbacks.cockpit_sound = events.cockpit_sound; sight.evaluate(input, callbacks);
 }
 void mission_player_weapons::finish_update(int32_t const now) {
-  if(!in_cockpit) mounts.position_gun(now, inventory.current, body(), target->identity.kind != target_kind::none ? std::optional{targets.describe(*target).movement} : std::nullopt, helmet);
+  if(!in_cockpit) mounts.position_gun(now, inventory.current, body(), target->identity.kind != target_kind::none ? std::optional{targets.describe(*target).movement} : std::nullopt, aiming_direction());
   warnings.present({events.incoming_sound, events.cockpit_sound, events.warning_message});
   if(gun_fired_last != inventory.gun_fired) {
     if(events.gun_sound) events.gun_sound(inventory.gun_fired);

@@ -26,6 +26,8 @@ struct widget {
   std::string sprite{};
   std::array<int, 6> sprite_geometry{0, 0, 0, 0, 0, 0};
   unsigned int palette_part{0};
+  int selected_line{0};
+  unsigned int start_line{0};
 };
 std::vector<widget> initial_widgets();
 } // namespace apache::frontend

@@ -152,13 +152,14 @@ void scene_palette::update(palette_conditions const &conditions) {
       if(distance < 0x20000) weather_level = static_cast<int32_t>(std::clamp((0x1ffff - distance) * 0x4000, int64_t{0}, int64_t{INT32_MAX}));
     }
   }
-  std::array<palette_fader, 5> const faders{{
+  std::vector<palette_fader> faders{
     {false, 1000, 2, 190, weather_level, {weather_colour, weather_colour, weather_colour}},
     {false, 2000, 2, 190, conditions.sun_glare, {255, 255, 215}},
     {false, 3000, 2, 166, conditions.infrared == 1 ? 0 : std::clamp(conditions.night, 0, 1964947537), {0, 0, 0}},
     {false, 3000, 255, 1, conditions.cockpit_glass, {0, 0, 0}},
     {true, 4000, 2, 190, conditions.infrared == 1 ? 1 : 0, {0, 1, 1}}
-  }};
+  };
+  faders.insert(faders.end(), additional_faders.begin(), additional_faders.end());
   auto base{colours};
   if(grassy) std::ranges::copy(grassy_colours, base.begin() + 83 * 3);
   modified = apply_faders(base, faders);

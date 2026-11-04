@@ -10,12 +10,16 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Run the menu frontend with:
+Run with:
 
 ```sh
 ./build/apache --data-dir /path/to/extracted/cd/files
 ```
 
-The menus open in a resizable window with square pixels. Click Flight, Quickstart, Preferences or Pilot’s Log; F1 opens the original help pages and Escape returns. Gameplay and editable mission/pilot state are still being connected.
+The game opens in a resizable window with square pixels. Flight now leads to training, single missions and campaigns, with mission selection, takeoff, live flight and combat, and a debrief with retry or logging. Campaign and pilot changes currently last for the running session.
+
+For a direct flight check, add `--mission 61`; `--realistic` selects the realistic flight model. Arrow keys control pitch and roll, Q/A change collective, Enter selects a weapon, Space fires, and F2/F3 select the pilot/gunner cockpit. P or Pause pauses; Ctrl+Escape ends the sortie.
+
+This is still a development build. Persistent profiles, editable preferences, Quickstart, the complete briefing map tools and audio playback are being integrated. F1 opens the menu help screen. The original game data are read without modification.
 
 `apache_inspect` checks decoded images, terrain, models and transforms. See [implementation and validation](docs/implementation.md).

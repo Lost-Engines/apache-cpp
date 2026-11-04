@@ -208,7 +208,19 @@ These menu comparisons use a defined initial palette and initialized widgets. Th
 - Live cockpit state matches 467,620 fields over 1,200 continuous updates, alongside 1,170,510 matching simulation fields. This connects flight instruments, weapon and target captions, gun impact and rocket intercept cues, stores, radar/tactical contacts and waypoint labels.
 - These cockpit, targeting, sensor, route, camera, lighting, sight and live scene checks pass in both normal and AddressSanitizer/UndefinedBehaviorSanitizer builds.
 
-Next: connect the shared runtime, cameras and cockpit to the frontend, then complete campaign interaction, audio and persistence. Full journey tests and CI follow once the game is connected.
+### Playable session and frontend integration
+
+The window now runs the shared mission runtime with original timer input, player flight, combat, sensors, cameras, live instruments, scenery and palette updates. Both original video modes are available. Focus loss releases held controls; explicit pause stops simulation while allowing view changes. Mission selection supports the shipped training and single missions and the three campaigns. Campaign introductions and stage descriptions lead to briefing and takeoff. Debrief evaluation feeds retry, discard and pilot/campaign logging in memory.
+
+- Communications match 6,000 operations and 600,000 state fields in normal and sanitizer builds.
+- Pilot save decoding/encoding, campaign choice, recovery, results and awards match 2,476 original-code cases in normal and sanitizer builds.
+- Debrief decisions and record insertion match 5,565 cases. Another 20 complete mission-derived debriefs match their explanation text and 1,880 serialized pilot bytes, including explicit landing, destruction, abort and crash fixtures. These also pass sanitizers.
+- Ten static menu screens, 32 populated/selected/scrolled text frames and 20 scrollbar states match original pixels. The dynamic comparisons cover 15,974,400 pixels.
+- Headless UI journeys exercise training, single missions in all three combat warzones, campaign introduction/stage transitions, takeoff, return to debrief, retry and logging.
+- Private X-server checks exercise window creation at both resolutions, input, paused view selection, resume and return to the menu.
+- Complete flight/input/render comparisons continue across four warzones and both flight models. These caught two integration details: chain-gun aiming uses the previous barrel attachment position, and explosion sound selection shares the library random sequence with wind gusts. The separate eight-trace weapon regression still matches 3,047,894 fields and 1,326 player-launched rounds after the attachment-order correction.
+
+Next: persistent pilot profiles, complete briefing/map interaction, editable preferences, Quickstart and audio playback. Complete game journeys and CI follow once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

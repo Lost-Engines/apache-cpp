@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <vector>
 #include <string_view>
 #include "palette_effects.h"
 #include "resources/data_store.h"
@@ -11,6 +12,7 @@ class scene_palette {
   bool grassy{false};
   void spread(unsigned int colour, unsigned int first, unsigned int count);
 public:
+  std::vector<palette_fader> additional_faders;
   palette_rgb colours{};
   palette_rgb modified{};
   std::array<uint8_t, 256> infrared{};

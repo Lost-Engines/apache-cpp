@@ -26,6 +26,7 @@ mission_flight::mission_flight(resources::mission_definition const &definition, 
   realistic_world.carrier_deck = deck();
   if(arcade_mode) { arcade.initialise(start, trig, arcade_world); unit.angles[1] = unit.angles[2] = 0; }
   else realistic.initialise(start, trig, realistic_world);
+  realistic.died = arcade.died = [this](){ if(died) died(); };
   synchronize();
 }
 int32_t mission_flight::deck() const {
@@ -62,7 +63,9 @@ math::pose mission_flight::place(math::pose const &position) {
 }
 void mission_flight::leave_carrier() { actors.units[player].conditions &= ~0x400u; }
 void mission_flight::synchronize() {
-  auto &object{actors.units[player].object}; object.relative = object.world = readings().position; render::maintain_model(object);
+  auto &object{actors.units[player].object}; object.relative = object.world = readings().position;
+  // Moving the root does not update attachment transforms. The original gun
+  // updater consumes the preceding barrel position before maintaining the tree.
 }
 flight_step_result mission_flight::advance(double const dt, int32_t const delta, flight_input const &input, unsigned int const random_sample) {
   realistic_world.carrier_deck = deck();
@@ -71,7 +74,7 @@ flight_step_result mission_flight::advance(double const dt, int32_t const delta,
 }
 void mission_flight::request_death(unsigned int const cause) {
   if(!arcade_mode) realistic.request_death(cause);
-  else if(!arcade.death && !arcade.invulnerable && !(arcade.no_crashes && (cause == 2 || cause == 3 || cause == 12))) arcade.death = cause;
+  else arcade.request_death(cause);
 }
 void mission_flight::land_on_carrier(size_t const owner, render::model_instance const &object) {
   auto const contact_pose{object.world}; auto const contact_model{object.id};

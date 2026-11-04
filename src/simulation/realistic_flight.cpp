@@ -61,6 +61,7 @@ void realistic_flight::transfer_from_carrier(int32_t const speed, uint32_t const
 void realistic_flight::request_death(unsigned int const cause) {
   if(death || invulnerable || ((cause == 2 || cause == 3 || cause == 12) && no_crashes)) return;
   death = cause;
+  if(died) died();
 }
 flight_step_result realistic_flight::advance(double const dt, int32_t const delta_time, flight_input const &input, flight_environment const &environment, math::trigonometry const &trig, unsigned int const random_sample) {
   if(dt <= 0 || !std::isfinite(dt) || delta_time <= 0) throw std::runtime_error{"Invalid flight timestep"};

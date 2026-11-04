@@ -54,6 +54,7 @@ struct realistic_flight {
   bool terrain_follow{false}, reset_altitude{true}, pull_up_message{false};
   bool overtorque_enabled{true}, infinite_fuel{false}, invulnerable{false}, no_crashes{false};
   unsigned int game_mode{0}, death{0};
+  std::function<void()> died;
   int32_t acceleration{1};
   uint32_t wind_direction{0};
   void initialise(flight_start const &start, math::trigonometry const &trig, flight_environment const &environment = {});

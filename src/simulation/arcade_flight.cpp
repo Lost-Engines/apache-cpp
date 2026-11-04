@@ -59,7 +59,7 @@ flight_step_result arcade_flight::advance(double const dt, flight_input const &i
       auto const landing{evaluate_landing(readings.airspeed, true_dz, environment.surface(readings.position.position[0], readings.position.position[1]), on_carrier, death)};
       if(landing.grade) {
         result.landing = landing; landed = true;
-        if(landing.death && !death && !invulnerable && !(no_crashes && (landing.death == 2 || landing.death == 3 || landing.death == 12))) death = landing.death;
+        if(landing.death) request_death(landing.death);
       }
     }
   }
@@ -189,6 +189,10 @@ void arcade_flight::update_hover(double const dt, flight_events &events) {
   }
   if(delta_vertical_velocity < 0) delta_vertical_velocity += dt * 0.3;
   else if(delta_vertical_velocity > 0) delta_vertical_velocity -= dt * 0.3;
+}
+void arcade_flight::request_death(unsigned int const cause) {
+  if(death || invulnerable || (no_crashes && (cause == 2 || cause == 3 || cause == 12))) return;
+  death = cause; if(died) died();
 }
 void arcade_flight::toggle_hover() {
   hover.active = std::abs(static_cast<int>(forward_velocity)) < 4320 && !hover.active;

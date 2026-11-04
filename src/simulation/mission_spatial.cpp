@@ -41,6 +41,14 @@ void mission_spatial::removed(uint32_t const id, size_t const sector) {
 void mission_spatial::move(actor_state &actor, math::vector3 const &position) {
   size_t const index{static_cast<size_t>(&actor - actors.units.data())}; auto pose{actor.object.world}; pose.position = position; mobiles.move(mobile_id(index), pose);
 }
+void mission_spatial::change_status(size_t const index, uint32_t const status) {
+  auto &unit{actors.units.at(index)}; auto const &position{unit.object.world.position};
+  bool const inside{position[0] >= 0 && position[0] < 0x10000000 && position[1] >= 0 && position[1] < 0x10000000};
+  size_t const sector{inside ? static_cast<size_t>((position[0] >> 22) * 64 + (position[1] >> 22)) : 0};
+  if(inside) removed(mobile_id(index), sector);
+  unit.object.status = status;
+  if(inside) placed(mobile_id(index), sector);
+}
 void mission_spatial::place(size_t const actor) { mobiles.place(mobile_id(actor)); }
 void mission_spatial::unplace(size_t const actor) { mobiles.unplace(mobile_id(actor)); }
 } // namespace apache::simulation

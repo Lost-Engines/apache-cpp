@@ -282,6 +282,8 @@ Weapon 10, the Cannon Pod, is explicitly sent through the original guided constr
 
 Network target lookup matches 5,567 queries across four warzones, including formation members, missing targets, both scenery layers, out-of-map positions and coordinate-cell boundaries. All six multiplayer modes match 1,536 settings cases and 18,432 fields. These cover crew permissions, rank, force level, weather, time, crashing and resource limits. Both builds pass. The application builds and all four existing CTest targets pass in normal and sanitizer configurations.
 
+Aircraft allocation, carrier detachment, Apache/Hind model replacement and revival match 675 assignment attempts, 108 restarts and 785 complete mobile/contact-registry fingerprints across four warzones and the dedicated multiplayer/flag missions. The 24,857 reported fields agree in normal and sanitizer builds. Both applications build, and all four CTest targets pass. Non-aircraft assignment and repeated carrier detachment are rejected.
+
 Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.

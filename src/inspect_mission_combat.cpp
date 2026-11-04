@@ -152,6 +152,52 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       auto const &state{*runtime.sensors}; output << "sensor-view " << state.state.locked << ' ' << state.state.tads; reference(&state.state.current); reference(&state.optical); output << ' ' << state.optical_symbol.has_value();
       if(state.optical_symbol) for(auto v : *state.optical_symbol) output << ' ' << v; output << '\n';
     }
+    else if(command == "network-assign" || command == "network-revive") {
+      uint32_t connection, model; size_t task; unsigned int mode, map; int flow; bool result;
+      input >> connection >> model;
+      if(command == "network-assign") {
+        input >> task >> mode >> flow >> map >> network.enabled;
+        result = network.assign(connection, model, task, static_cast<multiplayer::game_mode>(mode), flow, map);
+      } else result = network.revive(connection, static_cast<int32_t>(model));
+      output << "assignment " << result;
+      if(result) {
+        auto const index{*network.actor(connection)}; auto const &unit{actors.units[index]}; auto const &arm{combat.armaments[index]};
+        output << ' ' << index << ' ' << network.state.players[connection].flags << ' ' << unit.network << ' ' << unit.object.id << ' ' << unit.object.status << ' ' << unit.classification << ' ' << unit.conditions;
+        for(auto v : unit.object.world.position) output << ' ' << v; for(auto v : unit.object.world.rotation) output << ' ' << v;
+        for(auto v : unit.angles) output << ' ' << v;
+        output << ' ' << unit.speed << ' ' << unit.route_distance << ' ' << unit.weapon << ' ' << unit.weapon_slot;
+        for(auto v : unit.ammunition) output << ' ' << v;
+        output << ' ' << arm.ground_maximum << ' ' << arm.ground_minimum << ' ' << arm.air_maximum << ' ' << arm.air_minimum;
+        output << ' ' << unit.object.children.size(); for(auto const &child : unit.object.children) output << ' ' << (child ? child->id : 0);
+        output << ' ' << unit.destroyed << ' ' << static_cast<unsigned int>(combat.attention[index].damage) << ' ' << static_cast<unsigned int>(combat.attention[index].processed_damage);
+      }
+      output << '\n';
+    }
+    else if(command == "network-remove-unassigned") network.remove_unassigned();
+    else if(command == "network-spatial") {
+      resources::bytes mobile_bytes, war_bytes, actor_bytes;
+      auto const word{[](resources::bytes &bytes, uint32_t value){ for(unsigned int j{0}; j < 4; ++j) bytes.push_back(static_cast<uint8_t>(value >> (j * 8))); }};
+      auto const contact{[&](simulation::shared_target const &target) -> uint32_t {
+        if(target && target->identity.kind == simulation::target_kind::mobile) if(auto index{spatial.actor_index(target->identity.index)}) return static_cast<uint32_t>(*index + 1);
+        return 0;
+      }};
+      for(size_t sector{0}; sector < 4096; ++sector) {
+        auto const list{mobiles.sector(sector)}; word(mobile_bytes, static_cast<uint32_t>(list.size()));
+        for(auto id : list) word(mobile_bytes, static_cast<uint32_t>(*spatial.actor_index(id) + 1));
+        for(unsigned int side{1}; side <= 2; ++side) {
+          auto const *cell{spatial.grid.sector(static_cast<int32_t>(sector / 64), static_cast<int32_t>(sector % 64), side)};
+          word(war_bytes, cell != nullptr);
+          if(cell) for(auto const *bucket : {&cell->air, &cell->ground}) {
+            word(war_bytes, bucket->count); for(auto const &target : bucket->targets) word(war_bytes, contact(target));
+          }
+        }
+      }
+      for(auto const &unit : actors.units) { word(actor_bytes, unit.object.status); word(actor_bytes, static_cast<uint32_t>(unit.destroyed)); }
+      output << "network-spatial " << resources::fingerprint(mobile_bytes) << ' ' << resources::fingerprint(war_bytes) << ' ' << resources::fingerprint(actor_bytes);
+      for(auto value : spatial.grid.counts()) output << ' ' << value;
+      for(auto value : spatial.grid.peak_counts()) output << ' ' << value;
+      output << '\n';
+    }
     else if(command == "network-target") {
       multiplayer::target_state request; input >> request.kind; for(auto &v : request.data) input >> v;
       auto const result{network.resolve(request)}; output << "network-target " << (result ? identity(result->identity) : 0) << '\n';

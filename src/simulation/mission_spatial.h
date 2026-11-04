@@ -25,6 +25,7 @@ public:
   std::optional<size_t> actor_index(uint32_t id) const;
   uint32_t mobile_id(size_t actor) const { return targets.at(actor)->identity.index; }
   void move(actor_state &actor, math::vector3 const &position);
+  void change_status(size_t actor, uint32_t status);
   void place(size_t actor);
   void unplace(size_t actor);
 };

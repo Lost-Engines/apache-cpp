@@ -42,6 +42,15 @@ void actor_movement::take_off(size_t const index, actor_group const &group) {
   if((unit.object.world.position[0] || unit.object.world.position[1]) && callbacks.place) callbacks.place(index);
   slot.occupant.reset(); ship.object.children[slot.attachment].reset();
 }
+void actor_movement::release_carrier(size_t const index, bool const place_at_origin) {
+  auto const &unit{actors.units.at(index)};
+  if(!unit.carrier || !unit.carrier_slot || !(unit.conditions & 0x400)) return;
+  for(auto const &group : actors.groups) if(group.task == unit.location.task && group.index == unit.location.group) {
+    take_off(index, group);
+    if(place_at_origin && !unit.object.world.position[0] && !unit.object.world.position[1] && callbacks.place) callbacks.place(index);
+    return;
+  }
+}
 void actor_movement::land(size_t const index) {
   auto &unit{actors.units[index]}; if(!unit.carrier || !unit.carrier_slot) return;
   auto &carrier{actors.carriers[*unit.carrier]}; auto &ship{actors.units[carrier.actor]}; auto &slot{carrier.slots[*unit.carrier_slot]};

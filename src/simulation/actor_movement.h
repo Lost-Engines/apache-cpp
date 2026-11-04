@@ -42,6 +42,7 @@ class actor_movement {
   void move_air_or_ship(size_t index, actor_group const &group, movement_time const &time);
 public:
   actor_movement(mission_actors &units, resources::mission_definition const &definition, std::span<std::vector<resources::formation_member> const> shapes, resources::model_archive const &objects, math::trigonometry const &angles, actor_environment const &terrain, navigation_environment const &scenery, navigation_tables const &performance, combat_random &random_state, movement_callbacks events = {});
+  void release_carrier(size_t actor, bool place_at_origin = false);
   void update(movement_time const &time);
 };
 } // namespace apache::simulation

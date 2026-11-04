@@ -79,6 +79,22 @@ scene_palette::scene_palette(resources::data_store const &data, std::string_view
   spread(0xec, 0x7f, 6);
   spread(0xed, 0x7f, 7);
 
+  std::array<float, 4> constexpr fog_strength{0.04f, 0.26f, 0.47f, 0.74f};
+  // The original stores each slope as a 32-bit float before using x87
+  // multiplication to truncate the number of colours in an intensity ramp.
+  for(size_t bank{0}; bank != fog_intensity.size(); ++bank) {
+    double const strength{fog_strength[bank]};
+    for(auto const &[first, count, offset, extent] : std::array<std::array<unsigned int, 4>, 5>{{{71, 12, 3, 9}, {83, 16, 4, 12}, {99, 16, 4, 12}, {115, 12, 7, 5}, {127, 8, 2, 6}}}) {
+      auto const low{static_cast<unsigned int>(strength * offset + 0.5)};
+      auto const high{static_cast<unsigned int>((1.0 - strength) * extent + offset + 0.5)};
+      float const slope{static_cast<float>((high - low) * static_cast<double>(1.0f / static_cast<float>(count)))};
+      for(unsigned int i{0}; i != count; ++i) {
+        auto const length{static_cast<unsigned int>(i * static_cast<double>(slope))};
+        for(unsigned int level{0}; level != 256; ++level) fog_intensity[bank][(first + i) * 256 + level] = static_cast<uint8_t>(first + low + level * length / 256);
+      }
+    }
+  }
+
   std::string const prefix{std::string{zone} + ".WZ/"};
   load(prefix + "TERRAIN.RGB", 71, 64);
   load(prefix + (overcast ? "FOGDULL.RGB" : "FOG.RGB"), 135, 20);

@@ -9,6 +9,7 @@ class scene_palette {
 public:
   std::array<uint8_t, 768> colours{};
   std::array<uint8_t, 65536> intensity{};
+  std::array<std::array<uint8_t, 65536>, 4> fog_intensity{};
   std::array<uint8_t, 256> glass{};
   std::array<uint8_t, 256> visual_remap{};
   scene_palette(resources::data_store const &data, std::string_view zone, bool overcast = false);

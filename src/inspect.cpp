@@ -6,13 +6,17 @@
 #include <stdexcept>
 #include <string_view>
 #include "math/trigonometry.h"
+#include "render/draw_queue.h"
 #include "render/model_renderer.h"
 #include "render/projection.h"
 #include "render/rasterizer.h"
+#include "render/terrain_projection.h"
+#include "render/terrain_shading.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
 #include "resources/models.h"
 #include "resources/terrain.h"
+#include "resources/terrain_textures.h"
 
 namespace {
 void word(apache::resources::bytes &output, uint32_t const value) {
@@ -74,7 +78,68 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "palette") {
+  if(command == "terrain-shades") {
+    unsigned int detail{0}, colour{0}, kind{0}, salt{0};
+    uint32_t range{0};
+    while(std::cin >> detail >> range >> colour >> kind >> salt) {
+      apache::render::terrain_fog const fog{detail};
+      std::array<uint8_t, 256> remap;
+      for(unsigned int i{0}; i != 256; ++i) remap[i] = static_cast<uint8_t>(salt ? i * 73 + salt : i);
+      std::cout << fog.constant_colour(range, static_cast<uint8_t>(colour), remap) << ' ' << fog.shaded_colours(range, kind, remap) << ' ' << fog.texture_bank(range, 3) << '\n';
+    }
+  } else if(command == "terrain-textures") {
+    for(std::string_view const zone : {"FORT", "CYPRUS", "KOREA", "YEMEN"}) {
+      apache::resources::terrain_textures const textures{data, zone};
+      for(bool const detailed : {false, true}) for(bool const forward : {false, true}) for(unsigned int selector{0}; selector != 128; ++selector) {
+        auto const &texture{textures.get(forward, selector, detailed)};
+        std::cout << zone << ' ' << detailed << ' ' << forward << ' ' << selector << ' ' << std::hex << apache::resources::fingerprint(texture.pixels) << std::dec << '\n';
+      }
+    }
+  } else if(command == "fog-tables") {
+    apache::render::scene_palette const palette{data, "FORT"};
+    for(auto const &table : palette.fog_intensity) {
+      std::cout << std::hex << apache::resources::fingerprint(table) << std::dec << '\n';
+      if(argc >= 4) { std::ofstream out{std::string{argv[3]} + std::to_string(&table - palette.fog_intensity.data()), std::ios::binary}; out.write(reinterpret_cast<char const*>(table.data()), static_cast<std::streamsize>(table.size())); }
+    }
+  } else if(command == "terrain-vertices") {
+    apache::math::trigonometry const trig{data};
+    apache::render::projection const view{0, 0, 320, 240};
+    std::string zone;
+    apache::math::pose camera;
+    uint32_t heading{0}, pitch{0}, roll{0};
+    int left{0}, bottom{0};
+    unsigned int columns{0}, rows{0};
+    while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> left >> bottom >> columns >> rows) {
+      apache::resources::terrain const terrain{data.read(zone + ".WZ/GRIDPOST.BIN")};
+      camera.rotation = trig.transformation(heading, pitch, roll);
+      auto const ground{terrain.elevation(camera.position[0], camera.position[1])};
+      if(camera.position[2] <= ground) camera.position[2] = ground + 256;
+      auto const vertices{apache::render::project_terrain(terrain, camera, view, left, bottom, columns, rows)};
+      apache::resources::bytes output;
+      for(auto const &v : vertices) for(int32_t const field : {v.eye[0], v.eye[1], v.eye[2], v.screen.x, v.screen.y, v.screen.intensity, int32_t{v.outcode}}) {
+        for(unsigned int shift{0}; shift != 32; shift += 8) output.push_back(static_cast<uint8_t>(static_cast<uint32_t>(field) >> shift));
+        if(argc >= 4) std::cerr << field << ' ';
+      }
+      std::cout << std::hex << apache::resources::fingerprint(output) << std::dec << '\n';
+    }
+  } else if(command == "draw-order") {
+    unsigned int count{0};
+    while(std::cin >> count) {
+      apache::render::draw_queue queue;
+      for(unsigned int i{0}; i != count; ++i) {
+        apache::render::queued_draw draw;
+        unsigned int kind{0};
+        std::cin >> kind >> draw.depth >> draw.terrain_depth_sum >> draw.flat;
+        draw.kind = static_cast<apache::render::draw_kind>(kind);
+        draw.payload = i;
+        queue.push(draw);
+      }
+      auto const ordered{queue.ordered()};
+      std::cout << ordered.size();
+      for(auto const &draw : ordered) std::cout << ' ' << draw.payload;
+      std::cout << '\n';
+    }
+  } else if(command == "palette") {
     for(std::string_view const zone : {"FORT", "CYPRUS", "KOREA", "YEMEN"}) {
       apache::render::scene_palette const palette{data, zone};
       std::cout << zone << ' ' << std::hex << apache::resources::fingerprint(palette.colours) << ' ' << apache::resources::fingerprint(palette.intensity) << ' ' << apache::resources::fingerprint(palette.glass) << std::dec << '\n';

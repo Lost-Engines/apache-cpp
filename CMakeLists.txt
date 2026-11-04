@@ -18,6 +18,14 @@ add_library(apache_core
   src/frontend/menu.h
   src/frontend/widget.cpp
   src/frontend/widget.h
+  src/render/terrain_shading.cpp
+  src/render/terrain_shading.h
+  src/resources/terrain_textures.cpp
+  src/resources/terrain_textures.h
+  src/render/terrain_projection.cpp
+  src/render/terrain_projection.h
+  src/render/draw_queue.cpp
+  src/render/draw_queue.h
   src/render/model_renderer.cpp
   src/render/model_renderer.h
   src/render/scene_palette.cpp

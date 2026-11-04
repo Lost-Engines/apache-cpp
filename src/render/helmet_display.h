@@ -71,6 +71,7 @@ class helmet_display {
 public:
   helmet_display(resources::executable_data const &executable, math::trigonometry const &trig, unsigned int video_mode);
   void draw(framebuffer &target, helmet_instruments const &state) const;
+  vertex2 unproject_point(unsigned int view, int32_t x, int32_t y) const;
   std::optional<vertex2> project_point(unsigned int view, math::pose const &camera, projection const &scene, math::vector3 const &position) const;
   void draw_component(framebuffer &target, helmet_instruments const &state, helmet_component component) const;
 };

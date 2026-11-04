@@ -47,6 +47,13 @@ class landscape {
   std::vector<model_instance> scenery;
   std::vector<resources::scenery_placement> scenery_placements;
   std::array<std::vector<size_t>, 4096> scenery_sectors;
+  std::vector<resources::scenery_placement const *> live_scenery;
+  std::vector<bool> extra_scenery;
+  mobile_scene *live_mobiles{nullptr};
+  simulation::effects const *live_effects{nullptr};
+  simulation::craters const *live_craters{nullptr};
+  simulation::fragments const *live_fragments{nullptr};
+  void refresh_scenery(size_t index);
 public:
   scene_palette palette;
   mobile_scene mobiles;
@@ -57,6 +64,8 @@ public:
   size_t missing_normals{0};
   size_t invalid_texture_samples{0};
   landscape(resources::data_store const &data, std::string_view zone);
+  // Bound scene storage must outlive the renderer and retain its placement addresses.
+  void bind_scene(std::span<resources::scenery_placement const> base, std::span<resources::scenery_placement const> extra, mobile_scene &objects, simulation::effects const &particles, simulation::craters const &marks, simulation::fragments const &pieces);
   void initialise_model_metadata(resources::executable_data const &executable) { resources::initialise_model_metadata(models, executable); }
   resources::terrain const &heights() const { return terrain; }
   uint8_t surface_type(int32_t x, int32_t y) const;

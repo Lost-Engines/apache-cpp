@@ -3,11 +3,14 @@
 #include "mission_flight.h"
 #include "mission_player_damage.h"
 #include "mission_player_weapons.h"
+#include "player_sensors.h"
+#include "player_route.h"
 #include "resources/features.h"
 
 namespace apache::simulation {
 struct mission_runtime_events {
   std::function<void(size_t)> fire;
+  std::function<void(size_t)> waypoint;
   std::function<void(target_reference const &, target_reference const &, unsigned int)> ground_fire;
   std::function<void(size_t, projectile_record const &)> launched;
   std::function<void(size_t, projectile_record &, projectile_event_info const &)> projectile;
@@ -32,6 +35,7 @@ class mission_runtime {
   mission_combat_callbacks combat_callbacks();
   movement_callbacks movement_events();
   int32_t previous_time{0};
+  void synchronize_player_target();
 public:
   mission_runtime_events events;
   resources::mission_definition mission;
@@ -60,6 +64,8 @@ public:
   std::unique_ptr<mission_flight> pilot;
   std::unique_ptr<mission_player_damage> player_damage;
   std::unique_ptr<mission_player_weapons> player_armament;
+  std::unique_ptr<player_sensors> sensors;
+  player_route route;
   movement_time timing;
   size_t frame{0};
   bool check_collisions{true}, subdivide_flight{true};
@@ -69,6 +75,8 @@ public:
   mission_runtime &operator=(mission_runtime const &) = delete;
   void start_player(size_t index, mission_flight_settings const &settings);
   void equip_player(std::array<int32_t, 9> const &loadout);
+  void enable_player_sensors(unsigned int game_mode = 0);
+  void look_player(math::pose const &view, render::projection const &projection);
   bool fire_player(int32_t now, double dt, uint16_t key);
   void advance(int32_t now, int32_t delta, flight_input const &input, std::function<unsigned int()> const &flight_random);
 };

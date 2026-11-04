@@ -46,7 +46,7 @@ mission_runtime::mission_runtime(resources::data_store const &data, std::string 
     combat{mission, scene, actors, spatial, targets, terrain, trig, tables, formations, environment, random, weapon_random, difficulty, combat_callbacks()}, performance{executable},
     movement{actors, mission, formations, models, trig, environment, navigation, performance, random, movement_events()} {
   environment.relocate = [this](auto &actor, auto const &position){ spatial.move(actor, position); };
-  targets.additional_state = [this](uint32_t id){ mobile_target_state state; if(auto i{spatial.actor_index(id)}) state.damage = combat.attention[*i].damage; if(pilot) state.player_airspeed = pilot->readings().airspeed; return state; };
+  targets.additional_state = [this](uint32_t id){ mobile_target_state state; if(auto i{spatial.actor_index(id)}) state.damage = combat.attention[*i].damage; if(pilot) state.player_airspeed = pilot->readings().airspeed; if(sensors && spatial.player && spatial.mobile_id(*spatial.player) == id) { state.ground_radar = sensors->state.ground; state.air_radar = sensors->state.air; } return state; };
   if(armed) {
     mission_weapon_callbacks callbacks;
     callbacks.incoming = [this](size_t round, unsigned int weapon, int32_t arrival){ if(player_armament) player_armament->warnings.incoming(round, weapon, arrival); };
@@ -67,7 +67,7 @@ mission_runtime::mission_runtime(resources::data_store const &data, std::string 
   actors.synchronize_models();
 }
 void mission_runtime::start_player(size_t const index, mission_flight_settings const &settings) {
-  player_armament.reset(); player_damage.reset(); timing.player = index;
+  sensors.reset(); route = {}; player_armament.reset(); player_damage.reset(); combat.player_target.reset(); timing.player = index;
   pilot = std::make_unique<mission_flight>(mission, actors, spatial, models, terrain, trig, environment.surface, index, settings);
   combat.player_position = pilot->readings().position.position; combat.player_heading = pilot->readings().angles[0];
   if(damage) {
@@ -75,7 +75,7 @@ void mission_runtime::start_player(size_t const index, mission_flight_settings c
     callbacks.feedback = [this](auto const &event){
       if(event.kind == damage_feedback_kind::message) { if(events.message) events.message(event.text); }
       else if(event.kind == damage_feedback_kind::cockpit_sound) { if(events.sound) events.sound(event.value, true); }
-      else if(events.radar_toggle) events.radar_toggle(event.value);
+      else { if(sensors && player_armament) sensors->state.toggle_automatic(player_armament->control_mode, pilot->faults()); if(events.radar_toggle) events.radar_toggle(event.value); }
     };
     callbacks.impact_sound = [this](bool heavy){ if(events.impact_sound) events.impact_sound(heavy); };
     player_damage = std::make_unique<mission_player_damage>(*pilot, actors, spatial, targets, combat, models, callbacks);
@@ -89,13 +89,30 @@ void mission_runtime::equip_player(std::array<int32_t, 9> const &loadout) {
   callbacks.incoming_sound = [this](){ if(events.incoming_sound) events.incoming_sound(); };
   callbacks.gun_sound = [this](bool active){ if(events.gun_sound) events.gun_sound(active); };
   callbacks.warning_message = [this](size_t slot, bool added, std::string_view text){ if(events.warning_message) events.warning_message(slot, added, text); };
-  callbacks.cycle_target = [this](){ if(events.cycle_target) events.cycle_target(); };
+  callbacks.cycle_target = [this](){ if(sensors && player_armament) sensors->state.cycle_target(true, player_armament->control_mode); if(events.cycle_target) events.cycle_target(); };
   callbacks.missile_camera = [this](size_t i){ if(events.missile_camera) events.missile_camera(i); };
   player_armament = std::make_unique<mission_player_weapons>(*timing.player, actors, spatial, targets, combat, *weapons, *pilot, models, executable, trig, loadout, callbacks);
   player_armament->inventory.infinite = mission.infinite_weapons;
 }
+void mission_runtime::enable_player_sensors(unsigned int const game_mode) {
+  if(!pilot || !player_armament) throw std::runtime_error{"Player sensors require flight and armament"};
+  sensors = std::make_unique<player_sensors>(terrain, models, scene, mobiles, targets, trig, game_mode);
+  sensors->message = [this](std::string_view text){ if(events.message) events.message(text); };
+  player_armament->game_mode = game_mode; synchronize_player_target();
+}
+void mission_runtime::synchronize_player_target() {
+  if(!sensors || !player_armament) return;
+  *player_armament->target = sensors->state.current;
+  player_armament->ground_radar = sensors->state.ground; player_armament->air_radar = sensors->state.air;
+  if(player_damage) { player_damage->state.ground_radar = sensors->state.ground; player_damage->state.air_radar = sensors->state.air; }
+}
+void mission_runtime::look_player(math::pose const &view, render::projection const &projection) {
+  if(!sensors || !pilot || !player_armament) return;
+  sensors->pick_optical(view, pilot->readings().angles[0], projection, player_armament->control_mode, pilot->faults()); synchronize_player_target();
+}
 bool mission_runtime::fire_player(int32_t const now, double const dt, uint16_t const key) {
   if(!player_armament) return false;
+  synchronize_player_target();
   combat.set_time(now, timing.delta, static_cast<uint32_t>(frame));
   return player_armament->fire(now, dt, key);
 }
@@ -105,6 +122,7 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
   timing.now = now; timing.delta = delta; combat.set_time(now, delta, static_cast<uint32_t>(frame));
   if(weapons) weapons->environment.now = now;
   if(damage) damage->environment.flow = timing.game_flow;
+  synchronize_player_target();
   movement.update(timing);
   double const dt{static_cast<double>(elapsed) * 0.005};
   if(pilot) {
@@ -125,6 +143,12 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
   if(weapons) weapons->update({now, delta, dt, 2048, 400, 2});
   if(player_armament) { player_armament->synchronize_countermeasures(true); player_armament->finish_update(now); }
   combat.update(); actors.synchronize_models();
+  if(sensors && pilot && player_armament) { sensors->update(actors.units[*timing.player].object.world, pilot->readings().angles[0], spatial.mobile_id(*timing.player), player_armament->control_mode, pilot->faults()); synchronize_player_target(); }
+  if(sensors && pilot) {
+    auto &actor{actors.units[*timing.player]};
+    auto const &path{mission.tasks[actor.location.task].actors[actor.location.group].waypoints};
+    route.update(path, actor.waypoint, pilot->readings().position.position, {.key_event{}, .achieved{events.waypoint}, .sound{[this](unsigned int id){ if(events.sound) events.sound(id, true); }}, .surface{environment.surface}});
+  }
   if(damage) damage->marks.advance();
   if(weapons) weapons->visuals.advance(delta, terrain);
   previous_time = now; ++frame;

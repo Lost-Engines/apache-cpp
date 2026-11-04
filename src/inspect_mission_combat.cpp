@@ -1,5 +1,8 @@
 #include "inspect_mission_combat.h"
 #include "simulation/mission_runtime.h"
+#include "simulation/mission_instruments.h"
+#include "render/landscape.h"
+#include <fstream>
 #include <istream>
 #include <ostream>
 #include <iomanip>
@@ -29,10 +32,11 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
   }};
   bool drawing{false};
   auto &events{runtime.events};
+  events.waypoint = [&](size_t i){ output << "waypoint " << frame << ' ' << i << '\n'; };
   events.fire = [&](size_t i){ output << "fire " << frame << ' ' << i; reference(combat.armaments[i].target.get()); output << '\n'; };
   events.ground_fire = [&](auto const &source, auto const &target, unsigned int id){ output << "groundfire " << frame << ' ' << id; reference(&source); reference(&target); output << '\n'; };
   events.sound = [&](unsigned int sound, bool cockpit){ output << "sound " << (drawing && frame ? frame - 1 : frame) << ' ' << sound << ' ' << cockpit << '\n'; };
-  events.message = [&](std::string_view text){ output << "message " << frame << ' ' << std::quoted(std::string{text}) << '\n'; };
+  events.message = [&](std::string_view text){ output << "message " << (drawing && frame ? frame - 1 : frame) << ' ' << std::quoted(std::string{text}) << '\n'; };
   events.launched = [&](size_t i, auto const &round){ output << "launch " << frame << ' ' << i << ' ' << round.state.weapon << '\n'; };
   events.projectile = [&](size_t i, auto &, auto const &info){ output << "event " << frame << ' ' << i << ' ' << static_cast<unsigned int>(info.kind); for(auto v : info.position) output << ' ' << v; output << ' ' << (info.target ? identity(*info.target) : 0) << '\n'; };
   events.killed = [&](auto const &target, auto const &source){ output << "kill " << frame << ' ' << identity(target) << ' ' << identity(source) << '\n'; };
@@ -55,6 +59,13 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       output << ' ' << state.impacts.entries.size(); for(auto const &v : state.impacts.entries) output << ' ' << v.round << ' ' << v.deadline;
       auto const *mount{actors.units[*timing.player].object.children[0].get()}; auto const *barrel{mount ? mount->children[0].get() : nullptr};
       output << ' ' << state.gun_fired_last << ' ' << (barrel && !barrel->children.empty() && barrel->children[0] ? barrel->children[0]->id : 0) << '\n';
+    }
+    if(runtime.sensors) {
+      auto const &state{*runtime.sensors};
+      output << "sensors " << state.state.automatic << ' ' << state.state.cycle_direction << ' ' << state.state.laser; reference(&state.state.current);
+      for(auto const *list : {&state.ground, &state.mobile, &state.missiles}) { output << ' ' << list->size(); for(auto const &entry : *list) { output << ' ' << identity(entry.target.identity); for(auto v : entry.position) output << ' ' << v; } }
+      output << ' ' << state.ranked.size(); for(auto const &entry : state.ranked) output << ' ' << identity(entry.target.identity) << ' ' << entry.priority;
+      output << '\n';
     }
     if(pilot) {
       if(check_collisions) output << "contact " << pilot->collision_model << ' ' << (pilot->hit_actor ? static_cast<int64_t>(*pilot->hit_actor) : -1) << '\n';
@@ -121,6 +132,8 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     for(size_t i{0}; i != combat.battles.size(); ++i) { output << "battle " << i << ' ' << combat.battles[i].active; for(auto const &side : combat.battles[i].sides) output << ' ' << (side.task ? static_cast<int64_t>(*side.task) : -1) << ' ' << side.initial << ' ' << side.release_time; output << '\n'; }
     output << "patrol " << combat.patrols.last_scan << ' ' << combat.patrols.visible[0].size() << ' ' << combat.patrols.visible[1].size(); for(auto const &list : combat.patrols.visible) for(auto const &t : list) reference(t.get()); for(auto const &list : combat.patrols.assigned) for(auto const &t : list) reference(t.get()); output << '\n';
   }};
+  std::unique_ptr<render::landscape> renderer;
+  std::array<std::unique_ptr<simulation::mission_instruments>, 2> instruments;
   simulation::flight_input controls; std::string command;
   while(input >> command) {
     if(command == "mode") input >> timing.arcade >> timing.game_flow;
@@ -129,6 +142,14 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       runtime.start_player(index, settings);
     }
     else if(command == "loadout") { std::array<int32_t, 9> loadout; for(auto &v : loadout) input >> v; runtime.equip_player(loadout); }
+    else if(command == "sensors") { unsigned int game_mode{0}; input >> game_mode; runtime.enable_player_sensors(game_mode); }
+    else if(command == "sensor-mode") { auto &state{runtime.sensors->state}; input >> state.tads >> state.automatic >> state.ground >> state.air >> state.frozen >> state.scan_all >> state.threat; }
+    else if(command == "sensor-view") {
+      math::pose view; for(auto &v : view.position) input >> v; for(auto &v : view.rotation) input >> v;
+      drawing = true; runtime.look_player(view, render::projection{0, 0, 320, 240}); drawing = false;
+      auto const &state{*runtime.sensors}; output << "sensor-view " << state.state.locked << ' ' << state.state.tads; reference(&state.state.current); reference(&state.optical); output << ' ' << state.optical_symbol.has_value();
+      if(state.optical_symbol) for(auto v : *state.optical_symbol) output << ' ' << v; output << '\n';
+    }
     else if(command == "player-target") { size_t index{0}; input >> index; *runtime.player_armament->target = *spatial.targets.at(index); }
     else if(command == "player-weapon") { input >> runtime.player_armament->inventory.current >> runtime.player_armament->inventory.armed; }
     else if(command == "player-fire") { int32_t now{0}; double dt{0}; unsigned int key{0}; input >> now >> dt >> key; bool result{runtime.fire_player(now, dt, static_cast<uint16_t>(key))}; output << "player-fired " << frame << ' ' << result << '\n'; }
@@ -171,6 +192,33 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     else if(command == "view") { for(auto &v : combat.player_position) input >> v; input >> combat.player_heading; }
     else if(command == "kill") { size_t i{0}; input >> i; combat.kill(i); }
     else if(command == "damage") { size_t i{0}; unsigned int amount{0}; input >> i >> amount; combat.attention.at(i).damage = static_cast<uint8_t>(amount); }
+    else if(command == "instruments") {
+      unsigned int mode{0}, view{0}; math::pose camera; input >> mode >> view; for(auto &v : camera.position) input >> v; for(auto &v : camera.rotation) input >> v;
+      auto &display{instruments.at(mode)}; if(!display) display = std::make_unique<simulation::mission_instruments>(runtime, mode);
+      display->update(view, camera, render::projection{0, 0, 320, 240}); auto const &s{display->state}; auto const &h{s.helmet}; auto const &w{h.weapons};
+      output << "instrument-flight " << h.heading << ' ' << h.command_heading << ' ' << h.pitch << ' ' << h.roll << ' ' << h.climb_rate << ' ' << h.radar_altitude << ' ' << h.barometric_altitude << ' ' << h.airspeed << ' ' << h.torque << ' ' << static_cast<unsigned int>(h.waypoint_letter) << ' ' << h.waypoint_distance << ' ' << h.waypoint_time << ' ' << s.clock_time << '\n';
+      output << "instrument-weapon " << w.selected << ' ' << w.rounds << ' ' << w.impact_time << ' ' << w.lock_status << ' ' << w.armed << ' ' << w.landed << ' ' << w.target_exists << ' ' << w.target_locked << ' ' << w.target_designated << ' ' << w.target_aircraft << ' ' << w.target_valid << ' ' << (w.target_valid ? w.target.x : 0) << ' ' << (w.target_valid ? w.target.y : 0) << ' ' << w.impact.x << ' ' << w.impact.y << ' ' << w.intercept.x << ' ' << w.intercept.y << ' ' << w.target_range << ' ' << w.target_speed << ' ' << w.box_half_size << ' ' << w.rocket_elevation << ' ' << w.tads_active << ' ' << w.tads_valid << ' ' << (w.tads_valid ? w.tads.x : 0) << ' ' << (w.tads_valid ? w.tads.y : 0) << ' ' << h.faults << ' ' << h.mode << ' ' << std::quoted(w.name) << ' ' << std::quoted(w.target_name) << '\n';
+      output << "instrument-stores"; for(auto const &p : s.stores.pairs) output << ' ' << p.type << ' ' << p.rounds[0] << ' ' << p.rounds[1]; for(auto v : s.stores.wingtip) output << ' ' << v;
+      output << ' ' << s.stores.gun << ' ' << s.stores.chaff << ' ' << s.stores.flares << ' ' << s.stores.armed << ' ' << s.stores.auto_chaff << ' ' << s.stores.auto_ecm << '\n';
+      for(bool tactical : {false, true}) {
+        auto const &r{tactical ? s.tactical : s.radar}; auto const &contacts{tactical ? s.tactical_contacts : s.radar_contacts};
+        output << "instrument-radar " << static_cast<unsigned int>(r.mode) << ' ' << r.range << ' ' << r.corner_range << ' ' << r.mark_length << ' ' << r.heading << ' ' << r.failed << ' ' << r.frozen << ' ' << r.tads << ' ' << r.locked << ' ' << r.scan_all << ' ' << r.threat << ' ' << r.range_index << ' ' << r.has_target << ' ' << std::quoted(r.target_name) << ' ' << r.target_distance << ' ' << contacts.size();
+        for(auto const &c : contacts) output << ' ' << c.x << ' ' << c.y << ' ' << c.symbol << ' ' << c.selected; output << '\n';
+      }
+      output << "instrument-route " << s.route.size() << ' ' << s.waypoint; for(auto const &p : s.route) output << ' ' << p.x << ' ' << p.y << ' ' << static_cast<unsigned int>(p.label); output << '\n';
+    }
+    else if(command == "render-frame") {
+      std::string path; math::pose camera; int hidden{-1}; input >> std::quoted(path) >> hidden;
+      for(auto &v : camera.position) input >> v; for(auto &v : camera.rotation) input >> v;
+      if(!renderer) {
+        renderer = std::make_unique<render::landscape>(data, zone); renderer->initialise_model_metadata(runtime.executable);
+        renderer->bind_scene(scene.base, scene.extra, mobiles, launched ? launched->visuals : renderer->effects, damage ? damage->marks : renderer->craters, renderer->fragments);
+      }
+      render::landscape_options options; if(hidden >= 0) options.hidden_mobile = spatial.mobile_id(static_cast<size_t>(hidden));
+      render::framebuffer target{320, 240}; target.clear(255); renderer->draw(target, camera, options);
+      resources::write_ppm(path, target.image); std::ofstream pixels{path + ".pixels", std::ios::binary}; pixels.write(reinterpret_cast<char const *>(target.image.pixels.data()), static_cast<std::streamsize>(target.image.pixels.size()));
+      output << "render " << std::quoted(path) << ' ' << renderer->missing_normals << ' ' << renderer->invalid_texture_samples << '\n';
+    }
     else if(command == "snapshot") snapshot();
     else if(command == "step") {
       bool capture{false}; int32_t now{0}, delta{0}; input >> now >> delta >> capture;

@@ -200,7 +200,15 @@ These menu comparisons use a defined initial palette and initialized widgets. Th
 - Eight connected player-firing traces match 3,047,894 fields over 3,200 mission updates. They include 1,326 player-launched rounds, live guidance, rack depletion, gun flash/sound transitions, impact estimates, collision, combat damage and player subsystem faults. Target choice, missile-camera selection, random radio chatter and frontend/debrief handling remain boundaries in this suite.
 - All player weapon, mount, firing-solution, warning and connected launch comparisons pass in normal and AddressSanitizer/UndefinedBehaviorSanitizer builds. Reports live in the sibling analysis workspace under `analysis/checks/cpp/player-{weapons,mounts,sight,warnings,launches}` and their `-sanitize` directories.
 
-Next: connect live sensors, bring the shared mission runtime into the frontend, and complete campaign interaction, audio and persistence. Full journey tests and CI follow once the game is connected.
+- Player targeting controls match 18,000 cases and 314,666 fields. All 110 missions pass 5,500 live sensor scans and 22,000 optical selections, matching 11,852,651 fields. Waypoint controls match 12,000 cases and 55,460 fields.
+- Eight connected sensor/combat traces match 3,282,731 fields, 2,079 launches and 69 kills. These include radar/TADS transitions, frozen contacts, player weapons and subsystem damage.
+- Ten camera geometry paths match 30,000 cases and 449,970 defined fields. View selection and optical controls match 28,000 actions and 477,416 fields. Nine continuous camera sequences exercise all twenty views over 4,680 updates, matching 322,920 fields, including lost missiles, target loss, device failures and the crash fade.
+- Daylight, sun position, night-vision thresholds and gun impact estimates match 24,000 cases and 84,000 fields. The gun impact routine retains the original displacement-only coordinates when firing without a selected target.
+- Live scene binding now renders the mission's actual actor, projectile, scenery, smoke, explosion and crater pools. Four continuous battle traces match 1,100,627 state fields and produce 60 scene frames. Five frames are free of invalid original model reads and match all 384,000 indexed pixels and RGB output. The other 55 contain missing model normals, for which the reconstruction uses bounded handling; they are excluded from exact frame comparisons.
+- Live cockpit state matches 467,620 fields over 1,200 continuous updates, alongside 1,170,510 matching simulation fields. This connects flight instruments, weapon and target captions, gun impact and rocket intercept cues, stores, radar/tactical contacts and waypoint labels.
+- These cockpit, targeting, sensor, route, camera, lighting, sight and live scene checks pass in both normal and AddressSanitizer/UndefinedBehaviorSanitizer builds.
+
+Next: connect the shared runtime, cameras and cockpit to the frontend, then complete campaign interaction, audio and persistence. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

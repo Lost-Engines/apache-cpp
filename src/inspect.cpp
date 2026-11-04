@@ -1,5 +1,8 @@
+#include "inspect_cameras.h"
 #include "inspect_flight.h"
 #include "inspect_controls.h"
+#include "inspect_targeting.h"
+#include "inspect_sensors.h"
 #include "inspect_player_weapons.h"
 #include "inspect_arcade.h"
 #include <cstdlib>
@@ -159,6 +162,9 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(command == "mission-sensors") { if(argc < 5) throw std::runtime_error{"mission-sensors requires a warzone and mission path"}; inspect_sensors(data, argv[3], argv[4], std::cin, std::cout); return 0; }
+  if(command == "cameras") { inspect_cameras(data, std::cin, std::cout); return 0; }
+  if(command == "targeting") { inspect_targeting(data, std::cin, std::cout); return 0; }
   if(command == "player-warnings") { inspect_player_warnings(std::cin, std::cout); return 0; }
   if(command == "player-sight") { inspect_player_sight(data, std::cin, std::cout); return 0; }
   if(command == "player-mounts") { inspect_player_mounts(data, std::cin, std::cout); return 0; }

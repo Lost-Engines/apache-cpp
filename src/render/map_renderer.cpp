@@ -154,7 +154,10 @@ void landscape::draw_map(framebuffer &target, rectangle const area, window2 cons
     if(!visible(base, false)) continue;
     if(configuration.flags & 2) triangles(x, y, base, false);
     feature(features, x, y, base);
-    for(auto const index : scenery_sectors[static_cast<size_t>(x * 64 + y)]) object(scenery_placements[index]);
+    for(auto const index : scenery_sectors[static_cast<size_t>(x * 64 + y)]) {
+      if(!extra_scenery.empty() && extra_scenery[index] && !(configuration.flags & 16)) continue;
+      object(live_scenery.empty() ? scenery_placements[index] : *live_scenery[index]);
+    }
     if(configuration.flags & 16) for(auto const &placement : extra) if(placement.sector == x * 64 + y) object(placement);
   }
   if(configuration.flags & 4) for(int x{sectors[0]}; x <= sectors[2]; ++x) for(int y{sectors[1]}; y <= sectors[3]; ++y) {

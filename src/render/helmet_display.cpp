@@ -282,11 +282,14 @@ helmet_display::helmet_display(resources::executable_data const &executable, mat
 void helmet_display::draw(framebuffer &target, helmet_instruments const &state) const {
   helmet_drawing drawing{target, font, trig, state, high, viewports.at(state.view), sight_viewport}; drawing.complete();
 }
+vertex2 helmet_display::unproject_point(unsigned int const view, int32_t const x, int32_t const y) const {
+  return projection2{viewports.at(view), {-0x100000, -0xc0000, 0x100000, 0xc0000}}.unproject(x, y);
+}
 std::optional<vertex2> helmet_display::project_point(unsigned int const view, math::pose const &camera, projection const &scene, math::vector3 const &position) const {
   math::vector3 delta; for(size_t i{0}; i != 3; ++i) delta[i] = math::subtract(position[i], camera.position[i]);
   auto const point{scene.project_unclipped(math::transform(camera.rotation, delta))};
   if(!point || point->x < 0 || point->x >= 800 || point->y < 0 || point->y >= 600) return {};
-  return projection2{viewports.at(view), {-0x100000, -0xc0000, 0x100000, 0xc0000}}.unproject(point->x, point->y);
+  return unproject_point(view, point->x, point->y);
 }
 void helmet_display::draw_component(framebuffer &target, helmet_instruments const &state, helmet_component const component) const {
   helmet_drawing drawing{target, font, trig, state, high, viewports.at(state.view), sight_viewport};

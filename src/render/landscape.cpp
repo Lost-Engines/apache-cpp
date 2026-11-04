@@ -23,6 +23,27 @@ landscape::landscape(resources::data_store const &data, std::string_view const z
     scenery_placements.push_back(placement);
   }
 }
+void landscape::bind_scene(std::span<resources::scenery_placement const> const base, std::span<resources::scenery_placement const> const extra, mobile_scene &objects, simulation::effects const &particles, simulation::craters const &marks, simulation::fragments const &pieces) {
+  live_mobiles = &objects; live_effects = &particles; live_craters = &marks; live_fragments = &pieces;
+  scenery.clear(); scenery_placements.clear(); live_scenery.clear(); extra_scenery.clear();
+  for(auto &sector : scenery_sectors) sector.clear();
+  for(unsigned int layer{0}; layer != 2; ++layer) for(auto const &placement : layer ? extra : base) {
+    if(!placement.model) continue;
+    scenery_sectors.at(placement.sector).push_back(scenery.size());
+    scenery.emplace_back(); scenery_placements.emplace_back(); live_scenery.push_back(&placement); extra_scenery.push_back(layer != 0);
+    refresh_scenery(scenery.size() - 1);
+  }
+}
+void landscape::refresh_scenery(size_t const index) {
+  if(live_scenery.empty()) return;
+  auto const &source{*live_scenery[index]}; auto &cached{scenery_placements[index]}; auto &object{scenery[index]};
+  if(source.model && (source.model != object.id || source.heading != cached.heading || source.x != cached.x || source.y != cached.y)) {
+    uint32_t const angle{static_cast<uint32_t>(source.heading) << 16};
+    int32_t const sine{trig.sine(angle)}, cosine{trig.cosine(angle)};
+    object = construct_model(models, source.model, {{source.x, source.y, 0}, {cosine, math::negate(sine), 0, sine, cosine, 0, 0, 0, INT32_MAX}});
+  }
+  cached = source; object.flags = source.animation; object.alternate_colours = (source.status & 0x2000) != 0;
+}
 uint8_t landscape::surface_type(int32_t const x, int32_t const y) const { return resources::surface_type(features, super_features, x, y); }
 void landscape::advance(int32_t const delta_time, uint32_t &random_seed) {
   if(delta_time < 0) throw std::runtime_error{"Visual time cannot run backwards"};
@@ -51,6 +72,10 @@ std::string_view landscape::draw_flir(framebuffer &target, model_instance &objec
 }
 void landscape::draw(framebuffer &target, math::pose camera, landscape_options const &configuration) {
   auto options{configuration};
+  auto &active_mobiles{live_mobiles ? *live_mobiles : mobiles};
+  auto const &active_effects{live_effects ? *live_effects : effects};
+  auto const &active_craters{live_craters ? *live_craters : craters};
+  auto const &active_fragments{live_fragments ? *live_fragments : fragments};
   if(options.infrared == 2) { options.terrain_detail = 0; options.models.textures = false; options.models.gouraud = false; options.models.glass = false; options.sky.cloud_flags &= ~2u; }
   palette.prepare(options.infrared);
   if(options.terrain_detail > 3) throw std::runtime_error{"Terrain quality must be between zero and three"};
@@ -138,6 +163,8 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
         draw_feature(features, sx + x, sy + y, origin, std::abs(x) >= 4 || std::abs(y) >= 4);
         if(options.scenery && std::abs(x) < 2 && std::abs(y) < 2) {
           for(auto const index : scenery_sectors[static_cast<size_t>((sx + x) * 64 + sy + y)]) {
+            refresh_scenery(index);
+            if(!scenery_placements[index].model) continue;
             auto &object{scenery[index]};
             math::vector3 delta;
             for(size_t axis{0}; axis != 3; ++axis) delta[axis] = math::subtract(object.relative.position[axis], camera.position[axis]);
@@ -161,29 +188,29 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
     clouds->submit(queue, camera);
   }
   sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
-  submit_craters(queue, craters, camera, {.cloud_mode{sky.cloud_mode}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
-  submit_effects(queue, effects, camera, {.cloud_mode{sky.cloud_mode}, .infra_red{options.infrared}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
-  submit_fragments(queue, fragments, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
+  submit_craters(queue, active_craters, camera, {.cloud_mode{sky.cloud_mode}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
+  submit_effects(queue, active_effects, camera, {.cloud_mode{sky.cloud_mode}, .infra_red{options.infrared}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
+  submit_fragments(queue, active_fragments, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   shadow_projection casting{terrain, trig, options.lighting};
   casting.cloud_mode = sky.cloud_mode; casting.cloud_top = options.cloud_top;
-  casting.receiver = [&](math::vector3 const &position){ return mobiles.shadow_receiver(position); };
+  casting.receiver = [&](math::vector3 const &position){ return active_mobiles.shadow_receiver(position); };
   bool const shadows{options.shadows && options.lighting.night == 0 && std::bit_cast<int32_t>(options.lighting.pitch) < -0x71c71c6 && ((sky.cloud_mode == 0 && sky.weather == 0) || sky.cloud_mode == 2)};
-  mobiles.submit(queue, camera, {.cloud_mode{sky.cloud_mode}, .cloud_flags{sky.cloud_flags}, .weather{sky.weather}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}, .shadows{shadows}}, casting);
+  active_mobiles.submit(queue, camera, {.cloud_mode{sky.cloud_mode}, .cloud_flags{sky.cloud_flags}, .weather{sky.weather}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}, .shadows{shadows}}, casting);
   shadow_renderer shadow_drawer{target, models, casting, palette};
   for(auto const &entry : queue.ordered()) {
     if(entry.kind == draw_kind::terrain) draw_tile(tiles[entry.payload], false);
-    else if(entry.kind == draw_kind::smoke) effect_drawer.draw_smoke(effects.smoke_puffs.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
-    else if(entry.kind == draw_kind::explosion) effect_drawer.draw_explosion(effects.explosions.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
+    else if(entry.kind == draw_kind::smoke) effect_drawer.draw_smoke(active_effects.smoke_puffs.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
+    else if(entry.kind == draw_kind::explosion) effect_drawer.draw_explosion(active_effects.explosions.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
     else if(entry.kind == draw_kind::cloud) clouds->draw(cloud_raster, view, palette, entry.payload);
     else if(entry.kind == draw_kind::shadow) {
-      auto &object{mobiles.at(entry.payload)}; object.distance = entry.depth;
+      auto &object{active_mobiles.at(entry.payload)}; object.distance = entry.depth;
       shadow_drawer.draw(object, camera);
     } else {
       if(entry.kind == draw_kind::mobile && options.hidden_mobile == entry.payload) continue;
       std::optional<model_instance> temporary;
-      if(entry.kind == draw_kind::crater) temporary.emplace(crater_model(entry.payload < 128 ? craters.short_lived.at(entry.payload) : craters.long_lived.at(entry.payload - 128), trig, entry.depth));
-      if(entry.kind == draw_kind::fragment) temporary.emplace(fragment_model(fragments.pieces.at(entry.payload), models, entry.depth));
-      auto &object{temporary ? *temporary : entry.kind == draw_kind::mobile ? mobiles.at(entry.payload) : scenery[entry.payload]};
+      if(entry.kind == draw_kind::crater) temporary.emplace(crater_model(entry.payload < 128 ? active_craters.short_lived.at(entry.payload) : active_craters.long_lived.at(entry.payload - 128), trig, entry.depth));
+      if(entry.kind == draw_kind::fragment) temporary.emplace(fragment_model(active_fragments.pieces.at(entry.payload), models, entry.depth));
+      auto &object{temporary ? *temporary : entry.kind == draw_kind::mobile ? active_mobiles.at(entry.payload) : scenery[entry.payload]};
       object.distance = entry.depth;
       object_drawer.draw(object, camera);
       missing_normals += object_drawer.missing_normals;

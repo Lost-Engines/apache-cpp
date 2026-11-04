@@ -68,6 +68,10 @@ add_library(apache_core
   src/render/scene_palette.h
   src/simulation/mission_actors.cpp
   src/simulation/mission_actors.h
+  src/simulation/weapon_info.cpp
+  src/simulation/weapon_info.h
+  src/simulation/weapon_rules.cpp
+  src/simulation/weapon_rules.h
   src/simulation/actor_types.cpp
   src/simulation/actor_types.h
   src/simulation/arcade_flight.cpp
@@ -140,7 +144,7 @@ add_executable(apache
 target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
-add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h)
+add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)

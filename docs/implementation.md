@@ -50,6 +50,7 @@ Current implementation:
 - Initial menu navigation and a headless frame capture option.
 - Localized mission briefings, ordered mission tags, tasks, actor definitions, routes, objective flags, environment settings and embedded formations.
 - Actor classes and loadouts, formation expansion, variable model attachments, carrier reservations and complete starting poses.
+- All weapon definitions, projectile acceleration/drag/expiry, blast and armour damage, AI weapon selection, firing permissions and difficulty-dependent acquisition/burst timing.
 
 Validation completed:
 
@@ -135,6 +136,7 @@ Validation completed:
 - 28 continuous Arcade traces across all four warzones match 2,285,830 integer/event fields across 67,228 states. Of 4,235,364 double fields, 4,207,780 match bit-for-bit; the largest difference is 3.64e-12. The traces include carrier starts, takeoff, terrain-relative altitude holding, engine failures, fuel exhaustion, hover, variable timing and landings. The component and continuous sweeps also pass with both sanitizers enabled.
 - All 411 briefing entries in four language bundles, 89 formations (803 members), and all 110 missions match the original-loader exports. This covers 1,871 tasks, 8,944 actor definitions, 21,989 expanded model IDs, 42,054 waypoints and 156,552 setting records. The complete loading comparison also passes under both sanitizers. Actor placement and running behavior are verified separately.
 - All 1,315 actor type records match 19,725 fields. Across every mission, 58,496 model instances and attachment trees match, together with all 263,868 starting transform fields for 21,989 units. A second direct execution comparison matches 483,758 actor-state fields, including ammunition, angles, velocities, route selection, carrier slots and random ordering. Both full suites also pass under sanitizers.
+- All 55 weapon definitions match original initialization. Another 67,142 fields match across 3,706 atmosphere queries, 12 difficulty rows, 8,640 speed updates, 2,160 expiry cases, 6,912 damage cases, 4,800 weapon selections, 4,000 firing decisions, 4,320 fire intervals and 600 acquisition delays. These include multiplayer damage rules, range boundaries, motor burnout and the original random sequence. The complete comparison also passes under sanitizers. Guidance, collision and live target acquisition remain separate integration work.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

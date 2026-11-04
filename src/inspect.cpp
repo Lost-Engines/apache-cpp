@@ -37,6 +37,7 @@
 #include "resources/models.h"
 #include "resources/missions.h"
 #include "simulation/actor_types.h"
+#include "inspect_weapons.h"
 #include "simulation/mission_actors.h"
 #include "resources/terrain.h"
 #include "resources/terrain_textures.h"
@@ -167,6 +168,10 @@ int main(int const argc, char const *const argv[]) try {
       pose(unit.object.world); std::cout << '\n';
       node(node, unit.object, "root", unit.carrier_slot.has_value());
     }
+  } else if(command == "weapon-definitions") {
+    inspect_weapon_definitions(std::cout);
+  } else if(command == "weapon-rules") {
+    inspect_weapon_rules(std::cin, std::cout, data);
   } else if(command == "actor-types") {
     auto const types{apache::simulation::actor_types()};
     for(size_t id{0}; id != types.size(); ++id) {

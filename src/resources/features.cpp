@@ -1,6 +1,7 @@
 #include "features.h"
 #include <algorithm>
 #include <string>
+#include "math/fixed.h"
 
 namespace apache::resources {
 namespace {
@@ -101,5 +102,39 @@ feature_layer::feature_layer(data_store const &data, std::string_view const zone
     if(index >= records.size() || (index && !records[index])) input.fail("Terrain feature placement references a missing record");
     placements.push_back(index);
   }
+}
+uint8_t feature_surface(feature const &object, int32_t const x, int32_t const y) {
+  std::vector<std::array<int32_t, 2>> points;
+  for(auto const &v : object.vertices) {
+    std::array<int32_t, 2> point{0, 0};
+    std::array<int32_t, 4> constexpr scales{1 << 26, 1 << 18, 1 << 12, 1 << 6};
+    for(size_t level{0}; level != 4; ++level) for(size_t axis{0}; axis != 2; ++axis) point[axis] += v.components[level][axis] * scales[level];
+    points.push_back(point);
+  }
+  for(auto const &face : object.faces) {
+    if(face.type < 2) continue;
+    if(face.type > 5) throw std::runtime_error{"Unsupported surface-query face"};
+    bool inside{true};
+    auto const &indices{face.render_indices};
+    for(size_t i{0}; i != indices.size(); ++i) {
+      auto const &a{points.at(indices[i])}, &b{points.at(indices[(i + 1) % indices.size()])};
+      int64_t const cross{int64_t{math::subtract(b[0], x)} * math::subtract(a[1], b[1]) - int64_t{math::subtract(a[0], b[0])} * math::subtract(b[1], y)};
+      if(cross < 0) { inside = false; break; }
+    }
+    if(inside && !indices.empty()) return face.surface;
+  }
+  return 0;
+}
+uint8_t feature_layer::surface_type(int32_t x, int32_t y) const {
+  int32_t const offset{super ? 0x18000000 : 0}, limit{super ? 0x40000000 : 0x10000000};
+  x = math::add(x, offset); y = math::add(y, offset);
+  if(x < 0 || y < 0 || x >= limit || y >= limit) return 0;
+  int const shift{super ? 26 : 22}, side{super ? 16 : 64}, mask{(1 << shift) - 1};
+  auto const index{placements.at(static_cast<size_t>((x >> shift) * side + (y >> shift)))};
+  return index ? feature_surface(*records.at(index), x & mask, y & mask) : 0;
+}
+uint8_t surface_type(feature_layer const &normal, feature_layer const &super, int32_t const x, int32_t const y) {
+  auto const value{normal.surface_type(x, y)};
+  return value ? value : super.surface_type(x, y);
 }
 } // namespace apache::resources

@@ -7,6 +7,7 @@ struct pose {
   vector3 position{0, 0, 0};
   matrix3 rotation{identity};
 };
+vector3 normalise_q31(vector3 value);
 vector3 transform(matrix3 const &matrix, vector3 const &vector);
 matrix3 transpose(matrix3 const &matrix);
 matrix3 multiply(matrix3 const &a, matrix3 const &b);

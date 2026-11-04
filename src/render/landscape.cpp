@@ -6,7 +6,7 @@
 #include "terrain_projection.h"
 
 namespace apache::render {
-landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, effect_drawer{data}, textures{data, zone}, features{data, zone, false}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone}, mobiles{models} {
+landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, effect_drawer{data}, textures{data, zone}, features{data, zone, false}, super_features{data, zone, true}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone}, mobiles{models} {
   auto const placements{resources::read_scenery(data.read(std::string{zone} + ".WZ/GNDOBJS.BIN"))};
   scenery.reserve(placements.size());
   for(auto const &placement : placements) {
@@ -20,6 +20,12 @@ landscape::landscape(resources::data_store const &data, std::string_view const z
     scenery_sectors[placement.sector].push_back(scenery.size());
     scenery.push_back(std::move(object));
   }
+}
+uint8_t landscape::surface_type(int32_t const x, int32_t const y) const { return resources::surface_type(features, super_features, x, y); }
+void landscape::advance(int32_t const delta_time, uint32_t &random_seed) {
+  if(delta_time < 0) throw std::runtime_error{"Visual time cannot run backwards"};
+  craters.advance(); effects.advance(delta_time, terrain);
+  fragments.advance(delta_time, trig, terrain, [&](int32_t const x, int32_t const y){ return surface_type(x, y); }, craters, random_seed);
 }
 void landscape::draw(framebuffer &target, math::pose camera, landscape_options const &options) {
   if(options.terrain_detail > 3) throw std::runtime_error{"Terrain quality must be between zero and three"};
@@ -132,6 +138,7 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
   sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
   submit_craters(queue, craters, camera, {.cloud_mode{sky.cloud_mode}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   submit_effects(queue, effects, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
+  submit_fragments(queue, fragments, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   shadow_projection casting{terrain, trig, options.lighting};
   casting.cloud_mode = sky.cloud_mode; casting.cloud_top = options.cloud_top;
   casting.receiver = [&](math::vector3 const &position){ return mobiles.shadow_receiver(position); };
@@ -148,9 +155,10 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
       shadow_drawer.draw(object, camera);
     } else {
       if(entry.kind == draw_kind::mobile && options.hidden_mobile == entry.payload) continue;
-      std::optional<model_instance> crater;
-      if(entry.kind == draw_kind::crater) crater.emplace(crater_model(entry.payload < 128 ? craters.short_lived.at(entry.payload) : craters.long_lived.at(entry.payload - 128), trig, entry.depth));
-      auto &object{crater ? *crater : entry.kind == draw_kind::mobile ? mobiles.at(entry.payload) : scenery[entry.payload]};
+      std::optional<model_instance> temporary;
+      if(entry.kind == draw_kind::crater) temporary.emplace(crater_model(entry.payload < 128 ? craters.short_lived.at(entry.payload) : craters.long_lived.at(entry.payload - 128), trig, entry.depth));
+      if(entry.kind == draw_kind::fragment) temporary.emplace(fragment_model(fragments.pieces.at(entry.payload), models, entry.depth));
+      auto &object{temporary ? *temporary : entry.kind == draw_kind::mobile ? mobiles.at(entry.payload) : scenery[entry.payload]};
       object.distance = entry.depth;
       object_drawer.draw(object, camera);
       missing_normals += object_drawer.missing_normals;

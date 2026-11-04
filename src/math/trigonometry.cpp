@@ -55,4 +55,12 @@ matrix3 trigonometry::transformation(uint32_t const heading, uint32_t const pitc
     multiply_q31(cr, cp),
   };
 }
+matrix3 trigonometry::rotation(vector3 const &axis, uint32_t const angle) const {
+  int32_t const c{cosine(angle)}, s{sine(angle)};
+  int32_t const xs{multiply_q31(axis[0], s)}, ys{multiply_q31(axis[1], s)}, zs{multiply_q31(axis[2], s)};
+  int32_t const xx{multiply_q31(axis[0], axis[0])}, yy{multiply_q31(axis[1], axis[1])}, zz{multiply_q31(axis[2], axis[2])};
+  auto const cross{[&](size_t const a, size_t const b){ int32_t const v{multiply_q31(axis[a], axis[b])}; return subtract(v, multiply_q31(v, c)); }};
+  int32_t const xy{cross(0, 1)}, xz{cross(0, 2)}, yz{cross(1, 2)};
+  return {add(xx, multiply_q31(subtract(INT32_MAX, xx), c)), subtract(xy, zs), add(xz, ys), add(xy, zs), add(yy, multiply_q31(subtract(INT32_MAX, yy), c)), subtract(yz, xs), subtract(xz, ys), add(yz, xs), add(zz, multiply_q31(subtract(INT32_MAX, zz), c))};
+}
 } // namespace apache::math

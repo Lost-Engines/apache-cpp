@@ -42,6 +42,10 @@ add_library(apache_core
   src/render/model_renderer.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/fragments.cpp
+  src/simulation/fragments.h
+  src/render/fragment_renderer.cpp
+  src/render/fragment_renderer.h
   src/simulation/craters.cpp
   src/simulation/craters.h
   src/render/crater_renderer.cpp

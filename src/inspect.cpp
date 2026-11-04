@@ -88,19 +88,20 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters") {
+  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") {
     apache::math::trigonometry const trig{data};
+    auto const fragment_models{command == "scene-fragments" ? apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN")) : apache::resources::model_archive{}};
     std::string zone, loaded;
     std::unique_ptr<apache::render::landscape> world;
     apache::math::pose camera;
     uint32_t heading{0}, pitch{0}, roll{0};
     apache::render::landscape_options options;
     options.scenery = command == "scene";
-    options.celestial_bodies = command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters";
+    options.celestial_bodies = command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments";
     while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
       if(options.celestial_bodies) std::cin >> options.sky.cloud_flags >> options.sky.weather >> options.cloud_height >> options.cloud_bottom >> options.cloud_top >> options.lighting.heading >> options.lighting.pitch >> options.lighting.night;
       if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
-      if(command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters") {
+      if(command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") {
         world->effects.reset();
         size_t count{0}, puffs{0}, blasts{0}; std::cin >> count;
         for(size_t i{0}; i != count; ++i) {
@@ -111,7 +112,7 @@ int main(int const argc, char const *const argv[]) try {
           else world->effects.explosions.at(blasts++) = {kind, position, {0, 0, 0}, radius, age};
         }
       }
-      if(command == "scene-mobiles" || command == "scene-craters") {
+      if(command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") {
         world->mobiles.clear();
         size_t count{0}; int64_t hidden{-1}; std::cin >> count >> hidden;
         options.hidden_mobile = hidden < 0 ? std::nullopt : std::optional{static_cast<uint32_t>(hidden)};
@@ -122,13 +123,25 @@ int main(int const argc, char const *const argv[]) try {
           auto &object{world->mobiles.at(world->mobiles.add(model, pose))}; object.flags = flags; object.alternate_colours = alternate;
         }
       }
-      if(command == "scene-craters") {
+      if(command == "scene-craters" || command == "scene-fragments") {
         world->craters.reset(); size_t count{0}, short_count{0}, long_count{0}; std::cin >> count;
         for(size_t i{0}; i != count; ++i) {
           bool temporary{false}; apache::simulation::crater item;
           std::cin >> temporary >> item.model >> item.position[0] >> item.position[1] >> item.position[2] >> item.heading >> item.age >> item.scale[0] >> item.scale[1] >> item.scale[2];
           (temporary ? world->craters.short_lived.at(short_count++) : world->craters.long_lived.at(long_count++)) = item;
         }
+      }
+      if(command == "scene-fragments") {
+        world->fragments.reset(); uint32_t seed{0}; int32_t delta{0}; size_t steps{0}, count{0};
+        std::cin >> seed >> delta >> steps >> count;
+        for(size_t i{0}; i != count; ++i) {
+          bool tree{false}; uint32_t model{0}, flags{0}, h{0}, p{0}, r{0}; apache::math::pose pose;
+          std::cin >> tree >> model >> flags >> pose.position[0] >> pose.position[1] >> pose.position[2] >> h >> p >> r;
+          pose.rotation = trig.transformation(h, p, r);
+          if(tree) { auto object{apache::render::construct_model(fragment_models, model, pose)}; object.flags = flags; apache::render::fracture_model(object, world->fragments, seed); }
+          else world->fragments.create(model, flags, pose, seed);
+        }
+        for(size_t i{0}; i != steps; ++i) world->advance(delta, seed);
       }
       apache::render::framebuffer frame{320, 240};
       for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world->palette.colours[i * 3], world->palette.colours[i * 3 + 1], world->palette.colours[i * 3 + 2]};
@@ -137,9 +150,60 @@ int main(int const argc, char const *const argv[]) try {
       world->draw(frame, camera, options);
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec;
       if(options.celestial_bodies) std::cout << ' ' << world->sun_glare;
-      if(command == "scene" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
+      if(command == "scene" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "fragment-state") {
+    apache::math::trigonometry const trig{data};
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    std::unique_ptr<apache::render::landscape> world; uint32_t seed{1}; std::string operation;
+    while(std::cin >> operation) {
+      if(operation == "reset") { std::string zone; std::cin >> zone >> seed; world = std::make_unique<apache::render::landscape>(data, zone); }
+      else {
+        if(!world) throw std::runtime_error{"Reset the fragment scene first"};
+        if(operation == "advance") { int32_t delta{0}; std::cin >> delta; world->advance(delta, seed); }
+        else if(operation == "state") {
+          apache::resources::bytes bytes; size_t pieces{0}, splashes{0};
+          for(size_t i{0}; i != world->fragments.pieces.size(); ++i) {
+            auto const &piece{world->fragments.pieces[i]}; if(!piece.active) continue;
+            ++pieces; word(bytes, static_cast<uint32_t>(i)); word(bytes, 1); word(bytes, piece.model); word(bytes, piece.flags);
+            for(auto const v : piece.position.position) word(bytes, static_cast<uint32_t>(v));
+            for(auto const v : piece.position.rotation) word(bytes, static_cast<uint32_t>(v));
+            for(auto const v : piece.axis) word(bytes, static_cast<uint32_t>(v));
+            word(bytes, static_cast<uint32_t>(piece.spin));
+            for(auto const v : piece.velocity) word(bytes, static_cast<uint32_t>(v));
+          }
+          for(size_t i{0}; i != world->craters.short_lived.size(); ++i) {
+            auto const &item{world->craters.short_lived[i]}; if(item.model < 0) continue;
+            ++splashes; word(bytes, 65536u + static_cast<uint32_t>(i));
+            for(auto const v : item.position) word(bytes, static_cast<uint32_t>(v));
+            word(bytes, static_cast<uint32_t>(item.model)); word(bytes, item.heading); word(bytes, static_cast<uint32_t>(item.age));
+            for(auto const v : item.scale) word(bytes, static_cast<uint32_t>(v));
+          }
+          std::cout << seed << ' ' << pieces << ' ' << splashes << ' ' << std::hex << apache::resources::fingerprint(bytes) << std::dec << '\n';
+        } else if(operation == "single" || operation == "tree") {
+          uint32_t id{0}, flags{0}, h{0}, p{0}, r{0}; apache::math::pose pose;
+          std::cin >> id >> flags >> pose.position[0] >> pose.position[1] >> pose.position[2] >> h >> p >> r; pose.rotation = trig.transformation(h, p, r);
+          if(operation == "single") world->fragments.create(id, flags, pose, seed);
+          else { auto object{apache::render::construct_model(models, id, pose)}; object.flags = flags; apache::render::fracture_model(object, world->fragments, seed); }
+        } else throw std::runtime_error{"Unknown fragment-state operation"};
+      }
+    }
+  } else if(command == "vector-math") {
+    apache::math::trigonometry const trig{data}; apache::math::vector3 vector; uint32_t angle{0};
+    while(std::cin >> vector[0] >> vector[1] >> vector[2] >> angle) {
+      auto const axis{apache::math::normalise_q31(vector)};
+      for(auto const v : axis) std::cout << v << ' ';
+      auto const matrix{trig.rotation(axis, angle)};
+      for(size_t i{0}; i != matrix.size(); ++i) std::cout << matrix[i] << (i + 1 == matrix.size() ? '\n' : ' ');
+    }
+  } else if(command == "surface-types") {
+    std::string zone, loaded; int32_t x{0}, y{0};
+    std::optional<apache::resources::feature_layer> normal, super;
+    while(std::cin >> zone >> x >> y) {
+      if(loaded != zone) { normal.emplace(data, zone, false); super.emplace(data, zone, true); loaded = zone; }
+      std::cout << static_cast<unsigned int>(apache::resources::surface_type(*normal, *super, x, y)) << '\n';
     }
   } else if(command == "crater-state") {
     apache::simulation::craters craters;

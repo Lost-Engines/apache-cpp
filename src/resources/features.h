@@ -31,5 +31,8 @@ public:
   std::vector<std::optional<feature>> records;
   std::vector<uint32_t> placements;
   feature_layer(data_store const &data, std::string_view zone, bool super);
+  uint8_t surface_type(int32_t x, int32_t y) const;
 };
+uint8_t feature_surface(feature const &object, int32_t x, int32_t y);
+uint8_t surface_type(feature_layer const &normal, feature_layer const &super, int32_t x, int32_t y);
 } // namespace apache::resources

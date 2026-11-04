@@ -5,6 +5,7 @@
 #include "draw_queue.h"
 #include "effect_renderer.h"
 #include "feature_renderer.h"
+#include "fragment_renderer.h"
 #include "horizon.h"
 #include "model_renderer.h"
 #include "mobile_scene.h"
@@ -36,6 +37,7 @@ class landscape {
   effect_renderer effect_drawer;
   resources::terrain_textures textures;
   resources::feature_layer features;
+  resources::feature_layer super_features;
   math::trigonometry trig;
   resources::model_archive models;
   std::vector<std::optional<resources::texture>> object_textures;
@@ -47,10 +49,13 @@ public:
   int32_t sun_glare{0};
   simulation::effects effects;
   simulation::craters craters;
+  simulation::fragments fragments;
   size_t missing_normals{0};
   size_t invalid_texture_samples{0};
   landscape(resources::data_store const &data, std::string_view zone);
   resources::terrain const &heights() const { return terrain; }
+  uint8_t surface_type(int32_t x, int32_t y) const;
+  void advance(int32_t delta_time, uint32_t &random_seed);
   void draw(framebuffer &target, math::pose camera, landscape_options const &options);
 };
 } // namespace apache::render

@@ -124,7 +124,11 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "flight-systems") {
+  if(command == "flight-trace") {
+    inspect_flight_trace(std::cin, std::cout, data);
+  } else if(command == "flight-dynamics") {
+    inspect_flight_dynamics(std::cin, std::cout);
+  } else if(command == "flight-systems") {
     inspect_flight_systems(std::cin, std::cout);
   } else if(command == "helmet-components" || command == "helmet-weapons") {
     apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};

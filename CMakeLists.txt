@@ -64,6 +64,10 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/realistic_flight.cpp
+  src/simulation/realistic_flight.h
+  src/simulation/rotor_dynamics.cpp
+  src/simulation/rotor_dynamics.h
   src/simulation/flight_systems.cpp
   src/simulation/flight_systems.h
   src/simulation/instrument_state.cpp

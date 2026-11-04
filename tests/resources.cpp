@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include "configuration/preferences.h"
 #include "math/fixed.h"
+#include "render/celestial.h"
 #include "render/framebuffer.h"
 #include "render/projection.h"
 #include "render/projection2.h"
@@ -62,6 +63,16 @@ int main() try {
   require(buffer.image.pixels == apache::resources::bytes{9, 9, 9, 9, 9, 9, 2, 9, 9, 4, 5, 9}, "transparent blit clips without losing source alignment");
   buffer.fill({-100, -100, 100, 100}, 7);
   require(buffer.image.pixels == apache::resources::bytes{9, 9, 9, 9, 9, 7, 7, 7, 9, 7, 7, 7}, "fill intersects the framebuffer and caller clip");
+  apache::render::rasterizer circles{buffer};
+  apache::render::material circle_paint;
+  circle_paint.colours = 0x05050505;
+  circles.circle(0, 0, 10, circle_paint);
+  require(buffer.image.pixels == apache::resources::bytes{9, 9, 9, 9, 9, 5, 5, 5, 9, 5, 5, 5}, "circle clips against both the image and a larger caller viewport");
+  circles.circle(INT32_MIN, INT32_MAX, 20, circle_paint);
+  rejects([&]{ circles.circle(0, 0, INT32_MAX, circle_paint); }, "oversized circle rejected without arithmetic overflow");
+  rejects([]{ apache::render::read_stars(apache::resources::bytes{0, 32, 32}); }, "truncated star record rejected");
+  rejects([]{ apache::render::read_stars(apache::resources::bytes{24, 32, 32, 32}); }, "star palette index bounded");
+  rejects([]{ apache::render::read_stars(apache::resources::bytes{0, 32, 65, 32}); }, "star grid lookup bounded");
   require(apache::math::rounded_q31(0x40000000ull) == 1, "positive half rounds upward");
   require(apache::math::rounded_q31(0xffffffffc0000000ull) == 0, "negative half rounds toward zero");
   require(apache::math::negate(INT32_MIN) == INT32_MIN, "fixed-point negation has defined wrapping");

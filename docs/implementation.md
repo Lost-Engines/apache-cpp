@@ -11,12 +11,13 @@ Current implementation:
 - Terrain heights and scenery placements.
 - Model geometry, attachments, bounded drawing programs and authored animation branches.
 - Original rounded sine/cosine, arcsine and arctangent lookup, with Q31 heading/pitch/roll matrices and angle recovery.
-- Software line, polygon, mesh, translucent, heat-haze, affine-textured and Gouraud-shaded rasterization.
+- Software line, circle, polygon, mesh, translucent, heat-haze, affine-textured and Gouraud-shaded rasterization.
 - Complete model drawing with authored attachments, fixed-point grid coordinates, lighting, animation branches, level-of-detail chains and faction colour/texture swaps.
 - Original palette, intensity ramps and glass remaps for all four warzones.
 - Terrain grid projection, 7,200-entry scene queue, texture selection and fog shading tables.
 - Seven terrain drawing paths, including 64-triangle subdivision and perspective correction in 16-pixel spans.
-- Complete terrain and feature scene assembly, visible-sector selection, and the original ground/sky horizon.
+- Complete terrain, feature and placed-scenery assembly, visible-sector selection, and the original ground/sky horizon.
+- Star-map decoding, night visibility thresholds, sun/moon projection and sun glare.
 - Bounded feature-record decoding, distant feature variants and 2D world-window clipping.
 - Perspective projection and five-plane clipping with interpolated texture coordinates and lighting.
 - Preference parsing, conversion and serialization.
@@ -46,13 +47,17 @@ Validation completed:
 - 480 viewpoints match 10,488 sector-bound, origin and visibility fields.
 - 6,245 2D clipping cases match 123,036 projected coordinate/intensity fields.
 - 1,524 horizon images match all 206,233,600 pixels across camera angles and weather conditions.
-- 192 assembled landscape images match all pixels across the four warzones and terrain-quality levels. These include normal features, terrain sorting and the horizon; clouds, celestial bodies, scenery and moving objects are the next integration steps. Another 80 landscape and 424 horizon comparisons pass under sanitizers.
+- 192 assembled landscape images match all pixels across the four warzones and terrain-quality levels. These include normal features, terrain sorting and the horizon. Another 80 landscape and 424 horizon comparisons pass under sanitizers.
 - 2,485 alternate-faction model frames match, including inherited colour and texture swaps. A further 143 cases encounter the original unsafe lighting/texture reads already described above.
+- 68 complete scenery frames match exactly in a 192-case run across all warzones. The remaining frames include the original unsafe model reads described above; all 192 C++ frames use bounded handling.
+- 8,808 circle frames match 408,858,624 pixels, including edge clipping, mesh patterns and translucent remapping.
+- 1,324 celestial frames match 171,545,600 pixels and every sun-glare value, including twilight thresholds, weather cover and camera roll.
+- The full 192-case scenery run and another 424 celestial frames pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: scenery, moving objects, clouds and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
+Next: moving objects, clouds, scene effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

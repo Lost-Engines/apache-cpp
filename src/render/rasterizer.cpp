@@ -89,10 +89,44 @@ void rasterizer::polygon(std::span<screen_vertex const> const vertices, uint32_t
   fill(vertices, {.colours{colours}, .pattern{pattern}, .remapping{remapping}, .intensity_map{}});
 }
 void rasterizer::fill(std::span<screen_vertex const> const vertices, material const &paint) {
+  scan(vertices);
+  paint_scans(paint);
+}
+void rasterizer::circle(int const centre_x, int const centre_y, int const radius, material const &paint) {
+  if(paint.image || paint.light != shading::none) throw std::runtime_error{"Circles do not carry texture or lighting coordinates"};
+  if(radius <= 0) return;
+  if(radius > 1048576) throw std::runtime_error{"Circle radius exceeds the rasterizer limit"};
+  int64_t const cx{centre_x}, cy{centre_y};
+  auto const area{intersect(target.clip, {0, 0, static_cast<int>(target.image.width) - 1, static_cast<int>(target.image.height) - 1})};
+  if(area.left > area.right || area.top > area.bottom || cx - radius > area.right || cx + radius < area.left || cy - radius > area.bottom || cy + radius < area.top) return;
+  first_row = static_cast<int>(target.image.height);
+  last_row = -1;
+  auto const span{[&](int64_t const y, int64_t const extent){
+    if(y < area.top || y > area.bottom) return;
+    int64_t const lhs{std::max<int64_t>(cx - extent, area.left)}, rhs{std::min<int64_t>(cx + extent, area.right)};
+    if(lhs > rhs) return;
+    int const row{static_cast<int>(y)};
+    left[row] = {static_cast<int>(lhs), 0, 0, 0};
+    right[row] = {static_cast<int>(rhs), 0, 0, 0};
+    first_row = std::min(first_row, row);
+    last_row = std::max(last_row, row);
+  }};
+  int y{radius}, error{3 - radius * 2};
+  for(int x{0}; x <= y; ++x) {
+    span(cy + x, y); span(cy - x, y);
+    if(error < 0) error += x * 4 + 6;
+    else {
+      span(cy + y, x); span(cy - y, x);
+      error += (x - y) * 4 + 10;
+      --y;
+    }
+  }
+  paint_scans(paint);
+}
+void rasterizer::paint_scans(material const &paint) {
   if(paint.pattern == fill_pattern::remap && paint.remapping.size() != 256) throw std::runtime_error{"A translucent fill needs a 256-entry colour map"};
   if(paint.light != shading::none && paint.intensity_map.size() != 65536) throw std::runtime_error{"Shading needs the palette intensity table"};
   if(paint.image && paint.image->pixels.size() != static_cast<size_t>(paint.image->width) * paint.image->width) throw std::runtime_error{"Texture dimensions disagree with its pixels"};
-  scan(vertices);
   uint8_t heat{std::array<uint8_t, 4>{204, 102, 51, 153}[paint.heat_phase & 3]};
   for(int y{std::max(first_row, target.clip.top)}; y <= std::min(last_row, target.clip.bottom); ++y) {
     int const lhs{std::min(left[y].x, right[y].x)}, rhs{std::max(left[y].x, right[y].x)};

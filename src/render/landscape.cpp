@@ -6,9 +6,24 @@
 #include "terrain_projection.h"
 
 namespace apache::render {
-landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, textures{data, zone}, features{data, zone, false}, trig{data}, palette{data, zone} {}
+landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, textures{data, zone}, features{data, zone, false}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone} {
+  auto const placements{resources::read_scenery(data.read(std::string{zone} + ".WZ/GNDOBJS.BIN"))};
+  scenery.reserve(placements.size());
+  for(auto const &placement : placements) {
+    if(!placement.model) continue;
+    uint32_t const angle{static_cast<uint32_t>(placement.heading) << 16};
+    int32_t const sine{trig.sine(angle)}, cosine{trig.cosine(angle)};
+    math::pose const position{{placement.x, placement.y, 0}, {cosine, math::negate(sine), 0, sine, cosine, 0, 0, 0, INT32_MAX}};
+    auto object{construct_model(models, placement.model, position)};
+    object.flags = placement.animation;
+    object.alternate_colours = (placement.status & 0x2000) != 0;
+    scenery_sectors[placement.sector].push_back(scenery.size());
+    scenery.push_back(std::move(object));
+  }
+}
 void landscape::draw(framebuffer &target, math::pose camera, landscape_options const &options) {
   if(options.terrain_detail > 3) throw std::runtime_error{"Terrain quality must be between zero and three"};
+  missing_normals = invalid_texture_samples = 0;
   projection const view{target.clip.left, target.clip.top, target.clip.right - target.clip.left + 1, target.clip.bottom - target.clip.top + 1};
   horizon background{target, target.clip, palette, trig};
   terrain_fog const fog{options.distance};
@@ -18,6 +33,8 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
   background.ground(angles[1], angles[2], options.sky);
   feature_renderer feature_drawer{target, view, palette};
   terrain_renderer terrain_drawer{target, view, palette, textures};
+  model_renderer object_drawer{target, models, object_textures, palette};
+  object_drawer.style = options.models;
   draw_queue queue;
   struct tile_draw {
     unsigned int x{0};
@@ -85,10 +102,34 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
           }
         }
         draw_feature(features, sx + x, sy + y, origin, std::abs(x) >= 4 || std::abs(y) >= 4);
+        if(options.scenery && std::abs(x) < 2 && std::abs(y) < 2) {
+          for(auto const index : scenery_sectors[static_cast<size_t>((sx + x) * 64 + sy + y)]) {
+            auto &object{scenery[index]};
+            math::vector3 delta;
+            for(size_t axis{0}; axis != 3; ++axis) delta[axis] = math::subtract(object.relative.position[axis], camera.position[axis]);
+            int32_t const depth{math::transform(camera.rotation, delta)[1]};
+            if(depth <= options.near_object_depth || depth >= options.far_object_depth) continue;
+            auto const range{static_cast<int32_t>(approximate_range(delta))};
+            object.distance = depth < 0 ? -range : range;
+            if(!queue.push({draw_kind::ground_object, static_cast<uint32_t>(index), object.distance, 0, models[object.id]->bounds[5] == 0})) break;
+          }
+        }
       }
     }
   }
   background.sky(options.sky);
-  for(auto const &entry : queue.ordered()) draw_tile(tiles[entry.payload], false);
+  auto sky{options.sky};
+  if(sky.cloud_mode == 0 && (sky.weather == 2 || sky.weather == 3)) sky.cloud_flags &= ~2u;
+  bool const sky_visible{std::bit_cast<int32_t>(angles[1]) >= -0x38e38e38 && !(sky.cloud_mode == 1 && ((sky.cloud_flags & 2) || sky.weather == 1))};
+  sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
+  for(auto const &entry : queue.ordered()) {
+    if(entry.kind == draw_kind::terrain) draw_tile(tiles[entry.payload], false);
+    else {
+      object_drawer.draw(scenery[entry.payload], camera);
+      missing_normals += object_drawer.missing_normals;
+      invalid_texture_samples += object_drawer.invalid_texture_samples;
+    }
+  }
+  invalid_texture_samples += terrain_drawer.invalid_texture_samples();
 }
 } // namespace apache::render

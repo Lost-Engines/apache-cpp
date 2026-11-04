@@ -84,13 +84,15 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape") {
+  if(command == "landscape" || command == "scene") {
     apache::math::trigonometry const trig{data};
     std::string zone, loaded;
     std::unique_ptr<apache::render::landscape> world;
     apache::math::pose camera;
     uint32_t heading{0}, pitch{0}, roll{0};
     apache::render::landscape_options options;
+    options.scenery = command == "scene";
+    options.celestial_bodies = false;
     while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
       if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
       apache::render::framebuffer frame{320, 240};
@@ -98,8 +100,25 @@ int main(int const argc, char const *const argv[]) try {
       frame.clear(255);
       camera.rotation = trig.transformation(heading, pitch, roll);
       world->draw(frame, camera, options);
-      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec;
+      if(command == "scene") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
+      std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "celestial") {
+    apache::math::trigonometry const trig{data};
+    apache::render::scene_palette const palette{data, "FORT"};
+    apache::render::celestial const sky{data, "FORT"};
+    int w{0}, h{0};
+    uint32_t heading{0}, pitch{0}, roll{0};
+    apache::render::sky_conditions conditions;
+    apache::render::sky_lighting lighting;
+    while(std::cin >> w >> h >> heading >> pitch >> roll >> conditions.cloud_mode >> conditions.cloud_flags >> lighting.heading >> lighting.pitch >> lighting.night) {
+      apache::render::framebuffer frame{static_cast<unsigned int>(w), static_cast<unsigned int>(h)};
+      frame.clear(155);
+      auto const glare{sky.draw(frame, trig.transformation(heading, pitch, roll), trig, palette, conditions, lighting)};
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << glare << '\n';
+      if(argc > 3) { std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
   } else if(command == "horizon") {
     apache::math::trigonometry const trig{data};
@@ -382,6 +401,22 @@ int main(int const argc, char const *const argv[]) try {
       std::cout << output.size();
       for(auto const &v : output) std::cout << ' ' << v.eye[0] << ' ' << v.eye[1] << ' ' << v.eye[2] << ' ' << v.screen.x << ' ' << v.screen.y << ' ' << v.screen.u << ' ' << v.screen.v << ' ' << v.screen.intensity;
       std::cout << '\n';
+    }
+  } else if(command == "circles") {
+    int w{0}, h{0}, x{0}, y{0}, radius{0}, mode{0};
+    std::array<uint8_t, 256> remapping;
+    for(size_t i{0}; i != remapping.size(); ++i) remapping[i] = static_cast<uint8_t>((i * 13 + 7) & 255);
+    while(std::cin >> w >> h >> x >> y >> radius >> mode) {
+      apache::render::framebuffer frame{static_cast<unsigned int>(w), static_cast<unsigned int>(h)};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>((i * 7 + 19) & 255);
+      apache::render::rasterizer raster{frame};
+      apache::render::material paint;
+      paint.colours = 0x8b8b8b8b;
+      paint.pattern = static_cast<apache::render::fill_pattern>(mode);
+      paint.remapping = remapping;
+      raster.circle(x, y, radius, paint);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc > 3) { std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
   } else if(command == "raster") {
     apache::render::framebuffer frame{64, 48};

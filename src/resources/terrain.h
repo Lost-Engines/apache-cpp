@@ -15,6 +15,7 @@ struct terrain_post {
   std::array<uint8_t, 2> textures{0, 0};
 };
 struct scenery_placement {
+  uint16_t sector{0};
   uint16_t model{0};
   int32_t x{0};
   int32_t y{0};

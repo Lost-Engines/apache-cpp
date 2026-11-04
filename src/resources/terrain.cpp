@@ -56,6 +56,7 @@ std::vector<scenery_placement> read_scenery(std::span<uint8_t const> const data)
     if(count > input.remaining() / 12) input.fail("sector records exceed file");
     for(unsigned int i{0}; i != count; ++i) {
       scenery_placement item;
+      item.sector = static_cast<uint16_t>(sector);
       item.model = input.u16();
       item.x = static_cast<int32_t>((sector / 64) << 22) + input.u16() * 256;
       item.y = static_cast<int32_t>((sector % 64) << 22) + input.u16() * 256;

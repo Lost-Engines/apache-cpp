@@ -53,10 +53,12 @@ class rasterizer {
   int first_row{0};
   int last_row{-1};
   void scan(std::span<screen_vertex const> polygon);
+  void paint_scans(material const &paint);
 public:
   size_t invalid_texture_samples{0};
   explicit rasterizer(framebuffer &destination);
   void line(screen_vertex a, screen_vertex b, uint8_t colour);
+  void circle(int x, int y, int radius, material const &paint);
   void fill(std::span<screen_vertex const> vertices, material const &paint);
   void perspective(std::span<perspective_vertex const> vertices, resources::texture const &image, std::span<uint8_t const> intensity_map);
   void polygon(std::span<screen_vertex const> vertices, uint32_t colours, fill_pattern pattern = fill_pattern::solid, std::span<uint8_t const> remapping = {});

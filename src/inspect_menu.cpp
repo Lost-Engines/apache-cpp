@@ -43,6 +43,11 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
     if(command == "click") {
       int x, y; input >> x >> y; menu.move(x, y); menu.button(true); menu.button(false); menu.move(-1, -1);
     } else if(command == "rightclick") { int x, y; input >> x >> y; menu.move(x, y); menu.button(true, 1); menu.button(false, 1); menu.move(-1, -1); }
+    else if(command == "menutick") { double seconds; input >> seconds; app.planner.tick(seconds); }
+    else if(command == "mappose") { auto &c{app.planner.preview_camera}; c.mode = 1; for(auto &v : c.camera.position) input >> v; input >> c.heading >> c.pitch >> c.roll; c.target(c.camera.position[0], c.camera.position[1]); app.planner.tick(0); }
+    else if(command == "widgetbounds") { std::string name; input >> std::quoted(name); auto const &r{menu.named(name).area}; output << r.left << ' ' << r.top << ' ' << r.right << ' ' << r.bottom << '\n'; }
+    else if(command == "mapcamera") { auto const &c{app.planner.preview_camera}; output << c.mode; for(auto v : c.camera.position) output << ' ' << v; output << ' ' << c.heading << ' ' << c.pitch << ' ' << c.roll << ' ' << c.angle << ' ' << c.speed << ' ' << c.target_x << ' ' << c.target_y << '\n'; }
+    else if(command == "mapissues") { auto const [n, t]{app.planner.preview_issues()}; output << n << ' ' << t << '\n'; }
     else if(command == "mapstate") { auto const &p{app.planner.view.position}; output << p.x << ' ' << p.y << ' ' << p.zoom << ' ' << p.rotation << ' ' << app.planner.view.history_size() << '\n'; }
     else if(command == "loadout") { if(!mission) throw std::runtime_error{"No mission running"}; for(auto const &p : mission->runtime.player_armament->inventory.pylons) output << p.weapon << ' ' << p.ammunition << ' '; output << '\n'; }
     else if(command == "move") { int x, y; input >> x >> y; menu.move(x, y); }

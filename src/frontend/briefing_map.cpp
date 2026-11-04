@@ -11,11 +11,23 @@ std::string weapon_name(int const kind) {
 }
 }
 briefing_map::briefing_map(resources::data_store const &data, menu &ui, configuration::settings &preferences)
-  : interface{ui}, settings{preferences}, font{resources::executable_data{data}, true} {}
+  : data{data}, interface{ui}, settings{preferences}, font{resources::executable_data{data}, true} {
+  auto const sheet{resources::read_iff(data.read("UIDATA/MOUSE.LBM"))};
+  marker.width = 18; marker.height = 12; marker.pixels.resize(18 * 12);
+  std::vector<uint8_t> colours;
+  for(size_t y{0}; y != 12; ++y) for(size_t x{0}; x != 18; ++x) {
+    auto const c{sheet.pixels.at(y * sheet.width + 256 + x)};
+    if(c <= 1) continue;
+    auto at{std::ranges::find(colours, c)};
+    if(at == colours.end()) { if(colours.size() >= 2) throw std::runtime_error{"Invalid map camera marker"}; colours.push_back(c); at = colours.end() - 1; }
+    auto const index{253 + static_cast<size_t>(at - colours.begin())}; marker.pixels[y * 18 + x] = static_cast<uint8_t>(index); marker.colours[index] = sheet.colours[c];
+  }
+}
 void briefing_map::visible(std::string_view const name, bool const value) { auto &object{interface.named(name)}; object.flags = (object.flags & ~1u) | static_cast<unsigned int>(value); }
 void briefing_map::show(std::string_view const name) { visible(name, true); interface.raise(name); }
 void briefing_map::open(mission_session &session) {
-  mission = &session; active_tool = dragging = 0;
+  mission = &session; active_tool = dragging = 0; preview_world.reset(); preview_dirty = true;
+  visible("_map_3d_view_box", false); visible("_map_3d_position_sprite", false);
   for(auto &object : interface.objects()) {
     if(object.action == "notify_map_tool_" && object.type == 10) object.on = object.item == 0;
     if(object.action == "notify_map_key_button_" && object.item > 0 && object.item < 17) object.on = settings.values.integer(key_names[static_cast<size_t>(object.item)]).value_or(1) != 0;
@@ -43,7 +55,20 @@ void briefing_map::refresh() {
   image.blit(overlay.image, 0, 0, true); dirty = false;
 }
 void briefing_map::paint(render::framebuffer &target, widget const &object) {
-  if(!mission || &object != &interface.named("_map_screen")) return;
+  if(!mission) return;
+  if(&object == &interface.named("_map_3d_view_graphic")) {
+    if(preview_dirty) preview();
+    target.blit(preview_frame.image, object.area.left, object.area.top);
+    std::copy_n(preview_frame.image.colours.begin(), 224, target.image.colours.begin());
+    return;
+  }
+  if(&object == &interface.named("_map_3d_position_sprite")) {
+    target.blit(marker, object.area.left, object.area.top, true);
+    target.image.colours[253] = marker.colours[253]; target.image.colours[254] = marker.colours[254];
+    return;
+  }
+  if(&object != &interface.named("_map_screen")) return;
+  preview_layout();
   if(dirty) refresh();
   target.blit(image.image, 0, 0); target.image.colours = image.image.colours;
   if(dragging == 1) {
@@ -51,6 +76,42 @@ void briefing_map::paint(render::framebuffer &target, widget const &object) {
     int const l{start_x - half_width}, r{start_x + half_width}, t{start_y - half_height}, b{start_y + half_height};
     raster.line({l, t}, {r, t}, 245); raster.line({r, t}, {r, b}, 245); raster.line({r, b}, {l, b}, 245); raster.line({l, b}, {l, t}, 245);
   }
+}
+void briefing_map::preview_layout() {
+  bool const displayed{(interface.named("_map_3d_view_box").flags & 1) != 0};
+  visible("_map_3d_position_sprite", displayed);
+  if(!displayed) return;
+  auto const &box{interface.named("_map_3d_view_box").area};
+  render::rectangle const area{box.left + 1, box.top + 1, box.right - 1, box.bottom - 19};
+  interface.bounds("_map_3d_view_graphic", area);
+  unsigned int const width{static_cast<unsigned int>(area.right - area.left + 1)}, height{static_cast<unsigned int>(area.bottom - area.top + 1)};
+  if(width != preview_frame.image.width || height != preview_frame.image.height) { preview_frame = render::framebuffer{width, height}; preview_dirty = true; }
+  int x{box.left + 2};
+  for(auto name : {"_map_3d_view_sat", "_map_3d_view_point", "_map_3d_view_rand"}) { interface.bounds(name, {x, box.bottom - 17, x + 41, box.bottom - 2}); x += 43; }
+  auto const p{view.projection(mission->runtime.trig).project({preview_camera.camera.position[0], preview_camera.camera.position[1]})};
+  interface.bounds("_map_3d_position_sprite", {p.x - 7, p.y - 4, p.x + 11, p.y + 7});
+}
+void briefing_map::preview() {
+  auto const &runtime{mission->runtime};
+  if(!preview_world) {
+    preview_world = std::make_unique<render::landscape>(data, mission->zone);
+    preview_world->initialise_model_metadata(runtime.executable);
+    preview_world->bind_scene(runtime.scene.base, runtime.scene.extra, preview_world->mobiles, preview_world->effects, preview_world->craters, preview_world->fragments);
+  }
+  render::landscape_options options; auto const level{settings.detail};
+  options.distance = level < 7 ? 1 : (level - 6) * 2 + 1;
+  options.far_object_depth = level == 0 ? 0x200000 : 0x400000;
+  options.terrain_detail = level < 2 ? 0 : level < 5 ? 1 : level == 5 ? 2 : 3;
+  options.models.textures = level >= 3; options.models.gouraud = level >= 6;
+  options.sky.cloud_flags = level == 0 ? 0 : level < 4 ? 2 : 10;
+  options.shadows = false;
+  preview_world->draw(preview_frame, preview_camera.camera, options);
+  preview_dirty = false;
+}
+void briefing_map::tick(double const seconds) {
+  if(!mission || interface.current() != "_map_screen" || !(interface.named("_map_3d_view_box").flags & 1)) return;
+  preview_camera.step(std::clamp(seconds, 0.0, 0.5), mission->runtime.trig, [this](int32_t x, int32_t y){ return mission->runtime.terrain.elevation(x, y); });
+  preview_dirty = true;
 }
 void briefing_map::finish(render::framebuffer &target) {
   if(!mission || interface.current() != "_map_screen") return;
@@ -94,12 +155,23 @@ bool briefing_map::activate(widget &object) {
     interface.popup(std::move(choices), [this, slot](int kind){ if(!mission) return; mission->runtime.mission.weapons[slot] = mission->runtime.mission.weapons[slot + 1] = kind; payload(); });
     return true;
   }
+  if(object.action == "notify_map_3d_tool_") {
+    preview_camera.select(static_cast<unsigned int>(object.item));
+    for(auto &button : interface.objects()) if(button.action == object.action) button.on = button.item == object.item;
+    tick(0); return true;
+  }
   if(object.action != "notify_map_tool_") return false;
   switch(object.item) {
     case 2: view.pop(); dirty = true; break;
     case 3: fit(); break;
     case 6: show("_map_key"); break;
     case 8: weather(); show("_map_met_box"); break;
+    case 17: {
+      visible("_map_payload_box", false); show("_map_3d_view_box");
+      auto const r{interface.named("_map_3d_view_box").area}; interface.bounds("_map_3d_view_box", {r.left, r.top, r.left + 240, r.top + 200});
+      for(auto name : {"_map_3d_view_sat", "_map_3d_view_point", "_map_3d_view_rand"}) visible(name, true);
+      tick(0); break;
+    }
     case 18: visible("_map_3d_view_box", false); payload(); show("_map_payload_box"); break;
     default:
       active_tool = object.item;
@@ -120,6 +192,7 @@ bool briefing_map::pointer(widget &object, pointer_action const action, int cons
   cursor_world = view.projection(mission->runtime.trig).unproject(x, y);
   if(action == pointer_action::right_down) { view.centre(cursor_world.x, cursor_world.y); dirty = true; return true; }
   if(action == pointer_action::left_down) {
+    preview_camera.target(cursor_world.x, cursor_world.y);
     start_x = x; start_y = y; half_width = 20; half_height = 15;
     dragging = active_tool == 1 || active_tool == 4 ? active_tool : 0; start_angle = cursor_angle();
   } else if(action == pointer_action::move && dragging == 1) {

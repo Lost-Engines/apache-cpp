@@ -36,6 +36,8 @@ add_library(apache_core
   src/frontend/mission_session.h
   src/frontend/briefing_map.cpp
   src/frontend/briefing_map.h
+  src/frontend/map_camera.cpp
+  src/frontend/map_camera.h
   src/frontend/map_view.cpp
   src/frontend/map_view.h
   src/frontend/map_routes.cpp

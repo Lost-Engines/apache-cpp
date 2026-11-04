@@ -1,6 +1,7 @@
 #include "inspect_briefing.h"
 #include "frontend/map_routes.h"
 #include "frontend/map_layers.h"
+#include "frontend/map_camera.h"
 #include "frontend/mission_session.h"
 #include <fstream>
 #include <istream>
@@ -8,8 +9,23 @@
 #include <stdexcept>
 
 bool inspect_briefing(apache::resources::data_store const &data, std::string_view const command, std::istream &input, std::ostream &output, std::string_view const dump) {
-  if(command != "map-view" && command != "map-routes" && command != "map-overlay") return false;
+  if(command != "map-view" && command != "map-routes" && command != "map-overlay" && command != "map-camera") return false;
   apache::math::trigonometry trig{data}; apache::frontend::map_view view;
+  if(command == "map-camera") {
+    apache::frontend::map_camera camera; std::string operation;
+    while(input >> operation) {
+      if(operation == "select") { unsigned int mode; input >> mode; camera.select(mode); }
+      else if(operation == "target" || operation == "position") { int32_t x, y; input >> x >> y; if(operation == "target") camera.target(x, y); else camera.position(x, y); }
+      else if(operation == "step") { double seconds; input >> seconds; camera.step(seconds, trig, [](int32_t x, int32_t y){ return ((x >> 10) ^ (y >> 11)) & 0x3ffff; }); }
+      else throw std::runtime_error{"Unknown map camera operation"};
+      if(!input) throw std::runtime_error{"Incomplete map camera operation"};
+      output << camera.mode << ' ' << camera.heading << ' ' << camera.pitch << ' ' << camera.roll << ' ' << camera.angle << ' ' << static_cast<uint32_t>(camera.speed) << ' ' << static_cast<uint32_t>(camera.target_x) << ' ' << static_cast<uint32_t>(camera.target_y);
+      for(auto v : camera.camera.position) output << ' ' << static_cast<uint32_t>(v);
+      for(auto v : camera.camera.rotation) output << ' ' << static_cast<uint32_t>(v);
+      output << '\n';
+    }
+    return true;
+  }
   if(command == "map-view") {
     std::string operation;
     while(input >> operation) {

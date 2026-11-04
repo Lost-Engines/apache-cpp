@@ -25,6 +25,7 @@ class menu {
   int hovered{-1};
   int pressed{-1};
   int pointer_capture{-1}, moving_box{-1}, moving_x{0}, moving_y{0};
+  int resizing_widget{-1}, resize_dx{0}, resize_dy{0};
   std::vector<size_t> raised, paint_order;
   void bounds(size_t index, render::rectangle area);
   int cursor_x{0}, cursor_y{0};

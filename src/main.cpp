@@ -177,7 +177,9 @@ int main(int const argc, char const *const argv[]) try {
       if(frame_limit && ++frames == frame_limit) break;
       continue;
     }
-    previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
+    auto const now{std::chrono::steady_clock::now()};
+    frontend.planner.tick(std::chrono::duration<double>(now - previous_time).count());
+    previous_time = now; tick_fraction = 0;
     auto const cursor{window.cursor_position()};
     menu.move(cursor ? static_cast<int>(cursor->x) : -1, cursor ? static_cast<int>(cursor->y) : -1);
     for(auto const &click : input.clicks) menu.button(click.down, click.button);

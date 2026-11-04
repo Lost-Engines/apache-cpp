@@ -244,7 +244,9 @@ The map now supports drag zoom, undo, fit, rotation, right-click centering, rout
 
 Map navigation matches 5,082 original operations and 23,652 state fields. The route overlay matches 400 frames and 122,880,000 pixels; threat and territory layers match another 32 frames and 9,830,400 pixels. Thirty real mouse gestures match their original zoom/rotation/history states. Twelve complete map, weather and payload frames across four warzones match 3,686,400 indexed pixels and their final RGB colours. These comparisons pass in normal and sanitizer builds, alongside the existing menu journeys and resource/profile/scene checks.
 
-Next: 3D map preview, route editing, scripted briefings, remaining frontend screens and game journeys. CI follows once integration is finished.
+The live 3D preview supports satellite, orbit and fly-to-point views, and its window can be resized. Camera movement matches 9,956 original operations and 199,120 fields. Twenty captured window gestures match 320 original bounds fields. Fourteen preview frames, including enlarged windows, match 840,966 indexed and RGB pixels across four warzones. Another eighteen reference frames contain the already identified invalid model-normal reads and are excluded from exact image comparisons. All fifty payload combinations match 3,465,500 RGB pixels; a final launch verifies their weapon and ammunition assignments. Normal and sanitizer builds pass these comparisons.
+
+Next: route editing, scripted briefings, remaining frontend screens and game journeys. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

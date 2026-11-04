@@ -40,6 +40,10 @@ void menu::bounds(size_t const index, render::rectangle const area) {
     if(parent >= 0) { auto &r{widgets[i].area}; r.left += dx; r.right += dx; r.top += dy; r.bottom += dy; }
   }
   widgets[index].area = area;
+  for(size_t i{index + 1}; i < widgets.size(); ++i) if(widgets[i].parent == static_cast<int>(index) && widgets[i].type == 11) {
+    auto &r{widgets[i].area}; int const width{r.right - r.left}, height{r.bottom - r.top};
+    r = {area.right - width, area.bottom - height, area.right, area.bottom};
+  }
 }
 void menu::raise(std::string_view const global) {
   auto const index{globals.at(std::string{global})}; std::erase(raised, index); raised.push_back(index);
@@ -54,7 +58,7 @@ void menu::show(std::string_view const global) {
   screens.push_back(index);
   for(auto &object : widgets) if(object.parent == 0) object.flags &= ~1u;
   widgets[index].flags |= 1;
-  hovered = pressed = pointer_capture = moving_box = -1;
+  hovered = pressed = pointer_capture = moving_box = resizing_widget = -1;
 }
 void menu::back() {
   if(dismiss_popup()) return;
@@ -70,7 +74,7 @@ void menu::back() {
   auto const index{screens.back()};
   for(auto &object : widgets) if(object.parent == 0) object.flags &= ~1u;
   widgets[index].flags |= 1;
-  hovered = pressed = pointer_capture = moving_box = -1;
+  hovered = pressed = pointer_capture = moving_box = resizing_widget = -1;
 }
 void menu::popup(std::vector<std::pair<std::string, int>> choices, std::function<void(int)> selected) {
   if(choices.empty()) return;
@@ -254,6 +258,13 @@ void menu::move(int const x, int const y) {
     p.hovered = p.area.contains(x, y) && y >= p.area.top + 2 && y < p.area.bottom - 1 ? (y - p.area.top - 2) / 19 : -1;
     return;
   }
+  if(resizing_widget >= 0) {
+    auto const parent{widgets[static_cast<size_t>(resizing_widget)].parent};
+    auto const area{widgets[static_cast<size_t>(parent)].area};
+    int const right{std::max(area.left + 64, std::clamp(x, 0, 639) + resize_dx)}, bottom{std::max(area.top + 64, std::clamp(y, 0, 479) + resize_dy)};
+    bounds(static_cast<size_t>(parent), {area.left, area.top, right, bottom});
+    return;
+  }
   if(moving_box >= 0) {
     auto const index{static_cast<size_t>(moving_box)}; auto const &box{widgets[index]};
     auto const parent{box.parent >= 0 ? widgets[static_cast<size_t>(box.parent)].area : render::rectangle{0, 0, 639, 479}};
@@ -283,6 +294,7 @@ void menu::button(bool const down, unsigned int const button) {
     if(!down) { auto selected{std::move(active_popup->selected)}; auto const line{active_popup->hovered}; auto choices{std::move(active_popup->choices)}; active_popup.reset(); if(line >= 0 && static_cast<size_t>(line) < choices.size()) selected(choices[static_cast<size_t>(line)].second); }
     return;
   }
+  if(resizing_widget >= 0) { if(!down && !button) { widgets[static_cast<size_t>(resizing_widget)].on = false; resizing_widget = -1; } return; }
   if(moving_box >= 0) { if(!down && !button) moving_box = -1; return; }
   int const recipient{pointer_capture >= 0 ? pointer_capture : hovered};
   if(recipient >= 0 && pointer && pointer(widgets[static_cast<size_t>(recipient)], button ? (down ? pointer_action::right_down : pointer_action::right_up) : (down ? pointer_action::left_down : pointer_action::left_up), cursor_x, cursor_y)) {
@@ -295,6 +307,10 @@ void menu::button(bool const down, unsigned int const button) {
     if(pressed >= 0) {
       auto const &box{widgets[static_cast<size_t>(pressed)]};
       if(box.type == 2 && (box.flags & 8)) { moving_box = pressed; moving_x = cursor_x - box.area.left; moving_y = cursor_y - box.area.top; if(!box.globals.empty()) raise(box.globals.front()); pressed = -1; return; }
+      if(box.type == 11 && box.parent >= 0) {
+        resizing_widget = pressed; resize_dx = box.area.right - cursor_x; resize_dy = box.area.bottom - cursor_y;
+        widgets[static_cast<size_t>(pressed)].on = true; auto const &parent{widgets[static_cast<size_t>(box.parent)]}; if(!parent.globals.empty()) raise(parent.globals.front()); pressed = -1; return;
+      }
       if(box.type == 4 || box.type == 11) widgets[static_cast<size_t>(pressed)].on = true;
     }
     if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 9) widgets[static_cast<size_t>(pressed)].on = true;

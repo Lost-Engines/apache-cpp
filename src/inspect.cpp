@@ -36,6 +36,8 @@
 #include "resources/image.h"
 #include "resources/models.h"
 #include "resources/missions.h"
+#include "simulation/actor_types.h"
+#include "simulation/mission_actors.h"
 #include "resources/terrain.h"
 #include "resources/terrain_textures.h"
 
@@ -129,6 +131,51 @@ int main(int const argc, char const *const argv[]) try {
   if(command == "briefings") {
     if(argc != 4) throw std::runtime_error{"briefings requires a bundle resource"};
     for(auto const &mission : apache::resources::read_mission_briefings(data.read(argv[3]))) std::cout << mission.id << ' ' << mission.flow << ' ' << mission.zone << ' ' << mission.level << ' ' << std::quoted(mission.title) << '\n';
+  } else if(command == "mission-actors" || command == "mission-actor-state") {
+    if(argc != 5) throw std::runtime_error{"mission-actors requires a warzone and mission resource"};
+    auto const bytes{data.read(argv[4])};
+    auto const mission{apache::resources::read_mission_definition({reinterpret_cast<char const*>(bytes.data()), bytes.size()})};
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    auto const formations{apache::resources::read_formations(apache::resources::executable_data{data})};
+    apache::math::trigonometry trig{data};
+    std::string const zone{argv[3]};
+    apache::resources::terrain heights{data.read(zone + ".WZ/GRIDPOST.BIN")};
+    apache::resources::feature_layer features{data, zone, false}, super_features{data, zone, true};
+    apache::simulation::actor_environment const environment{
+      .height{[&](int32_t x, int32_t y){ return heights.elevation(x, y); }},
+      .surface{[&](int32_t x, int32_t y){ return apache::resources::surface_type(features, super_features, x, y); }},
+    };
+    apache::simulation::mission_actors const actors{mission, formations, models, trig, environment, 0};
+    auto const pose{[](apache::math::pose const &value){ for(auto v : value.position) std::cout << ' ' << v; for(auto v : value.rotation) std::cout << ' ' << v; }};
+    auto const node{[&](auto const &self, apache::render::model_instance const &object, std::string const &path, bool relative)->void {
+      std::cout << "node " << path << ' ' << object.id << ' ' << object.flags << ' ' << relative;
+      if(relative) pose(object.relative);
+      std::cout << '\n';
+      for(size_t i{0}; i != object.children.size(); ++i) if(object.children[i]) self(self, *object.children[i], path + "/" + std::to_string(i), true);
+    }};
+    for(auto const &unit : actors.units) {
+      if(command == "mission-actor-state") {
+        std::cout << unit.location.task << ' ' << unit.location.group << ' ' << unit.location.member << ' ' << unit.classification << ' ' << unit.conditions;
+        for(auto value : unit.angles) std::cout << ' ' << value;
+        for(auto value : unit.velocity) std::cout << ' ' << value;
+        std::cout << ' ' << unit.speed << ' ' << unit.desired_speed << ' ' << unit.route_distance;
+        for(auto value : unit.ammunition) std::cout << ' ' << value;
+        std::cout << ' ' << unit.weapon << ' ' << unit.weapon_slot << ' ' << unit.random << ' ' << (unit.carrier ? static_cast<int>(*unit.carrier) : -1) << ' ' << (unit.carrier_slot ? static_cast<int>(*unit.carrier_slot) : -1) << ' ' << (unit.waypoint ? static_cast<int>(*unit.waypoint) : -1) << '\n';
+        continue;
+      }
+      std::cout << "unit " << unit.location.task << ' ' << unit.location.group << ' ' << unit.location.member << ' ' << unit.classification;
+      pose(unit.object.world); std::cout << '\n';
+      node(node, unit.object, "root", unit.carrier_slot.has_value());
+    }
+  } else if(command == "actor-types") {
+    auto const types{apache::simulation::actor_types()};
+    for(size_t id{0}; id != types.size(); ++id) {
+      auto const &type{types[id]};
+      std::cout << id << ' ' << type.flags << ' ' << type.classification << ' ' << type.aircraft << ' ' << type.ship;
+      for(auto const weapon : type.weapons) std::cout << ' ' << weapon;
+      for(auto const load : type.ammunition) std::cout << ' ' << load;
+      std::cout << ' ' << type.main_weapon << '\n';
+    }
   } else if(command == "formations") {
     auto const all{apache::resources::read_formations(apache::resources::executable_data{data})};
     for(size_t id{0}; id != all.size(); ++id) { std::cout << id << ' ' << all[id].size(); for(auto const &member : all[id]) { for(auto const v : member.offset) std::cout << ' ' << v; std::cout << ' ' << member.model; } std::cout << '\n'; }

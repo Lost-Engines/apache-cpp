@@ -8,21 +8,23 @@ resources::model const &model_at(resources::model_archive const &models, uint32_
   if(id >= models.size() || !models[id]) throw std::runtime_error{"Unavailable model instance"};
   return *models[id];
 }
-model_instance construct(resources::model_archive const &models, uint32_t const id, math::pose const &position, unsigned int const depth) {
+model_instance construct(resources::model_archive const &models, uint32_t const id, math::pose const &position, unsigned int const depth, std::span<uint32_t const> &variable_children) {
   if(depth > 64) throw std::runtime_error{"Cyclic or excessive model attachment tree"};
   auto const &definition{model_at(models, id)};
   model_instance object;
   object.id = id;
   object.relative = object.world = position;
   for(auto const &attachment : definition.children) {
-    if(!attachment.model) object.children.emplace_back();
-    else object.children.push_back(std::make_unique<model_instance>(construct(models, attachment.model, {attachment.translation, attachment.rotation}, depth + 1)));
+    uint32_t child{attachment.model};
+    if(!child && !variable_children.empty()) { child = variable_children.front(); variable_children = variable_children.subspan(1); }
+    if(!child) object.children.emplace_back();
+    else object.children.push_back(std::make_unique<model_instance>(construct(models, child, {attachment.translation, attachment.rotation}, depth + 1, variable_children)));
   }
   return object;
 }
 } // namespace
-model_instance construct_model(resources::model_archive const &models, uint32_t const id, math::pose const &position) {
-  return construct(models, id, position, 0);
+model_instance construct_model(resources::model_archive const &models, uint32_t const id, math::pose const &position, std::span<uint32_t const> variable_children) {
+  return construct(models, id, position, 0, variable_children);
 }
 void maintain_model(model_instance &object, math::pose const *const parent) {
   if(parent) {

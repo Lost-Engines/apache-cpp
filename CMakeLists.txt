@@ -66,6 +66,10 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/mission_actors.cpp
+  src/simulation/mission_actors.h
+  src/simulation/actor_types.cpp
+  src/simulation/actor_types.h
   src/simulation/arcade_flight.cpp
   src/simulation/arcade_flight.h
   src/simulation/realistic_flight.cpp

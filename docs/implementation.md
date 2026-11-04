@@ -49,6 +49,7 @@ Current implementation:
 - Original menu font, picture/button/text/slider/sprite drawing and 636 recovered widget definitions.
 - Initial menu navigation and a headless frame capture option.
 - Localized mission briefings, ordered mission tags, tasks, actor definitions, routes, objective flags, environment settings and embedded formations.
+- Actor classes and loadouts, formation expansion, variable model attachments, carrier reservations and complete starting poses.
 
 Validation completed:
 
@@ -133,6 +134,7 @@ Validation completed:
 - 6,000 Arcade component cases match 337,859 fields exactly, covering input shaping, attitude limits, motion, fuel, heat/failures and hover.
 - 28 continuous Arcade traces across all four warzones match 2,285,830 integer/event fields across 67,228 states. Of 4,235,364 double fields, 4,207,780 match bit-for-bit; the largest difference is 3.64e-12. The traces include carrier starts, takeoff, terrain-relative altitude holding, engine failures, fuel exhaustion, hover, variable timing and landings. The component and continuous sweeps also pass with both sanitizers enabled.
 - All 411 briefing entries in four language bundles, 89 formations (803 members), and all 110 missions match the original-loader exports. This covers 1,871 tasks, 8,944 actor definitions, 21,989 expanded model IDs, 42,054 waypoints and 156,552 setting records. The complete loading comparison also passes under both sanitizers. Actor placement and running behavior are verified separately.
+- All 1,315 actor type records match 19,725 fields. Across every mission, 58,496 model instances and attachment trees match, together with all 263,868 starting transform fields for 21,989 units. A second direct execution comparison matches 483,758 actor-state fields, including ammunition, angles, velocities, route selection, carrier slots and random ordering. Both full suites also pass under sanitizers.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

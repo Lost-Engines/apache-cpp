@@ -17,7 +17,7 @@ struct model_instance {
   math::vector3 scale{1 << 24, 1 << 24, 1 << 24};
   std::vector<std::unique_ptr<model_instance>> children;
 };
-model_instance construct_model(resources::model_archive const &models, uint32_t id, math::pose const &position);
+model_instance construct_model(resources::model_archive const &models, uint32_t id, math::pose const &position, std::span<uint32_t const> variable_children = {});
 void maintain_model(model_instance &object, math::pose const *parent = nullptr);
 struct model_style {
   bool textures{true};

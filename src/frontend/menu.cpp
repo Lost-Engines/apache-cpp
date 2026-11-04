@@ -29,6 +29,9 @@ void menu::scroll_changed(size_t const index) {
 }
 void menu::bounds(std::string_view const global, render::rectangle const area) {
   auto const index{globals.at(std::string{global})};
+  bounds(index, area);
+}
+void menu::bounds(size_t const index, render::rectangle const area) {
   auto const old{widgets[index].area};
   int const dx{area.left - old.left}, dy{area.top - old.top};
   for(size_t i{index + 1}; i < widgets.size(); ++i) {
@@ -37,6 +40,9 @@ void menu::bounds(std::string_view const global, render::rectangle const area) {
     if(parent >= 0) { auto &r{widgets[i].area}; r.left += dx; r.right += dx; r.top += dy; r.bottom += dy; }
   }
   widgets[index].area = area;
+}
+void menu::raise(std::string_view const global) {
+  auto const index{globals.at(std::string{global})}; std::erase(raised, index); raised.push_back(index);
 }
 void menu::show(std::string_view const global) {
   active_popup.reset();
@@ -48,7 +54,7 @@ void menu::show(std::string_view const global) {
   screens.push_back(index);
   for(auto &object : widgets) if(object.parent == 0) object.flags &= ~1u;
   widgets[index].flags |= 1;
-  hovered = pressed = -1;
+  hovered = pressed = pointer_capture = moving_box = -1;
 }
 void menu::back() {
   if(dismiss_popup()) return;
@@ -64,7 +70,7 @@ void menu::back() {
   auto const index{screens.back()};
   for(auto &object : widgets) if(object.parent == 0) object.flags &= ~1u;
   widgets[index].flags |= 1;
-  hovered = pressed = -1;
+  hovered = pressed = pointer_capture = moving_box = -1;
 }
 void menu::popup(std::vector<std::pair<std::string, int>> choices, std::function<void(int)> selected) {
   if(choices.empty()) return;
@@ -169,6 +175,17 @@ void menu::draw_widget(render::framebuffer &target, widget const &object) {
     }
     target.surround({left, r.top + 2, right, r.bottom - 2}, object.on);
   }
+  if(object.type == 4 || object.type == 11) {
+    std::string const name{object.type == 4 ? (object.on ? "UIDATA/CLOSEON.BM" : "UIDATA/CLOSEOFF.BM") : (object.on ? "UIDATA/RESIZING.BM" : "UIDATA/RESIZE.BM")};
+    auto found{sprites.find(name)};
+    if(found == sprites.end()) {
+      auto raw{data.read(name)};
+      if(raw.size() != 256) throw std::runtime_error{"Invalid window control sprite"};
+      for(auto &pixel : raw) pixel = static_cast<uint8_t>(pixel + 4);
+      found = sprites.emplace(name, resources::indexed_image{16, 16, std::move(raw), {}}).first;
+    }
+    target.blit(found->second, r.left, r.top, true);
+  }
   if(object.type == 17 && !object.sprite.empty()) {
     auto found{sprites.find(object.sprite)};
     if(found == sprites.end()) {
@@ -191,9 +208,17 @@ void menu::render(render::framebuffer &target) {
   target.reset_clip();
   auto const screen_clip{target.clip};
   target.clear();
-  for(size_t i{0}; i != widgets.size(); ++i) {
+  paint_order.clear();
+  auto const raised_ancestor{[&](size_t i) {
+    int parent{static_cast<int>(i)};
+    while(parent >= 0) { if(std::ranges::find(raised, static_cast<size_t>(parent)) != raised.end()) return parent; parent = widgets[static_cast<size_t>(parent)].parent; }
+    return -1;
+  }};
+  for(size_t i{0}; i != widgets.size(); ++i) if(raised_ancestor(i) < 0) paint_order.push_back(i);
+  for(auto top : raised) for(size_t i{0}; i != widgets.size(); ++i) if(raised_ancestor(i) == static_cast<int>(top)) paint_order.push_back(i);
+  std::ranges::fill(clips, render::rectangle{});
+  for(auto i : paint_order) {
     auto const &object{widgets[i]};
-    clips[i] = {};
     if(!(object.flags & 1)) continue;
     auto const parent_clip{object.parent < 0 ? screen_clip : clips[static_cast<size_t>(object.parent)]};
     clips[i] = render::intersect(parent_clip, object.area);
@@ -202,6 +227,7 @@ void menu::render(render::framebuffer &target) {
     draw_widget(target, object);
     if(paint) paint(target, object);
   }
+  if(finish) finish(target);
   // Original UI palette, shared by every menu and independent of the backdrop.
   resources::palette &palette{target.image.colours};
   std::array<resources::rgb, 7> constexpr colours{{{66, 97, 100}, {76, 112, 116}, {135, 169, 171}, {102, 151, 154}, {178, 203, 204}, {255, 255, 255}, {0, 127, 127}}};
@@ -218,7 +244,7 @@ void menu::render(render::framebuffer &target) {
   }
 }
 int menu::hit(int const x, int const y) const {
-  for(size_t i{widgets.size()}; i-- > 0;) if((widgets[i].flags & 0x8000) && clips[i].contains(x, y)) return static_cast<int>(i);
+  for(auto it{paint_order.rbegin()}; it != paint_order.rend(); ++it) if((widgets[*it].flags & 0x8000) && clips[*it].contains(x, y)) return static_cast<int>(*it);
   return -1;
 }
 void menu::move(int const x, int const y) {
@@ -228,6 +254,16 @@ void menu::move(int const x, int const y) {
     p.hovered = p.area.contains(x, y) && y >= p.area.top + 2 && y < p.area.bottom - 1 ? (y - p.area.top - 2) / 19 : -1;
     return;
   }
+  if(moving_box >= 0) {
+    auto const index{static_cast<size_t>(moving_box)}; auto const &box{widgets[index]};
+    auto const parent{box.parent >= 0 ? widgets[static_cast<size_t>(box.parent)].area : render::rectangle{0, 0, 639, 479}};
+    int const left{std::clamp(x, parent.left, parent.right) - moving_x}, top{std::clamp(y, parent.top, parent.bottom) - moving_y};
+    bounds(index, {left, top, left + box.area.right - box.area.left, top + box.area.bottom - box.area.top});
+    return;
+  }
+  hovered = hit(x, y);
+  int const recipient{pointer_capture >= 0 ? pointer_capture : hovered};
+  if(recipient >= 0 && pointer && pointer(widgets[static_cast<size_t>(recipient)], pointer_action::move, x, y)) return;
   if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 14 && scroll_direction == 0) {
     auto &bar{widgets[static_cast<size_t>(pressed)]};
     bar.range[2] = std::clamp(drag_position + x - drag_y, bar.range[0], bar.range[1]);
@@ -241,13 +277,26 @@ void menu::move(int const x, int const y) {
   hovered = hit(x, y);
   for(size_t i{0}; i != widgets.size(); ++i) if(widgets[i].type == 9 && !widgets[i].picture.empty()) widgets[i].on = static_cast<int>(i) == hovered;
 }
-void menu::button(bool const down) {
+void menu::button(bool const down, unsigned int const button) {
+  if(button > 1) return;
   if(active_popup) {
     if(!down) { auto selected{std::move(active_popup->selected)}; auto const line{active_popup->hovered}; auto choices{std::move(active_popup->choices)}; active_popup.reset(); if(line >= 0 && static_cast<size_t>(line) < choices.size()) selected(choices[static_cast<size_t>(line)].second); }
     return;
   }
+  if(moving_box >= 0) { if(!down && !button) moving_box = -1; return; }
+  int const recipient{pointer_capture >= 0 ? pointer_capture : hovered};
+  if(recipient >= 0 && pointer && pointer(widgets[static_cast<size_t>(recipient)], button ? (down ? pointer_action::right_down : pointer_action::right_up) : (down ? pointer_action::left_down : pointer_action::left_up), cursor_x, cursor_y)) {
+    if(!button) pointer_capture = down ? recipient : -1;
+    return;
+  }
+  if(button) return;
   if(down) {
     pressed = hovered;
+    if(pressed >= 0) {
+      auto const &box{widgets[static_cast<size_t>(pressed)]};
+      if(box.type == 2 && (box.flags & 8)) { moving_box = pressed; moving_x = cursor_x - box.area.left; moving_y = cursor_y - box.area.top; if(!box.globals.empty()) raise(box.globals.front()); pressed = -1; return; }
+      if(box.type == 4 || box.type == 11) widgets[static_cast<size_t>(pressed)].on = true;
+    }
     if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 9) widgets[static_cast<size_t>(pressed)].on = true;
     if(pressed >= 0 && (widgets[static_cast<size_t>(pressed)].type == 13 || widgets[static_cast<size_t>(pressed)].type == 14)) {
       auto &bar{widgets[static_cast<size_t>(pressed)]}; auto const &r{bar.area};
@@ -268,7 +317,7 @@ void menu::button(bool const down) {
       if(bar.type == 14 && activated) activated(bar, bar.range[2]);
     } else if(pressed >= 0) {
       auto &object{widgets[static_cast<size_t>(pressed)]};
-      if(object.type == 9 && object.picture.empty()) object.on = false;
+      if((object.type == 9 && object.picture.empty()) || object.type == 4 || object.type == 11) object.on = false;
       if(pressed == hovered) activate(static_cast<size_t>(pressed));
     }
     pressed = -1;

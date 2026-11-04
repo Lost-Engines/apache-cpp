@@ -27,13 +27,15 @@ std::string zone_name(int const zone) {
 }
 }
 mission_frontend::mission_frontend(resources::data_store const &data, mission_options const settings)
-  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings} {
+  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, planner{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings} {
   interface.link_scroll("_map_briefing_subtitle_text", "_map_briefing_subtitle_scrollbar");
   interface.link_scroll("_situation_text", "_situation_scroll_bar");
+  interface.finish = [this](render::framebuffer &target){ planner.finish(target); };
+  interface.pointer = [this](widget &object, pointer_action action, int x, int y){ return prepared && planner.pointer(object, action, x, y); };
   interface.activated = [this](widget &object, int line){ return activate(object, line); };
   interface.paint = [this](render::framebuffer &frame, widget const &object){
     preferences.paint(frame, object);
-    if(&object == &interface.named("_map_screen") && prepared) { frame.blit(map_image.image, 0, 0); frame.image.colours = map_image.image.colours; }
+    if(prepared) planner.paint(frame, object);
   };
 }
 void mission_frontend::load_profiles(std::filesystem::path const &path) { logs.load(path, hours_now()); settings.load(path); scores.load(); apply_preferences(); }
@@ -111,22 +113,7 @@ void mission_frontend::subtitles(bool const expanded) {
   auto &body{interface.named("_map_briefing_subtitle_text")}; body.area.bottom = body.area.top + height - 20;
   auto &bar{interface.named("_map_briefing_subtitle_scrollbar")}; bar.area.bottom = bar.area.top + height - 20;
 }
-void mission_frontend::map() {
-  auto &runtime{prepared->runtime}; auto const &actor{runtime.actors.units[*runtime.timing.player]};
-  auto const &path{runtime.mission.tasks[actor.location.task].actors[actor.location.group].waypoints};
-  int32_t left{actor.object.world.position[0]}, right{left}, bottom{actor.object.world.position[1]}, top{bottom};
-  for(auto const &point : path) { left = std::min(left, point.position[0]); right = std::max(right, point.position[0]); bottom = std::min(bottom, point.position[1]); top = std::max(top, point.position[1]); }
-  int32_t zoom{std::clamp(std::max((right - left) / 640 * 150 / 100, (top - bottom) / 480 * 150 / 100), 256, 0x33333)};
-  int32_t cx{std::clamp((right + left) / 2, 0x2000000 + zoom * 320, 0xe000000 - zoom * 320)};
-  int32_t cy{std::clamp((top + bottom) / 2, 0x2000000 + zoom * 240, 0xe000000 - zoom * 240)};
-  render::window2 const window{cx - zoom * 320, cy - zoom * 240, cx + zoom * 320, cy + zoom * 240};
-  map_image.reset_clip();
-  auto const &palette{prepared->world.palette.colours};
-  for(size_t i{0}; i != 256; ++i) map_image.image.colours[i] = {palette[i * 3], palette[i * 3 + 1], palette[i * 3 + 2]};
-  prepared->world.draw_map(map_image, map_image.clip, window, 0, {}, runtime.scene.extra);
-  render::projection2 view{map_image.clip, window}; render::rasterizer raster{map_image};
-  for(size_t i{1}; i < path.size(); ++i) if(auto line{view.clip_line({path[i - 1].position[0], path[i - 1].position[1]}, {path[i].position[0], path[i].position[1]})}) raster.line((*line)[0], (*line)[1], 255);
-}
+void mission_frontend::map() { planner.open(*prepared); }
 void mission_frontend::campaign(bool const fresh) {
   if(fresh || pilot().campaign.warzone != static_cast<uint32_t>(zone)) {
     pilot().campaign = {static_cast<uint32_t>(zone), 1, 4, static_cast<uint32_t>(std::chrono::system_clock::now().time_since_epoch().count()) & 0x7fff, {}}; last_result = 0;
@@ -155,7 +142,7 @@ void mission_frontend::campaign(bool const fresh) {
 }
 std::unique_ptr<mission_session> mission_frontend::takeoff() {
   if(!departing) return {};
-  departing = false; return std::move(prepared);
+  departing = false; planner.close(); return std::move(prepared);
 }
 void mission_frontend::complete(std::unique_ptr<mission_session> mission) {
   if(mission->briefing.flow == 1) {
@@ -194,7 +181,7 @@ void mission_frontend::log_result(bool const keep) {
     result->log(pilot(), static_cast<uint32_t>(prepared->briefing.id), static_cast<unsigned int>(flow), hours_now());
     pilot().update(definitions); awards = pilot().awards; last_result = static_cast<unsigned int>(result->mission); logs.save();
   }
-  prepared.reset(); result.reset(); interface.back();
+  planner.close(); prepared.reset(); result.reset(); interface.back();
   if(flow != 4) list();
   if(pilot().status != 2) show_pilots(flow == 4);
   else if(flow == 4 && !awards) campaign();
@@ -226,13 +213,14 @@ void mission_frontend::back() {
   }
   if(current == "_map_screen" && result) {
     visible("_map_debrief_log_do_not_log_box", true); visible("_map_debrief_retry_mission_button", true); visible("_map_debrief_do_not_log_mission_button", flow != 4);
-  } else { if(current == "_map_screen") prepared.reset(); interface.back(); }
+  } else { if(current == "_map_screen") { planner.close(); prepared.reset(); } interface.back(); }
 }
 bool mission_frontend::activate(widget &object, int const line) {
   auto const &action{object.action};
   if(action == "notify_log_button_" || action == "notify_mission_select_log_") {
     show_pilots(flow == 4 && interface.current() != "_main_screen" && interface.current() != "_flight_screen"); return true;
   }
+  if(planner.activate(object)) return true;
   if(pilots.activate(object, line)) return true;
   if(preferences.activate(object)) { apply_preferences(); return true; }
   if(action == "notify_quick_start_topten_button_") scores.show();

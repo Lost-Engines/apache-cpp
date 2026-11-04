@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include "menu.h"
+#include "briefing_map.h"
 #include "pilot_menu.h"
 #include "score_menu.h"
 #include "preferences_menu.h"
@@ -13,7 +14,6 @@ class mission_frontend {
   std::vector<size_t> listed;
   std::unique_ptr<mission_session> prepared;
   std::optional<simulation::debrief_result> result;
-  render::framebuffer map_image{640, 480};
   int flow{2}, zone{4}, selected{-1}, campaign_mission{0};
   unsigned int last_result{0};
   bool departing{false};
@@ -41,6 +41,7 @@ public:
   mission_options options;
   configuration::settings settings;
   preferences_menu preferences;
+  briefing_map planner;
   configuration::profiles logs;
   pilot_menu pilots;
   score_menu scores;

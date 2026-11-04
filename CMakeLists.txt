@@ -34,6 +34,14 @@ add_library(apache_core
   src/frontend/mission_frontend.h
   src/frontend/mission_session.cpp
   src/frontend/mission_session.h
+  src/frontend/briefing_map.cpp
+  src/frontend/briefing_map.h
+  src/frontend/map_view.cpp
+  src/frontend/map_view.h
+  src/frontend/map_routes.cpp
+  src/frontend/map_routes.h
+  src/frontend/map_layers.cpp
+  src/frontend/map_layers.h
   src/frontend/menu.cpp
   src/frontend/menu.h
   src/frontend/widget.cpp
@@ -259,7 +267,7 @@ add_executable(apache
 target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL pcm_device)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
-add_executable(apache_inspect src/inspect_audio.cpp src/inspect_audio.h src/inspect_menu.cpp src/inspect_menu.h src/inspect_debrief.cpp src/inspect_debrief.h src/inspect_logbook.cpp src/inspect_logbook.h src/inspect_session.cpp src/inspect_session.h src/inspect_cameras.cpp src/inspect_cameras.h src/inspect_sensors.cpp src/inspect_sensors.h src/inspect_targeting.cpp src/inspect_targeting.h src/inspect_player_weapons.cpp src/inspect_controls.cpp src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h src/inspect_seekers.cpp src/inspect_seekers.h src/inspect_projectiles.cpp src/inspect_projectiles.h src/inspect_projectile_pool.cpp src/inspect_projectile_pool.h src/inspect_targets.cpp src/inspect_targets.h src/inspect_tracking.cpp src/inspect_tracking.h src/inspect_countermeasures.cpp src/inspect_countermeasures.h src/inspect_damage.cpp src/inspect_damage.h src/inspect_blasts.cpp src/inspect_blasts.h src/inspect_combat_effects.cpp src/inspect_combat_effects.h src/inspect_mission_combat.cpp src/inspect_mission_targets.cpp src/inspect_mission_spatial.cpp src/inspect_mission_radar.cpp src/inspect_mission_scenery.cpp src/inspect_combat_update.cpp src/inspect_war_grid.cpp src/inspect_battles.cpp src/inspect_patrol.cpp src/inspect_actor_targeting.cpp src/inspect_target_search.cpp src/inspect_actor_reactions.cpp src/inspect_actor_firing.cpp src/inspect_firing.cpp src/inspect_firing.h)
+add_executable(apache_inspect src/inspect_briefing.cpp src/inspect_briefing.h src/inspect_audio.cpp src/inspect_audio.h src/inspect_menu.cpp src/inspect_menu.h src/inspect_debrief.cpp src/inspect_debrief.h src/inspect_logbook.cpp src/inspect_logbook.h src/inspect_session.cpp src/inspect_session.h src/inspect_cameras.cpp src/inspect_cameras.h src/inspect_sensors.cpp src/inspect_sensors.h src/inspect_targeting.cpp src/inspect_targeting.h src/inspect_player_weapons.cpp src/inspect_controls.cpp src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h src/inspect_seekers.cpp src/inspect_seekers.h src/inspect_projectiles.cpp src/inspect_projectiles.h src/inspect_projectile_pool.cpp src/inspect_projectile_pool.h src/inspect_targets.cpp src/inspect_targets.h src/inspect_tracking.cpp src/inspect_tracking.h src/inspect_countermeasures.cpp src/inspect_countermeasures.h src/inspect_damage.cpp src/inspect_damage.h src/inspect_blasts.cpp src/inspect_blasts.h src/inspect_combat_effects.cpp src/inspect_combat_effects.h src/inspect_mission_combat.cpp src/inspect_mission_targets.cpp src/inspect_mission_spatial.cpp src/inspect_mission_radar.cpp src/inspect_mission_scenery.cpp src/inspect_combat_update.cpp src/inspect_war_grid.cpp src/inspect_battles.cpp src/inspect_patrol.cpp src/inspect_actor_targeting.cpp src/inspect_target_search.cpp src/inspect_actor_reactions.cpp src/inspect_actor_firing.cpp src/inspect_firing.cpp src/inspect_firing.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)

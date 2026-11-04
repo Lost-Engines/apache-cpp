@@ -27,7 +27,8 @@ unsigned int number(std::string_view const text) {
 struct events {
   struct key { int value, modifiers; bool down; bool character{false}, repeat{false}; };
   std::vector<key> keys;
-  std::vector<bool> clicks;
+  struct click { unsigned int button; bool down; };
+  std::vector<click> clicks;
 };
 } // namespace
 
@@ -146,7 +147,7 @@ int main(int const argc, char const *const argv[]) try {
   });
   glfwSetCharCallback(window.get(), [](GLFWwindow *handle, unsigned int value){ static_cast<events*>(glfwGetWindowUserPointer(handle))->keys.push_back({static_cast<int>(value), 0, true, true}); });
   glfwSetMouseButtonCallback(window.get(), [](GLFWwindow *const handle, int const button, int const action, int){
-    if(button == GLFW_MOUSE_BUTTON_LEFT) static_cast<events*>(glfwGetWindowUserPointer(handle))->clicks.push_back(action == GLFW_PRESS);
+    if(button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT) static_cast<events*>(glfwGetWindowUserPointer(handle))->clicks.push_back({button == GLFW_MOUSE_BUTTON_LEFT ? 0u : 1u, action == GLFW_PRESS});
   });
   unsigned int frames{0};
   auto previous_time{std::chrono::steady_clock::now()};
@@ -179,7 +180,7 @@ int main(int const argc, char const *const argv[]) try {
     previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
     auto const cursor{window.cursor_position()};
     menu.move(cursor ? static_cast<int>(cursor->x) : -1, cursor ? static_cast<int>(cursor->y) : -1);
-    for(bool const click : input.clicks) menu.button(click);
+    for(auto const &click : input.clicks) menu.button(click.down, click.button);
     input.clicks.clear();
     for(auto const &key : input.keys) {
       if(!key.down) continue;

@@ -22,6 +22,7 @@ public:
   std::array<std::array<uint8_t, 65536>, 4> fog_intensity{};
   std::array<uint8_t, 256> glass{};
   std::array<uint8_t, 256> visual_remap{};
+  void apply_terrain_palette(palette_rgb &target) const;
   void prepare(unsigned int infrared_mode);
   void update(palette_conditions const &conditions);
   scene_palette(resources::data_store const &data, std::string_view zone, bool overcast = false);

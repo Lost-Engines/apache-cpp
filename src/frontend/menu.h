@@ -12,6 +12,7 @@
 #include "widget.h"
 
 namespace apache::frontend {
+enum class pointer_action { move, left_down, left_up, right_down, right_up };
 class menu {
   resources::data_store const &data;
   render::menu_font font;
@@ -23,6 +24,9 @@ class menu {
   std::vector<render::rectangle> clips;
   int hovered{-1};
   int pressed{-1};
+  int pointer_capture{-1}, moving_box{-1}, moving_x{0}, moving_y{0};
+  std::vector<size_t> raised, paint_order;
+  void bounds(size_t index, render::rectangle area);
   int cursor_x{0}, cursor_y{0};
   struct popup_state {
     std::vector<std::pair<std::string, int>> choices;
@@ -44,6 +48,8 @@ public:
   menu(resources::data_store const &data);
   std::function<bool(widget &, int)> activated;
   std::function<void(render::framebuffer &, widget const &)> paint;
+  std::function<void(render::framebuffer &)> finish;
+  std::function<bool(widget &, pointer_action, int, int)> pointer;
   widget &named(std::string_view global);
   std::span<widget> objects() { return widgets; }
   std::string_view current() const;
@@ -54,7 +60,8 @@ public:
   void bounds(std::string_view global, render::rectangle area);
   void back();
   void move(int x, int y);
-  void button(bool down);
+  void button(bool down, unsigned int button = 0);
+  void raise(std::string_view global);
   void toggle_quick(bool visible);
   void press_named(std::string_view name);
   void render(render::framebuffer &target);

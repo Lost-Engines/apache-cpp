@@ -238,7 +238,13 @@ The original STOP sample contains one authored byte although DirectSound allocat
 
 Static scenery now uses the original bare model construction. Mobile instances can have attached turrets and other children; scenery placements do not create those children. All 1,000 scenery frames match the original in normal and sanitizer builds. An extended flight comparison, including the random-radio interval, matches 828 frames, 62,100 state fields, 635,904 palette bytes and 26,144,180 defined cockpit pixels. The 187 complete frames without invalid original reads match 14,361,600 pixels.
 
-Next: complete briefing/map interaction, remaining frontend screens and game journeys. CI follows once integration is finished.
+### Briefing map
+
+The map now supports drag zoom, undo, fit, rotation, right-click centering, route symbols and labels, territory and threat overlays, grid/compass controls, weather and selectable payloads. Tool windows can be raised, moved and closed. The payload panel shares the original terrain palette adjustment in the Fort Hood and Korea warzones.
+
+Map navigation matches 5,082 original operations and 23,652 state fields. The route overlay matches 400 frames and 122,880,000 pixels; threat and territory layers match another 32 frames and 9,830,400 pixels. Thirty real mouse gestures match their original zoom/rotation/history states. Twelve complete map, weather and payload frames across four warzones match 3,686,400 indexed pixels and their final RGB colours. These comparisons pass in normal and sanitizer builds, alongside the existing menu journeys and resource/profile/scene checks.
+
+Next: 3D map preview, route editing, scripted briefings, remaining frontend screens and game journeys. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

@@ -42,7 +42,10 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
   while(input >> command) {
     if(command == "click") {
       int x, y; input >> x >> y; menu.move(x, y); menu.button(true); menu.button(false); menu.move(-1, -1);
-    } else if(command == "move") { int x, y; input >> x >> y; menu.move(x, y); }
+    } else if(command == "rightclick") { int x, y; input >> x >> y; menu.move(x, y); menu.button(true, 1); menu.button(false, 1); menu.move(-1, -1); }
+    else if(command == "mapstate") { auto const &p{app.planner.view.position}; output << p.x << ' ' << p.y << ' ' << p.zoom << ' ' << p.rotation << ' ' << app.planner.view.history_size() << '\n'; }
+    else if(command == "loadout") { if(!mission) throw std::runtime_error{"No mission running"}; for(auto const &p : mission->runtime.player_armament->inventory.pylons) output << p.weapon << ' ' << p.ammunition << ' '; output << '\n'; }
+    else if(command == "move") { int x, y; input >> x >> y; menu.move(x, y); }
     else if(command == "drag") { int x, y, xx, yy; input >> x >> y >> xx >> yy; menu.move(x, y); menu.button(true); menu.move(xx, yy); menu.button(false); menu.move(-1, -1); }
     else if(command == "preference") { std::string name; int value; input >> std::quoted(name) >> value; app.settings.set(name, value); app.preferences.update(); }
     else if(command == "previewzone") input >> app.preferences.zone;

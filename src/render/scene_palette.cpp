@@ -121,10 +121,13 @@ scene_palette::scene_palette(resources::data_store const &data, std::string_view
   if(mapping.size() != glass.size()) throw std::runtime_error{"Invalid glass colour map"};
   std::ranges::copy(mapping, glass.begin());
   modified = colours;
-  if(grassy) std::ranges::copy(grassy_colours, modified.begin() + 83 * 3);
+  apply_terrain_palette(modified);
   glass[155] = 155;
   for(size_t i{156}; i != 168; ++i) glass[i] = static_cast<uint8_t>(i - 1);
   for(size_t i{224}; i != 256; ++i) glass[i] = static_cast<uint8_t>(i);
+}
+void scene_palette::apply_terrain_palette(palette_rgb &target) const {
+  if(grassy) std::ranges::copy(grassy_colours, target.begin() + 83 * 3);
 }
 void scene_palette::prepare(unsigned int const infrared_mode) {
   if(infrared_mode > 2) throw std::runtime_error{"Invalid infrared mode"};
@@ -161,7 +164,7 @@ void scene_palette::update(palette_conditions const &conditions) {
   };
   faders.insert(faders.end(), additional_faders.begin(), additional_faders.end());
   auto base{colours};
-  if(grassy) std::ranges::copy(grassy_colours, base.begin() + 83 * 3);
+  apply_terrain_palette(base);
   modified = apply_faders(base, faders);
 }
 } // namespace apache::render

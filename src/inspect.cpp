@@ -1,4 +1,5 @@
 #include "inspect_menu.h"
+#include "inspect_briefing.h"
 #include "inspect_audio.h"
 #include "inspect_session.h"
 #include "inspect_logbook.h"
@@ -167,6 +168,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(inspect_briefing(data, command, std::cin, std::cout, argc > 3 ? argv[3] : "")) return 0;
   if(command == "frontend") { inspect_frontend(data, std::cin, std::cout); return 0; }
   if(command == "menu") {
     inspect_menu(data, std::cin, std::cout); return 0;

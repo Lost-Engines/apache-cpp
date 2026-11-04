@@ -73,6 +73,7 @@ void projectiles::update(projectile_time const &time) {
     auto const aim{weapon.movement_class == 2 && callbacks.guidance ? callbacks.guidance(round, time.now) : projectile_aim{}};
     if(weapon.movement_class == 2 && aim.target && aim.actor && body.motion.distance >= weapon.guidance_start_distance) emit(index, projectile_event::notify, body.pose.position);
     auto const step{calculate_projectile_move(body, weapon, aim.target, aim.actor, trig, time.delta)};
+    if(body.seeker.adjusted == seeker_target::none) round.adjusted = {};
     if(round.mobile) mobiles.move(*round.mobile, body.pose);
     if(step.explosion) emit(index, projectile_event::proximity, *step.explosion);
     if(collide(index, step.displacement)) { remove(index); continue; }

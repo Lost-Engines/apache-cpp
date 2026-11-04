@@ -20,6 +20,7 @@ Current implementation:
 - Star-map decoding, night visibility thresholds, sun/moon projection and sun glare.
 - Cloud-sector selection, quantized cloud mesh, detail transitions, horizon fading and interleaved scene sorting.
 - Smoke and explosion creation, circular storage, lifetime updates, masked billboards and scene sorting.
+- Short/long crater pools, authored sizing, splash state changes and scaled crater model drawing.
 - Moving-object sector lists, cloud visibility, model/shadow sorting and hidden-player handling.
 - Sun-cast model shadows with clipping, attachments, detail chains and ship-deck receiving.
 - Bounded feature-record decoding, distant feature variants and 2D world-window clipping.
@@ -69,11 +70,14 @@ Validation completed:
 - 3,056 mobile-scene operations match 144 sector-list snapshots, 384 drawing queues and 400 ship-deck receiver checks.
 - 96 assembled moving-object scenes match 7,372,800 pixels, including aircraft, carrier models, shadows, hidden-player handling, terrain, clouds, smoke and explosions.
 - Shadow catalogue, mobile-state and combined-scene comparisons also pass under sanitizers.
+- 4,168 crater operations match 360 snapshots containing 40,853 active records.
+- 932 crater/splash frames match 71,577,600 pixels. The other 68 cases reach the original invalid normal references described above.
+- 81 assembled crater scenes match 6,220,800 pixels; 15 further cases encounter those same original invalid reads. All C++ cases use bounded handling, with additional state/frame/scene sanitizer runs.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: craters, fragments, remaining palette effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
+Next: fragments, remaining palette effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

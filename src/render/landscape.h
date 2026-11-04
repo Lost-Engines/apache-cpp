@@ -1,6 +1,7 @@
 #pragma once
 #include "celestial.h"
 #include "clouds.h"
+#include "crater_renderer.h"
 #include "draw_queue.h"
 #include "effect_renderer.h"
 #include "feature_renderer.h"
@@ -45,6 +46,7 @@ public:
   mobile_scene mobiles;
   int32_t sun_glare{0};
   simulation::effects effects;
+  simulation::craters craters;
   size_t missing_normals{0};
   size_t invalid_texture_samples{0};
   landscape(resources::data_store const &data, std::string_view zone);

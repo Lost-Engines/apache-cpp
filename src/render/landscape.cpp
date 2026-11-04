@@ -130,6 +130,7 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
     clouds->submit(queue, camera);
   }
   sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
+  submit_craters(queue, craters, camera, {.cloud_mode{sky.cloud_mode}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   submit_effects(queue, effects, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   shadow_projection casting{terrain, trig, options.lighting};
   casting.cloud_mode = sky.cloud_mode; casting.cloud_top = options.cloud_top;
@@ -147,7 +148,9 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
       shadow_drawer.draw(object, camera);
     } else {
       if(entry.kind == draw_kind::mobile && options.hidden_mobile == entry.payload) continue;
-      auto &object{entry.kind == draw_kind::mobile ? mobiles.at(entry.payload) : scenery[entry.payload]};
+      std::optional<model_instance> crater;
+      if(entry.kind == draw_kind::crater) crater.emplace(crater_model(entry.payload < 128 ? craters.short_lived.at(entry.payload) : craters.long_lived.at(entry.payload - 128), trig, entry.depth));
+      auto &object{crater ? *crater : entry.kind == draw_kind::mobile ? mobiles.at(entry.payload) : scenery[entry.payload]};
       object.distance = entry.depth;
       object_drawer.draw(object, camera);
       missing_normals += object_drawer.missing_normals;

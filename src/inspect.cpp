@@ -7,6 +7,7 @@
 #include <string_view>
 #include "math/trigonometry.h"
 #include "render/clouds.h"
+#include "render/crater_renderer.h"
 #include "render/draw_queue.h"
 #include "render/effect_renderer.h"
 #include "render/feature_renderer.h"
@@ -87,7 +88,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles") {
+  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters") {
     apache::math::trigonometry const trig{data};
     std::string zone, loaded;
     std::unique_ptr<apache::render::landscape> world;
@@ -95,11 +96,11 @@ int main(int const argc, char const *const argv[]) try {
     uint32_t heading{0}, pitch{0}, roll{0};
     apache::render::landscape_options options;
     options.scenery = command == "scene";
-    options.celestial_bodies = command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles";
+    options.celestial_bodies = command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters";
     while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
       if(options.celestial_bodies) std::cin >> options.sky.cloud_flags >> options.sky.weather >> options.cloud_height >> options.cloud_bottom >> options.cloud_top >> options.lighting.heading >> options.lighting.pitch >> options.lighting.night;
       if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
-      if(command == "scene-effects" || command == "scene-mobiles") {
+      if(command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters") {
         world->effects.reset();
         size_t count{0}, puffs{0}, blasts{0}; std::cin >> count;
         for(size_t i{0}; i != count; ++i) {
@@ -110,7 +111,7 @@ int main(int const argc, char const *const argv[]) try {
           else world->effects.explosions.at(blasts++) = {kind, position, {0, 0, 0}, radius, age};
         }
       }
-      if(command == "scene-mobiles") {
+      if(command == "scene-mobiles" || command == "scene-craters") {
         world->mobiles.clear();
         size_t count{0}; int64_t hidden{-1}; std::cin >> count >> hidden;
         options.hidden_mobile = hidden < 0 ? std::nullopt : std::optional{static_cast<uint32_t>(hidden)};
@@ -121,6 +122,14 @@ int main(int const argc, char const *const argv[]) try {
           auto &object{world->mobiles.at(world->mobiles.add(model, pose))}; object.flags = flags; object.alternate_colours = alternate;
         }
       }
+      if(command == "scene-craters") {
+        world->craters.reset(); size_t count{0}, short_count{0}, long_count{0}; std::cin >> count;
+        for(size_t i{0}; i != count; ++i) {
+          bool temporary{false}; apache::simulation::crater item;
+          std::cin >> temporary >> item.model >> item.position[0] >> item.position[1] >> item.position[2] >> item.heading >> item.age >> item.scale[0] >> item.scale[1] >> item.scale[2];
+          (temporary ? world->craters.short_lived.at(short_count++) : world->craters.long_lived.at(long_count++)) = item;
+        }
+      }
       apache::render::framebuffer frame{320, 240};
       for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world->palette.colours[i * 3], world->palette.colours[i * 3 + 1], world->palette.colours[i * 3 + 2]};
       frame.clear(255);
@@ -128,9 +137,56 @@ int main(int const argc, char const *const argv[]) try {
       world->draw(frame, camera, options);
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec;
       if(options.celestial_bodies) std::cout << ' ' << world->sun_glare;
-      if(command == "scene" || command == "scene-effects" || command == "scene-mobiles") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
+      if(command == "scene" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "crater-state") {
+    apache::simulation::craters craters;
+    std::optional<apache::resources::terrain> terrain;
+    uint32_t seed{1}; std::string operation;
+    while(std::cin >> operation) {
+      if(operation == "reset") {
+        std::string zone; std::cin >> zone >> seed; terrain.emplace(data.read(zone + ".WZ/GRIDPOST.BIN")); craters = {}; craters.reset();
+      } else if(operation == "clear") craters.reset();
+      else if(operation == "advance") craters.advance();
+      else if(operation == "state") {
+        apache::resources::bytes bytes; size_t count{0};
+        for(size_t i{0}; i != 256; ++i) {
+          auto const &item{i < 128 ? craters.short_lived[i] : craters.long_lived[i - 128]};
+          if(item.model < 0) continue;
+          ++count; word(bytes, static_cast<uint32_t>(i));
+          for(auto const v : item.position) word(bytes, static_cast<uint32_t>(v));
+          word(bytes, static_cast<uint32_t>(item.model)); word(bytes, item.heading); word(bytes, static_cast<uint32_t>(item.age));
+          for(auto const v : item.scale) word(bytes, static_cast<uint32_t>(v));
+        }
+        std::cout << seed << ' ' << count << ' ' << std::hex << apache::resources::fingerprint(bytes) << std::dec << '\n';
+      } else {
+        if(!terrain) throw std::runtime_error{"Reset the crater scene first"};
+        apache::math::vector3 position; for(auto &v : position) std::cin >> v;
+        int32_t model{0}; bool temporary{false};
+        if(operation == "scale") { int32_t radius{0}; bool heave{false}; std::cin >> radius >> heave; craters.add_scalable(position, radius, heave, *terrain, seed); }
+        else if(operation == "random") { std::cin >> model >> temporary; craters.add_random(position, model, temporary, *terrain, seed); }
+        else if(operation == "add") { uint32_t heading{0}; std::cin >> model >> heading >> temporary; craters.add(position, model, heading, temporary, *terrain); }
+        else throw std::runtime_error{"Unknown crater-state operation"};
+      }
+    }
+  } else if(command == "craters") {
+    apache::math::trigonometry const trig{data};
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    auto const textures{apache::resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))};
+    std::string zone, loaded; std::optional<apache::resources::terrain> terrain; std::optional<apache::render::scene_palette> palette;
+    apache::simulation::crater crater; apache::math::pose camera; apache::render::sky_lighting light;
+    uint32_t h{0}, p{0}, r{0}; int32_t distance{0};
+    while(std::cin >> zone >> crater.model >> crater.position[0] >> crater.position[1] >> crater.position[2] >> crater.heading >> crater.age >> crater.scale[0] >> crater.scale[1] >> crater.scale[2] >> camera.position[0] >> camera.position[1] >> camera.position[2] >> h >> p >> r >> light.heading >> light.pitch >> distance) {
+      if(loaded != zone) { terrain.emplace(data.read(zone + ".WZ/GRIDPOST.BIN")); palette.emplace(data, zone); loaded = zone; }
+      camera.position[2] = std::max(camera.position[2], terrain->elevation(camera.position[0], camera.position[1]) + 256); camera.rotation = trig.transformation(h, p, r);
+      apache::render::framebuffer frame{320, 240};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>((i * 7 + 19) & 255);
+      auto instance{apache::render::crater_model(crater, trig, distance)};
+      apache::render::model_renderer renderer{frame, models, textures, *palette}; renderer.style.light = apache::render::light_vector(trig, light); renderer.draw(instance, camera);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << renderer.missing_normals << ' ' << renderer.invalid_texture_samples << '\n';
+      if(argc > 3) { std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
   } else if(command == "mobile-state") {
     apache::math::trigonometry const trig{data};

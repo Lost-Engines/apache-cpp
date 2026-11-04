@@ -25,6 +25,8 @@ display_area viewport(int const width, int const height, int const logical_width
 
 glfw_runtime::glfw_runtime() {
   glfwSetErrorCallback([](int const code, char const *const message){ std::cerr << "ERROR: GLFW " << code << ": " << message << std::endl; });
+  // Hat directions are handled separately from the four original fire buttons.
+  glfwInitHint(GLFW_JOYSTICK_HAT_BUTTONS, GLFW_FALSE);
   if(!glfwInit()) throw std::runtime_error{"GLFW could not initialise a desktop display"};
 }
 glfw_runtime::~glfw_runtime() {

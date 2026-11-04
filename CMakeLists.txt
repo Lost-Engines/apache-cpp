@@ -226,6 +226,7 @@ add_library(apache_core
   src/render/menu_font.h
   src/resources/reader.cpp
   src/resources/reader.h
+  src/resources/installation.cpp src/resources/installation.h src/resources/reference_files.inc
   src/resources/data_store.cpp
   src/resources/data_store.h
   src/resources/animation.cpp src/resources/animation.h

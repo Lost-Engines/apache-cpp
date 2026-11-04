@@ -260,7 +260,13 @@ Original ANIM movies now play at 12.5 frames per second, including the introduct
 
 All 26 authored movies match 5,217 frames, 306,913,280 pixels and 4,006,656 palette bytes. The unused delta path also matches the original for all 256 byte masks. Campaign selection, four intro/fallback choices, audio suspension and malformed-data bounds pass normal and sanitizer checks. A private-window journey plays and skips the intro, enters a campaign, plays its movie and takes off from the briefing.
 
-Next: first-launch asset setup, final game journeys and documentation cleanup. CI follows once integration is finished.
+First-launch setup uses the verified October 2000 CD. The fetch helpers download its standalone MODE1 BIN, check SHA-256, extract 1,504 game files through the native installer and delete the temporary image. The installer checks every source payload before writing, preserves matching existing files and rejects different existing files. The corresponding 2048-byte-sector ISO is supported too. Original installers, drivers and redistributables are omitted.
+
+A selected data location is remembered beside the user's saves. Fetched assets and saves have separate directories. The default data path is available through `--asset-directory`; `--check-assets` verifies an installation without opening a window. GLFW's synthetic hat buttons are disabled because physical hats have their own input path.
+
+Installer comparisons match all 1,504 files and 305,373,380 bytes against the independent media SHA-256 manifest. Normal and sanitizer runs cover BIN/ISO extraction, repeat installs, preservation of different files, repair of missing files, rejected corruption, path containment, fetch-helper caching and temporary-image cleanup. Private-window tests cover remembered data selection, stale-path recovery and save-directory protection.
+
+Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

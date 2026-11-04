@@ -2,24 +2,43 @@
 
 A native C++26 reconstruction of Digital Integration's **Apache Longbow**, released as **Apache** in the US, from the [Lost Engines](https://github.com/Lost-Engines) reverse-engineering project.
 
-Implementation is in progress. The reference is the January 1998 software engine. Original game data are loaded separately from a selected installation or extracted CD directory.
+Quickstart, training, single missions and campaigns are playable, with the original software graphics, flight models, combat, instruments, mission planner, music and speech. Development continues on multiplayer and final verification.
+
+## Getting started
+
+Build with CMake 3.30 or later, a C++26 compiler and OpenGL development libraries:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j
+./scripts/fetch-assets.sh
+./build/apache
+```
+
+The fetch helper downloads the reference CD from Archive.org, verifies its checksum and extracts the game files. The temporary CD image is removed afterwards. On Windows, use `scripts\fetch-assets.bat`. If your executable is somewhere other than `build/` or the package directory, set `APACHE_EXECUTABLE` to its path.
+
+Already have the game? Select an extracted CD directory or a matching Windows software installation:
+
+```sh
+./build/apache --data-dir /path/to/apache
+```
+
+That location is remembered for subsequent launches. The reference is the January 1998 software build, supplied on the Sold Out and October 2000 European CDs. Other engine versions are not supported yet. Original files are read without modification.
+
+## Playing
+
+Flight opens the training, single-mission and campaign choices. Briefing maps support route editing, payload selection and a live 3D preview. Preferences controls graphics, flight model, difficulty, audio and keyboard/joystick selection.
+
+Arrow keys control pitch and roll, Q/A change collective, Enter selects a weapon, and Space fires. F2/F3 select the pilot/gunner cockpit. F1 opens the illustrated manual, including during flight. P or Pause pauses; Ctrl+Escape asks whether to end the sortie (Y/N).
+
+The window uses square pixels and nearest-neighbour scaling. `--skip-intro` skips the opening sequence, and `--no-audio` disables playback. Run `apache --help` for other options.
+
+Pilot profiles and preferences are saved under `$XDG_DATA_HOME/apache` or `~/.local/share/apache` on Linux, and `%LOCALAPPDATA%\apache` on Windows. `--save-dir` selects another location. Fetched game files occupy the separate `game` subdirectory on Linux, or `data` beside the Windows executable.
+
+## Development
+
+```sh
 ctest --test-dir build --output-on-failure
 ```
 
-Run with:
-
-```sh
-./build/apache --data-dir /path/to/extracted/cd/files
-```
-
-The game opens in a resizable window with square pixels. Flight now leads to Quickstart, training, single missions and campaigns, with mission selection, takeoff, live flight and combat, and a debrief with retry or logging. The pilot logbook supports multiple users and pilots, saved campaign progress, promotions and medals. On Linux, saves go to `$XDG_DATA_HOME/apache` or `~/.local/share/apache`; `--save-dir` selects another directory.
-
-For a direct flight check, add `--mission 61`; `--realistic` selects the realistic flight model. Arrow keys control pitch and roll, Q/A change collective, Enter selects a weapon, Space fires, and F2/F3 select the pilot/gunner cockpit. P or Pause pauses; Ctrl+Escape asks whether to end the sortie (Y/N).
-
-This is still a development build. Briefing maps support route editing, payload selection and a live 3D preview. Music, spoken briefings, radio calls and flight/combat effects play from the original PCM resources; `--no-audio` disables playback. Graphics, flight model, difficulty and control choices can be changed in Preferences and are saved beside pilot profiles. F1 opens the illustrated manual, including during flight. Intro and campaign movies play from the original files; `--skip-intro` skips the opening sequence. The original game data are read without modification.
-
-`apache_inspect` checks decoded images, terrain, models and transforms. See [implementation and validation](docs/implementation.md).
+`apache_inspect` exercises the decoded resources and simulation without opening a window. See [implementation and validation](docs/implementation.md) for the original-code comparisons and remaining work. Game data and generated captures are kept outside this repository.

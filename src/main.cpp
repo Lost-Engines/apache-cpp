@@ -17,6 +17,7 @@
 #include "platform/key_map.h"
 #include "platform/window.h"
 #include "resources/data_store.h"
+#include "resources/installation.h"
 #include "resources/animation.h"
 #include "frontend/presentation.h"
 
@@ -78,7 +79,9 @@ bool play_clip(apache::resources::data_store const &data, apache::frontend::pres
 } // namespace
 
 int main(int const argc, char const *const argv[]) try {
-  std::filesystem::path directory{"data"};
+  std::optional<std::filesystem::path> directory;
+  std::filesystem::path cd_image;
+  bool check_assets{false}, asset_directory{false};
   auto save_directory{apache::configuration::default_save_directory()};
   std::string selected_menu{"_main_screen"};
   std::string capture;
@@ -99,6 +102,9 @@ int main(int const argc, char const *const argv[]) try {
                    "Usage: apache [--data-dir DIRECTORY] [--scale N]\n"
                    "  --data-dir DIRECTORY  Original installation or extracted CD contents\n"
                    "  --save-dir DIRECTORY  Pilot and preference storage\n"
+                   "  --install-cd FILE     Extract the reference CD into --data-dir or the default location\n"
+                   "  --check-assets        Verify all reference game files without starting the game\n"
+                   "  --asset-directory     Print the default game-data directory\n"
                    "  --scale N             Integer scale, or 0 for automatic sizing\n"
                    "  --skip-intro          Skip the opening movies and publisher logos\n"
                    "  --no-audio            Disable the playback device\n"
@@ -115,6 +121,9 @@ int main(int const argc, char const *const argv[]) try {
       return EXIT_SUCCESS;
     }
     if(key == "--data-dir") directory = value();
+    else if(key == "--install-cd") cd_image = value();
+    else if(key == "--check-assets") check_assets = true;
+    else if(key == "--asset-directory") asset_directory = true;
     else if(key == "--save-dir") save_directory = value();
     else if(key == "--scale") {
       scale = number(value());
@@ -132,7 +141,17 @@ int main(int const argc, char const *const argv[]) try {
     else if(key == "--video-mode") { mission_options.video_mode = number(value()); override_video = true; }
     else throw std::runtime_error{"Unknown option: " + std::string{key}};
   }
-  apache::resources::data_store const data{directory};
+  if(asset_directory) { std::cout << apache::resources::default_game_directory().string() << '\n'; return EXIT_SUCCESS; }
+  if(!cd_image.empty()) {
+    auto const destination{directory.value_or(apache::resources::default_game_directory())};
+    apache::resources::install_reference_cd(cd_image, destination);
+    std::cout << "Game resources installed in " << destination.string() << '\n'; return EXIT_SUCCESS;
+  }
+  if(check_assets) {
+    apache::resources::check_reference_installation(directory.value_or(apache::resources::default_game_directory()));
+    std::cout << "All game resources match the reference CD.\n"; return EXIT_SUCCESS;
+  }
+  apache::resources::data_store const data{apache::resources::select_game_directory(directory, save_directory)};
   std::unique_ptr<apache::frontend::mission_session> mission;
   if(mission_id && !capture.empty()) mission = std::make_unique<apache::frontend::mission_session>(data, mission_id, mission_options);
   apache::frontend::mission_frontend frontend{data, mission_options};
@@ -153,6 +172,7 @@ int main(int const argc, char const *const argv[]) try {
   auto const relative{save_root.lexically_relative(data_root)};
   if(relative.empty() || (!relative.empty() && *relative.begin() != "..")) throw std::runtime_error{"Save directory must be outside the original game data"};
   frontend.load_profiles(save_directory);
+  if(directory) apache::resources::remember_game_directory(data.directory(), save_directory);
   if(override_model) frontend.options.arcade = mission_options.arcade;
   if(override_detail) frontend.options.detail = mission_options.detail;
   if(override_video) frontend.options.video_mode = mission_options.video_mode;

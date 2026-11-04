@@ -53,6 +53,10 @@ Current implementation:
 - All weapon definitions, projectile acceleration/drag/expiry, blast and armour damage, AI weapon selection, firing permissions and difficulty-dependent acquisition/burst timing.
 - Ground-vehicle and train movement, formation transitions, waypoint overshoot, battle stops, retreat and resumed advance.
 - AI aircraft/ship steering, bank and pitch limits, terrain/obstacle avoidance, attack-speed selection and helicopter approach/landing bounds.
+- Mission actor movement, patrol routes, carrier takeoff, retreat orders and model-tree synchronization.
+- Scenery, mobile-object, recursive-box and crater collision queries.
+- Laser, radar and infrared seekers, designation, decoys and lock cooldowns.
+- Projectile guidance, lead estimates, lateral acceleration limits, gravity, proximity detonation and subdivided terrain impacts.
 
 Validation completed:
 
@@ -144,11 +148,12 @@ Validation completed:
 - Eight complete mission-movement traces across all four warzones match 348,486 actor states and 9,025,846 defined fields over 19,200 updates. These include 5,594 waypoint crossings, 904 aircraft patrol loops, twelve carrier takeoffs, formation changes and retreat/advance orders. Normal and sanitizer builds agree. Player flight, live target acquisition/firing and scenery obstruction queries remain separate boundaries in these traces.
 - 180,000 geometry/intersection cases match original execution: 6,000 perpendicular-distance calculations, 6,000 intercept estimates, and 24,000 cases each for scenery points/lines, mobile points/lines, recursive bounding boxes and crater points/lines. The checks include all four warzones, extra mission scenery, moving objects, ignored objects, edge points and overflow boundaries. Normal and sanitizer builds agree.
 - 12,000 laser/radar/infrared seeker cases and 24,192 decoy cases match 129,577 fields, including lock flags, adjusted targets, cooldown deadlines, random-state updates and ordered visibility/random queries. Both normal and sanitizer builds pass. Target properties and visibility results are controlled inputs; world targeting is still being connected.
+- 12,000 projectile movement cases, 6,000 closest-approach calculations and 12,000 terrain-bound queries match 431,607 defined fields, including 131 proximity detonations and 5,365 terrain hits. Normal and sanitizer builds agree. Target queries are controlled and damage/notification calls are observed; complete projectile lifecycles are the next integration step.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: connect collision volumes to player flight and projectiles, implement missile guidance and live sensor/target behavior, then complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
+Next: connect collision volumes to player flight and projectiles, complete projectile lifecycles and live sensor/target behavior, then complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

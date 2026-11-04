@@ -14,6 +14,7 @@ public:
   trigonometry(resources::data_store const &data);
   int32_t sine(uint32_t angle) const;
   int32_t cosine(uint32_t angle) const;
+  uint32_t arcsine(int32_t value) const;
   uint32_t arccosine(int32_t value) const;
   uint32_t arctangent(int32_t x, int32_t y) const;
   std::array<uint32_t, 3> angles(matrix3 const &matrix) const;

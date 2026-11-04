@@ -21,6 +21,11 @@ int32_t trigonometry::sine(uint32_t const angle) const {
 int32_t trigonometry::cosine(uint32_t const angle) const {
   return sin_cos[2048 + (angle >> 19) + ((angle >> 18) & 1)];
 }
+uint32_t trigonometry::arcsine(int32_t const value) const {
+  auto const magnitude{static_cast<uint32_t>(std::abs(int64_t{value}))};
+  auto const angle{static_cast<uint32_t>(arc_sin[(magnitude >> 18) + ((magnitude >> 17) & 1)])};
+  return value < 0 ? 0u - angle : angle;
+}
 uint32_t trigonometry::arccosine(int32_t const value) const {
   auto const magnitude{static_cast<uint32_t>(std::abs(int64_t{value}))};
   auto const angle{static_cast<uint32_t>(arc_cos[(magnitude >> 18) + ((magnitude >> 17) & 1)])};

@@ -23,7 +23,7 @@ unsigned int number(std::string_view const text) {
   return result;
 }
 struct events {
-  struct key { int value, modifiers; bool down; };
+  struct key { int value, modifiers; bool down; bool character{false}, repeat{false}; };
   std::vector<key> keys;
   std::vector<bool> clicks;
 };
@@ -31,6 +31,7 @@ struct events {
 
 int main(int const argc, char const *const argv[]) try {
   std::filesystem::path directory{"data"};
+  auto save_directory{apache::configuration::default_save_directory()};
   std::string selected_menu{"_main_screen"};
   std::string capture;
   std::string pressed;
@@ -48,6 +49,7 @@ int main(int const argc, char const *const argv[]) try {
       std::cout << "Apache C++ reconstruction\n"
                    "Usage: apache [--data-dir DIRECTORY] [--scale N]\n"
                    "  --data-dir DIRECTORY  Original installation or extracted CD contents\n"
+                   "  --save-dir DIRECTORY  Pilot and preference storage\n"
                    "  --scale N             Integer scale, or 0 for automatic sizing\n"
                    "Development checks:\n"
                    "  --menu NAME           Select an original frontend screen\n"
@@ -62,6 +64,7 @@ int main(int const argc, char const *const argv[]) try {
       return EXIT_SUCCESS;
     }
     if(key == "--data-dir") directory = value();
+    else if(key == "--save-dir") save_directory = value();
     else if(key == "--scale") {
       scale = number(value());
       if(scale > 16) throw std::runtime_error{"Window scale must be between 0 and 16"};
@@ -92,12 +95,18 @@ int main(int const argc, char const *const argv[]) try {
     apache::resources::write_ppm(capture, mission ? mission->frame.image : frame.image);
     return EXIT_SUCCESS;
   }
+  auto const data_root{std::filesystem::weakly_canonical(data.directory())};
+  auto const save_root{std::filesystem::weakly_canonical(save_directory)};
+  auto const relative{save_root.lexically_relative(data_root)};
+  if(relative.empty() || (!relative.empty() && *relative.begin() != "..")) throw std::runtime_error{"Save directory must be outside the original game data"};
+  frontend.load_profiles(save_directory);
   apache::platform::window window{scale};
   events input;
   glfwSetWindowUserPointer(window.get(), &input);
   glfwSetKeyCallback(window.get(), [](GLFWwindow *const handle, int const key, int, int const action, int const modifiers){
-    if(action != GLFW_REPEAT) static_cast<events*>(glfwGetWindowUserPointer(handle))->keys.push_back({key, modifiers, action == GLFW_PRESS});
+    static_cast<events*>(glfwGetWindowUserPointer(handle))->keys.push_back({key, modifiers, action != GLFW_RELEASE, false, action == GLFW_REPEAT});
   });
+  glfwSetCharCallback(window.get(), [](GLFWwindow *handle, unsigned int value){ static_cast<events*>(glfwGetWindowUserPointer(handle))->keys.push_back({static_cast<int>(value), 0, true, true}); });
   glfwSetMouseButtonCallback(window.get(), [](GLFWwindow *const handle, int const button, int const action, int){
     if(button == GLFW_MOUSE_BUTTON_LEFT) static_cast<events*>(glfwGetWindowUserPointer(handle))->clicks.push_back(action == GLFW_PRESS);
   });
@@ -107,7 +116,7 @@ int main(int const argc, char const *const argv[]) try {
   if(mission) { mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title); }
   while(window.poll() && !menu.quit_requested()) {
     if(mission) {
-      for(auto const &key : input.keys) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
+      for(auto const &key : input.keys) if(!key.character && !key.repeat) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
       input.keys.clear(); input.clicks.clear();
       if(!window.focused()) { mission->controls.held.fill(false); mission->controls.counts.fill(0); }
       if(mission->controls.configuration.input_type != 1) {
@@ -134,6 +143,8 @@ int main(int const argc, char const *const argv[]) try {
     input.clicks.clear();
     for(auto const &key : input.keys) {
       if(!key.down) continue;
+      if(key.character) { frontend.text_input(static_cast<unsigned int>(key.value)); continue; }
+      if((key.value == GLFW_KEY_ESCAPE || key.value == GLFW_KEY_ENTER || key.value == GLFW_KEY_BACKSPACE) && frontend.text_input(key.value == GLFW_KEY_ESCAPE ? 27 : key.value == GLFW_KEY_ENTER ? 10 : 8)) continue;
       if(key.value == GLFW_KEY_ESCAPE) frontend.back();
       else if(key.value == GLFW_KEY_F1) menu.show("_help_screen");
     }
@@ -147,6 +158,7 @@ int main(int const argc, char const *const argv[]) try {
     }
     if(frame_limit && ++frames == frame_limit) break;
   }
+  frontend.logs.save();
   return EXIT_SUCCESS;
 } catch(std::exception const &error) {
   std::cerr << "ERROR: " << error.what() << std::endl;

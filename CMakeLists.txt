@@ -23,6 +23,8 @@ add_library(apache_core
   src/resources/missions.h
   src/resources/models.cpp
   src/resources/models.h
+  src/frontend/pilot_menu.cpp
+  src/frontend/pilot_menu.h
   src/frontend/mission_frontend.cpp
   src/frontend/mission_frontend.h
   src/frontend/mission_session.cpp
@@ -214,6 +216,8 @@ add_library(apache_core
   src/resources/texture.h
   src/resources/terrain.cpp
   src/resources/terrain.h
+  src/configuration/profiles.cpp
+  src/configuration/profiles.h
   src/configuration/preferences.cpp
   src/configuration/preferences.h
 )
@@ -237,6 +241,9 @@ add_executable(apache_inspect src/inspect_menu.cpp src/inspect_menu.h src/inspec
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)
+  add_executable(profile_tests tests/profiles.cpp)
+  target_link_libraries(profile_tests PRIVATE apache_core)
+  add_test(NAME profile_tests COMMAND profile_tests)
   add_executable(resource_tests tests/resources.cpp)
   target_link_libraries(resource_tests PRIVATE apache_core)
   add_test(NAME resource_tests COMMAND resource_tests)

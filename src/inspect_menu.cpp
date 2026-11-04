@@ -40,11 +40,26 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
   while(input >> command) {
     if(command == "click") {
       int x, y; input >> x >> y; menu.move(x, y); menu.button(true); menu.button(false); menu.move(-1, -1);
-    } else if(command == "back") app.back();
+    } else if(command == "profiles") { std::string path; input >> std::quoted(path); app.load_profiles(path); }
+    else if(command == "text") { std::string text; input >> std::quoted(text); for(unsigned char ch : text) app.text_input(ch); }
+    else if(command == "editkey") { unsigned int value; input >> value; app.text_input(value); }
+    else if(command == "profile") { output << "profile " << app.logs.user << ' ' << app.logs.users[app.logs.user].selected << ' ' << app.logs.users[app.logs.user].pilots.size() << ' ' << std::quoted(app.logs.users[app.logs.user].name) << ' ' << std::quoted(app.pilot().name) << ' ' << app.pilot().rank << ' ' << app.pilot().status << '\n'; }
+    else if(command == "back") app.back();
     else if(command == "tick") {
       unsigned int ticks; input >> ticks;
       if(!mission) throw std::runtime_error{"No mission running"};
       mission->step(ticks); mission->draw();
+    } else if(command == "fixture_death") {
+      if(!mission) throw std::runtime_error{"No mission running"};
+      unsigned int death; input >> death;
+      mission->runtime.pilot->arcade.death = death; mission->runtime.pilot->realistic.death = death;
+    } else if(command == "complete") {
+      if(!mission) throw std::runtime_error{"No mission running"};
+      app.complete(std::move(mission));
+    } else if(command == "campaign") {
+      auto const &p{app.pilot().campaign}; output << "campaign " << p.warzone << ' ' << p.level << ' ' << p.lives << ' ' << p.seed << ' ' << p.missions.size();
+      for(bool won : app.pilot().victories) output << ' ' << won;
+      output << '\n';
     } else if(command == "end") {
       if(!mission) throw std::runtime_error{"No mission running"};
       mission->post(0x2001); mission->step(1); app.complete(std::move(mission));
@@ -54,8 +69,8 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
       if(file != "-") apache::resources::write_ppm(file, image);
       output << "frame " << apache::resources::fingerprint(image.pixels) << '\n';
     } else if(command == "state") {
-      output << std::quoted(menu.current()) << ' ' << (mission ? mission->briefing.id : 0) << ' ' << app.pilot.total_time << ' ' << app.pilot.missions.size();
-      for(auto const &entry : app.pilot.missions) output << ' ' << entry.mission << ' ' << static_cast<unsigned int>(entry.result);
+      output << std::quoted(menu.current()) << ' ' << (mission ? mission->briefing.id : 0) << ' ' << app.pilot().total_time << ' ' << app.pilot().missions.size();
+      for(auto const &entry : app.pilot().missions) output << ' ' << entry.mission << ' ' << static_cast<unsigned int>(entry.result);
       output << '\n';
     } else throw std::runtime_error{"Unknown frontend inspection command"};
     if(!input) throw std::runtime_error{"Incomplete frontend inspection command"};

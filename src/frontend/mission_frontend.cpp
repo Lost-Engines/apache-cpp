@@ -27,8 +27,7 @@ std::string zone_name(int const zone) {
 }
 }
 mission_frontend::mission_frontend(resources::data_store const &data, mission_options const settings)
-  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings} {
-  pilot.name = "de Fault"; pilot.rank = 6; pilot.protected_profile = 1; pilot.status_hour = hours_now();
+  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, logs{hours_now()}, pilots{data, interface, logs, definitions} {
   interface.link_scroll("_map_briefing_subtitle_text", "_map_briefing_subtitle_scrollbar");
   interface.link_scroll("_situation_text", "_situation_scroll_bar");
   interface.activated = [this](widget &object, int line){ return activate(object, line); };
@@ -36,6 +35,7 @@ mission_frontend::mission_frontend(resources::data_store const &data, mission_op
     if(object.type == 5 && prepared) { frame.blit(map_image.image, 0, 0); frame.image.colours = map_image.image.colours; }
   };
 }
+void mission_frontend::load_profiles(std::filesystem::path const &path) { logs.load(path, hours_now()); }
 void mission_frontend::visible(std::string_view const name, bool const show) {
   auto &object{interface.named(name)}; object.flags = (object.flags & ~1u) | static_cast<unsigned int>(show);
 }
@@ -48,8 +48,8 @@ void mission_frontend::list() {
     auto const &mission{definitions[index]};
     if(!names.empty()) { names += '\n'; numbers += '\n'; ticks += '\n'; }
     names += mission.title; numbers += std::to_string(mission.id);
-    auto const found{std::ranges::find(pilot.missions, static_cast<uint32_t>(mission.id), &simulation::mission_history::mission)};
-    unsigned int const state{found == pilot.missions.end() ? 0u : static_cast<unsigned int>(found->result)};
+    auto const found{std::ranges::find(pilot().missions, static_cast<uint32_t>(mission.id), &simulation::mission_history::mission)};
+    unsigned int const state{found == pilot().missions.end() ? 0u : static_cast<unsigned int>(found->result)};
     ticks += state == 0 ? ' ' : state == 1 ? '-' : static_cast<char>(5 - state);
   }
   auto &entries{interface.named("_mission_selection_list")}; entries.text = names; entries.selected_line = -1; entries.start_line = 0;
@@ -72,8 +72,8 @@ void mission_frontend::prepare(int const id) {
   result.reset(); prepared = std::make_unique<mission_session>(data, id, options);
   auto const &definition{prepared->briefing}; flow = definition.flow; zone = definition.zone;
   auto const mid{static_cast<uint32_t>(id)};
-  if(std::ranges::find(pilot.missions, mid, &simulation::mission_history::mission) == pilot.missions.end()) pilot.missions.push_back({mid});
-  if(flow == 4 && std::ranges::find(pilot.campaign.missions, mid, &simulation::mission_history::mission) == pilot.campaign.missions.end()) pilot.campaign.missions.push_back({mid});
+  if(std::ranges::find(pilot().missions, mid, &simulation::mission_history::mission) == pilot().missions.end()) pilot().missions.push_back({mid});
+  if(flow == 4 && std::ranges::find(pilot().campaign.missions, mid, &simulation::mission_history::mission) == pilot().campaign.missions.end()) pilot().campaign.missions.push_back({mid});
   int const parent{static_cast<int>(&interface.named("_map_screen") - interface.objects().data())};
   for(auto &object : interface.objects()) if(object.parent == parent) object.flags &= ~1u;
   for(auto const name : {"_map_briefing_button", "_map_takeoff_button", "_map_briefing_subtitle_box", "_map_exit_button"}) visible(name, true);
@@ -105,11 +105,11 @@ void mission_frontend::map() {
   for(size_t i{1}; i < path.size(); ++i) if(auto line{view.clip_line({path[i - 1].position[0], path[i - 1].position[1]}, {path[i].position[0], path[i].position[1]})}) raster.line((*line)[0], (*line)[1], 255);
 }
 void mission_frontend::campaign(bool const fresh) {
-  if(fresh || pilot.campaign.warzone != static_cast<uint32_t>(zone) || !pilot.campaign.level) {
-    pilot.campaign = {static_cast<uint32_t>(zone), 1, 4, static_cast<uint32_t>(std::chrono::system_clock::now().time_since_epoch().count()) & 0x7fff, {}}; last_result = 0;
+  if(fresh || pilot().campaign.warzone != static_cast<uint32_t>(zone)) {
+    pilot().campaign = {static_cast<uint32_t>(zone), 1, 4, static_cast<uint32_t>(std::chrono::system_clock::now().time_since_epoch().count()) & 0x7fff, {}}; last_result = 0;
   }
-  campaign_mission = fresh ? 0 : pilot.next_mission(definitions);
-  int level{static_cast<int>(pilot.campaign.level)}; std::string section{"Situation"};
+  campaign_mission = fresh ? 0 : pilot().next_mission(definitions);
+  int level{static_cast<int>(pilot().campaign.level)}; std::string section{"Situation"};
   if(fresh) { level = 0; section = "Description"; }
   else if(campaign_mission == -2 || campaign_mission == -3) { level = 0; section = campaign_mission == -2 ? "Failure" : "Success"; }
   else if(last_result == 2) { ++level; section = "Failure"; }
@@ -125,9 +125,9 @@ void mission_frontend::campaign(bool const fresh) {
   std::erase(body.text, '\r'); body.start_line = 0;
   interface.named("_situation_screen").picture = "menuscrn/c_" + zone_name(zone) + ".lbm";
   visible("_situation_ok_button", campaign_mission >= 0);
-  if(campaign_mission == -3) { pilot.victories[static_cast<size_t>(zone - 1)] = true; pilot.campaign = {}; }
-  else if(campaign_mission == -2) pilot.campaign = {};
-  interface.show("_situation_screen");
+  if(campaign_mission == -3) { pilot().victories[static_cast<size_t>(zone - 1)] = true; pilot().campaign = {}; }
+  else if(campaign_mission == -2) pilot().campaign = {};
+  logs.save(); interface.show("_situation_screen");
 }
 std::unique_ptr<mission_session> mission_frontend::takeoff() {
   if(!departing) return {};
@@ -135,34 +135,74 @@ std::unique_ptr<mission_session> mission_frontend::takeoff() {
 }
 void mission_frontend::complete(std::unique_ptr<mission_session> mission) {
   prepared = std::move(mission);
-  result = simulation::evaluate_debrief(prepared->runtime, prepared->records, prepared->runtime.random.global_seed, pilot.name);
+  result = simulation::evaluate_debrief(prepared->runtime, prepared->records, prepared->runtime.random.global_seed, pilot().name);
   interface.named("_map_briefing_subtitle_title").text = result->title();
   auto &body{interface.named("_map_briefing_subtitle_text")}; body.text.clear(); body.start_line = 0;
   for(auto const &line : result->explanations) { if(!body.text.empty()) body.text += "\n\n"; body.text += line; }
   visible("_map_takeoff_button", false); visible("_map_exit_button", false); visible("_map_debrief_exit_button", true);
   visible("_map_debrief_log_do_not_log_box", false); map(); interface.show("_map_screen");
 }
+void mission_frontend::show_pilots(bool const transfer_campaign) {
+  if(transfer_campaign) transferred_campaign = pilot().campaign;
+  else transferred_campaign.reset();
+  pilots.show();
+}
+void mission_frontend::show_awards(unsigned int const mask) {
+  // Screens are stacked in the same order as the original debrief callback.
+  if(mask & 8) interface.show("_medal_3_screen");
+  if(mask & 4) interface.show("_medal_2_screen");
+  if(mask & 2) interface.show("_medal_1_screen");
+  if(mask & 1) {
+    std::array<std::string_view, 4> const pictures{"prm_lt", "prm_cpt", "prm_mjr", "prm_lcol"};
+    if(pilot().rank >= 3 && pilot().rank <= 6) interface.named("_promotion_screen").picture = "menuscrn/" + std::string{pictures[pilot().rank - 3]} + ".lbm";
+    interface.show("_promotion_screen");
+  }
+}
 void mission_frontend::log_result(bool const keep) {
   if(!prepared || !result) return;
+  unsigned int awards{0};
   if(keep) {
-    result->log(pilot, static_cast<uint32_t>(prepared->briefing.id), static_cast<unsigned int>(flow), hours_now());
-    pilot.update(definitions); last_result = static_cast<unsigned int>(result->mission); if(save) save(pilot);
+    result->log(pilot(), static_cast<uint32_t>(prepared->briefing.id), static_cast<unsigned int>(flow), hours_now());
+    pilot().update(definitions); awards = pilot().awards; last_result = static_cast<unsigned int>(result->mission); logs.save();
   }
   prepared.reset(); result.reset(); interface.back();
-  if(flow == 4) campaign(); else list();
+  if(flow != 4) list();
+  if(pilot().status != 2) show_pilots(flow == 4);
+  else if(flow == 4 && !awards) campaign();
+  show_awards(awards);
 }
 void mission_frontend::back() {
-  if(interface.current() == "_map_screen" && result) {
+  auto const current{interface.current()};
+  if(current == "_promotion_screen" || current.starts_with("_medal_")) {
+    interface.back();
+    auto const next{interface.current()};
+    if(next != "_promotion_screen" && !next.starts_with("_medal_") && flow == 4 && pilot().status == 2 && !transferred_campaign) campaign();
+    return;
+  }
+  if(current == "_log_screen") {
+    if(!pilots.can_exit()) return;
+    interface.back();
+    if(transferred_campaign) {
+      pilot().campaign = std::move(*transferred_campaign); transferred_campaign.reset();
+      zone = static_cast<int>(pilot().campaign.warzone); logs.save(); campaign();
+    }
+    return;
+  }
+  if(current == "_map_screen" && result) {
     visible("_map_debrief_log_do_not_log_box", true); visible("_map_debrief_retry_mission_button", true); visible("_map_debrief_do_not_log_mission_button", flow != 4);
-  } else { if(interface.current() == "_map_screen") prepared.reset(); interface.back(); }
+  } else { if(current == "_map_screen") prepared.reset(); interface.back(); }
 }
 bool mission_frontend::activate(widget &object, int const line) {
   auto const &action{object.action};
+  if(action == "notify_log_button_" || action == "notify_mission_select_log_") {
+    show_pilots(flow == 4 && interface.current() != "_main_screen" && interface.current() != "_flight_screen"); return true;
+  }
+  if(pilots.activate(object, line)) return true;
   if(action == "notify_training_button_") { flow = 2; zone = 4; list(); }
   else if(action == "notify_single_button_" || action == "notify_campaign_button_") { flow = action == "notify_single_button_" ? 3 : 4; interface.show("_world_screen"); }
   else if(action == "notify_map_yemen_button_" || action == "notify_map_korea_button_" || action == "notify_map_cyprus_button_") {
     zone = action == "notify_map_yemen_button_" ? 1 : action == "notify_map_korea_button_" ? 2 : 3;
-    if(flow == 4) campaign(pilot.campaign.warzone != static_cast<uint32_t>(zone)); else list();
+    if(flow == 4) campaign(pilot().campaign.warzone != static_cast<uint32_t>(zone)); else list();
   } else if(action == "notify_mission_selection_list_") select(line);
   else if(action == "notify_mission_selection_load_") { if(selected >= 0) prepare(definitions[listed[static_cast<size_t>(selected)]].id); }
   else if(action == "notify_situation_ok_button_") { if(campaign_mission == 0) campaign(); else if(campaign_mission > 0) prepare(campaign_mission); }
@@ -170,7 +210,7 @@ bool mission_frontend::activate(widget &object, int const line) {
   else if(action == "notify_debrief_log_button_") log_result(true);
   else if(action == "notify_debrief_do_not_log_button_") log_result(false);
   else if(action == "notify_debrief_retry_mission_button_") { if(prepared) prepare(prepared->briefing.id); }
-  else if(action == "notify_mission_select_exit_button_" || action == "notify_map_exit_button_" || action == "notify_debrief_exit_button_" || action == "notify_situation_exit_button_") back();
+  else if(action == "notify_promotion_exit_button_" || action == "notify_exit_log_screen_" || action == "notify_mission_select_exit_button_" || action == "notify_map_exit_button_" || action == "notify_debrief_exit_button_" || action == "notify_situation_exit_button_") back();
   else if(action == "notify_briefing_subtitle_min_max_button_") { auto const &area{interface.named("_map_briefing_subtitle_box").area}; subtitles(area.bottom - area.top < 51); }
   else if(action == "notify_briefing_button_") visible("_map_briefing_subtitle_box", !(interface.named("_map_briefing_subtitle_box").flags & 1));
   else return false;

@@ -210,7 +210,7 @@ These menu comparisons use a defined initial palette and initialized widgets. Th
 
 ### Playable session and frontend integration
 
-The window now runs the shared mission runtime with original timer input, player flight, combat, sensors, cameras, live instruments, scenery and palette updates. Both original video modes are available. Focus loss releases held controls; explicit pause stops simulation while allowing view changes. Mission selection supports the shipped training and single missions and the three campaigns. Campaign introductions and stage descriptions lead to briefing and takeoff. Debrief evaluation feeds retry, discard and pilot/campaign logging in memory.
+The window now runs the shared mission runtime with original timer input, player flight, combat, sensors, cameras, live instruments, scenery and palette updates. Both original video modes are available. Focus loss releases held controls; explicit pause stops simulation while allowing view changes. Mission selection supports the shipped training and single missions and the three campaigns. Campaign introductions and stage descriptions lead to briefing and takeoff. Debrief evaluation feeds retry, discard and persistent pilot/campaign logging.
 
 - Communications match 6,000 operations and 600,000 state fields in normal and sanitizer builds.
 - Pilot save decoding/encoding, campaign choice, recovery, results and awards match 2,476 original-code cases in normal and sanitizer builds.
@@ -220,7 +220,11 @@ The window now runs the shared mission runtime with original timer input, player
 - Private X-server checks exercise window creation at both resolutions, input, paused view selection, resume and return to the menu.
 - Complete flight/input/render comparisons continue across four warzones and both flight models. These caught two integration details: chain-gun aiming uses the previous barrel attachment position, and explosion sound selection shares the library random sequence with wind gusts. The separate eight-trace weapon regression still matches 3,047,894 fields and 1,326 player-launched rounds after the attachment-order correction.
 
-Next: persistent pilot profiles, complete briefing/map interaction, editable preferences, Quickstart and audio playback. Complete game journeys and CI follow once integration is finished.
+Pilot profiles use the original `log/current.log`, `log/user.N` and binary `log/logN.S` formats in a separate user-data directory. The logbook supports ten user groups, ten pilots per group, protected defaults, naming, deletion and restart. Eight populated logbook frames match 2,457,600 original pixels. Normal and sanitizer journeys cover campaign victory and defeat, replacement of killed pilots, promotion and all three medal screens. Invalid profile loads leave the current in-memory profiles intact; serialization is validated before existing files are replaced.
+
+The four-warzone session comparison is complete: 1,896 frames, 142,200 state fields, 1,456,128 palette bytes and 106,255,220 defined panel pixels. The 326 complete frames free of invalid original reads match 62,592,000 pixels. Remaining frames are checked outside individually identified invalid model or FLIR reads.
+
+Next: complete briefing/map interaction, editable preferences, Quickstart and audio playback. Complete game journeys and CI follow once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

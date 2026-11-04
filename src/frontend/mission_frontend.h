@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include "menu.h"
+#include "pilot_menu.h"
 #include "mission_session.h"
 
 namespace apache::frontend {
@@ -14,6 +15,9 @@ class mission_frontend {
   int flow{2}, zone{4}, selected{-1}, campaign_mission{0};
   unsigned int last_result{0};
   bool departing{false};
+  std::optional<simulation::campaign_progress> transferred_campaign;
+  void show_pilots(bool transfer_campaign);
+  void show_awards(unsigned int mask);
   void visible(std::string_view name, bool show);
   void list();
   void select(int row);
@@ -26,8 +30,11 @@ class mission_frontend {
 public:
   menu interface;
   mission_options options;
-  simulation::pilot_log pilot;
-  std::function<void(simulation::pilot_log const &)> save;
+  configuration::profiles logs;
+  pilot_menu pilots;
+  simulation::pilot_log &pilot() { return logs.current(); }
+  void load_profiles(std::filesystem::path const &path);
+  bool text_input(unsigned int value) { return pilots.key(value); }
   mission_frontend(resources::data_store const &data, mission_options options = {});
   std::unique_ptr<mission_session> takeoff();
   void complete(std::unique_ptr<mission_session> mission);

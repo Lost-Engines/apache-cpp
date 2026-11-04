@@ -16,10 +16,10 @@ Run with:
 ./build/apache --data-dir /path/to/extracted/cd/files
 ```
 
-The game opens in a resizable window with square pixels. Flight now leads to training, single missions and campaigns, with mission selection, takeoff, live flight and combat, and a debrief with retry or logging. Campaign and pilot changes currently last for the running session.
+The game opens in a resizable window with square pixels. Flight now leads to training, single missions and campaigns, with mission selection, takeoff, live flight and combat, and a debrief with retry or logging. The pilot logbook supports multiple users and pilots, saved campaign progress, promotions and medals. On Linux, saves go to `$XDG_DATA_HOME/apache` or `~/.local/share/apache`; `--save-dir` selects another directory.
 
 For a direct flight check, add `--mission 61`; `--realistic` selects the realistic flight model. Arrow keys control pitch and roll, Q/A change collective, Enter selects a weapon, Space fires, and F2/F3 select the pilot/gunner cockpit. P or Pause pauses; Ctrl+Escape ends the sortie.
 
-This is still a development build. Persistent profiles, editable preferences, Quickstart, the complete briefing map tools and audio playback are being integrated. F1 opens the menu help screen. The original game data are read without modification.
+This is still a development build. Editable preferences, Quickstart, the complete briefing map tools and audio playback are being integrated. F1 opens the menu help screen. The original game data are read without modification.
 
 `apache_inspect` checks decoded images, terrain, models and transforms. See [implementation and validation](docs/implementation.md).

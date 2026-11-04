@@ -10,6 +10,7 @@
 #include "render/projection2.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
+#include "resources/animation.h"
 #include "resources/models.h"
 #include "resources/terrain.h"
 #include "resources/texture.h"
@@ -32,6 +33,15 @@ template<typename F> void rejects(F const &fn, char const *const message) {
 } // anonymous namespace
 
 int main() try {
+  apache::resources::bytes const movie_bytes{'A','N','I','M', 1,0, 8,0, 8,0, 0,1, 48, 8,0,0,0, 6,0,0,0, 1,9,1,63,0,0, 0,9};
+  apache::resources::animation movie{movie_bytes};
+  require(movie.advance() && movie.image.pixels == apache::resources::bytes(64, 9) && movie.image.colours[9] == apache::resources::rgb{252,0,0}, "ANIM palette run and solid block");
+  require(!movie.advance(), "ANIM ends at its declared frame count");
+  for(size_t i{0}; i < movie_bytes.size(); ++i) rejects([&]{ apache::resources::animation short_movie{{movie_bytes.begin(), movie_bytes.begin() + static_cast<ptrdiff_t>(i)}}; short_movie.advance(); }, "truncated ANIM packet rejected");
+  auto bad_movie{movie_bytes}; bad_movie[23] = 250; bad_movie[24] = 9;
+  rejects([&]{ apache::resources::animation invalid{bad_movie}; invalid.advance(); }, "ANIM palette overflow rejected");
+  bad_movie = movie_bytes; bad_movie[27] = 8;
+  rejects([&]{ apache::resources::animation invalid{bad_movie}; invalid.advance(); }, "unknown ANIM block rejected");
   apache::configuration::preferences options;
   options.load("Key=first\r\nKEY=last\n Spaced =preserved\r\nNumber= -17tail\r\n");
   require(options.get("key") == "last", "last case-insensitive preference wins");

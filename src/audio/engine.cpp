@@ -86,6 +86,7 @@ void engine::mission(bool const active) {
   } else if(music_enabled && transport.stored()) change(transition::restore);
   else if(music_enabled && theme.pcm) change(transition::start, theme);
 }
+void engine::cinematic(bool const active) { std::lock_guard lock{mutex}; movie_active = active; }
 void engine::pause(bool const active) { std::lock_guard lock{mutex}; sounds.paused = active; }
 void engine::play(unsigned int const id, int32_t const volume, int32_t const pan) { std::lock_guard lock{mutex}; sounds.play(id, static_cast<unsigned int>(std::clamp(volume, 0, 63)), pan); }
 void engine::voice(unsigned int const id, bool const cockpit) { std::lock_guard lock{mutex}; if(cockpit) sounds.cockpit(id); else sounds.radio(id); }
@@ -103,7 +104,9 @@ void engine::flight(simulation::flight_event const event) {
 }
 void engine::render(std::span<float> const stereo) {
   if(stereo.size() % 2) throw std::invalid_argument{"Audio requires stereo frames"};
-  std::lock_guard lock{mutex}; std::ranges::fill(stereo, 0); sounds.render(stereo);
+  std::lock_guard lock{mutex}; std::ranges::fill(stereo, 0);
+  if(movie_active) return;
+  sounds.render(stereo);
   for(size_t i{0}; i < stereo.size(); i += 2) {
     auto const a{transport.sample()}, b{transport.sample(1)};
     float const fraction{static_cast<float>(resample_phase) / 48000};

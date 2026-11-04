@@ -45,6 +45,7 @@ add_library(apache_core
   src/frontend/map_routes.h
   src/frontend/map_layers.cpp
   src/frontend/map_layers.h
+  src/frontend/presentation.cpp src/frontend/presentation.h
   src/frontend/help_menu.cpp src/frontend/help_menu.h
   src/frontend/menu.cpp
   src/frontend/menu.h
@@ -227,6 +228,7 @@ add_library(apache_core
   src/resources/reader.h
   src/resources/data_store.cpp
   src/resources/data_store.h
+  src/resources/animation.cpp src/resources/animation.h
   src/resources/image.cpp
   src/resources/image.h
   src/resources/texture.cpp

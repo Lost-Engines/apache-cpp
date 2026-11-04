@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <utility>
 #include "frontend/mission_frontend.h"
 #include "audio/engine.h"
 #include "platform/audio_output.h"
@@ -16,6 +17,8 @@
 #include "platform/key_map.h"
 #include "platform/window.h"
 #include "resources/data_store.h"
+#include "resources/animation.h"
+#include "frontend/presentation.h"
 
 namespace {
 unsigned int number(std::string_view const text) {
@@ -30,6 +33,48 @@ struct events {
   struct click { unsigned int button; bool down; };
   std::vector<click> clicks;
 };
+// Playback uses the original 16-tick frame interval (200 Hz clock). Slow
+// presentation holds the current frame instead of dropping authored deltas.
+bool play_clip(apache::resources::data_store const &data, apache::frontend::presentation_clip const &clip, apache::platform::window &window, events &input) {
+  auto const interrupted{[&](){
+    bool const skip{std::ranges::any_of(input.keys, [](auto const &k){ return k.down && !k.character; }) || std::ranges::any_of(input.clicks, [](auto const &c){ return c.down; })};
+    input.keys.clear(); input.clicks.clear(); return skip;
+  }};
+  input.keys.clear(); input.clicks.clear();
+  if(clip.movie) {
+    apache::resources::animation movie{data.read(clip.path)};
+    apache::render::framebuffer frame{movie.image.width, std::max(200u, movie.image.height)};
+    auto previous{std::chrono::steady_clock::now()};
+    while(window.poll()) {
+      if(interrupted()) return true;
+      auto const now{std::chrono::steady_clock::now()};
+      if(std::chrono::duration<double>(now - previous).count() >= .08) {
+        previous = now;
+        if(!movie.advance()) return false;
+        frame.blit(movie.image, 0, 0); frame.image.colours = movie.image.colours;
+      }
+      window.present(frame);
+    }
+    return true;
+  }
+  auto const picture{apache::resources::read_iff(data.read(clip.path))};
+  apache::render::framebuffer frame{640, 480}; frame.blit(picture, 0, 0);
+  auto const start{std::chrono::steady_clock::now()};
+  while(window.poll()) {
+    if(interrupted()) return true;
+    double const seconds{std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count()};
+    int const retrace{static_cast<int>(seconds * 60)};
+    if((clip.title && retrace >= 50) || (!clip.title && seconds >= 4 + 50.0 / 60)) return false;
+    int const fade{retrace < 50 ? 50 - retrace : seconds >= 4 ? static_cast<int>((seconds - 4) * 60) : 0};
+    apache::render::palette_rgb colours;
+    for(size_t i{0}; i != 256; ++i) { colours[i * 3] = picture.colours[i].r; colours[i * 3 + 1] = picture.colours[i].g; colours[i * 3 + 2] = picture.colours[i].b; }
+    apache::render::palette_fader const fader{false, 0, 0, 256, static_cast<int32_t>(int64_t{fade} * INT32_MAX / 50), {0, 0, 0}};
+    colours = apache::render::apply_faders(colours, std::span{&fader, 1});
+    for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {colours[i * 3], colours[i * 3 + 1], colours[i * 3 + 2]};
+    window.present(frame);
+  }
+  return true;
+}
 } // namespace
 
 int main(int const argc, char const *const argv[]) try {
@@ -39,7 +84,7 @@ int main(int const argc, char const *const argv[]) try {
   std::string capture;
   std::string pressed;
   unsigned int scale{0}, frame_limit{0};
-  bool no_audio{false};
+  bool no_audio{false}, skip_intro{false};
   bool quick{false}, override_model{false}, override_detail{false}, override_video{false};
   int mission_id{0};
   apache::frontend::mission_options mission_options;
@@ -55,6 +100,7 @@ int main(int const argc, char const *const argv[]) try {
                    "  --data-dir DIRECTORY  Original installation or extracted CD contents\n"
                    "  --save-dir DIRECTORY  Pilot and preference storage\n"
                    "  --scale N             Integer scale, or 0 for automatic sizing\n"
+                   "  --skip-intro          Skip the opening movies and publisher logos\n"
                    "  --no-audio            Disable the playback device\n"
                    "Development checks:\n"
                    "  --menu NAME           Select an original frontend screen\n"
@@ -77,6 +123,7 @@ int main(int const argc, char const *const argv[]) try {
     else if(key == "--menu") selected_menu = "_" + std::string{value()} + "_screen";
     else if(key == "--capture") capture = value();
     else if(key == "--press") pressed = value();
+    else if(key == "--skip-intro") skip_intro = true;
     else if(key == "--no-audio") no_audio = true;
     else if(key == "--quick") quick = true;
     else if(key == "--mission") mission_id = static_cast<int>(number(value()));
@@ -116,7 +163,7 @@ int main(int const argc, char const *const argv[]) try {
   std::unique_ptr<apache::platform::audio_output> audio_device;
   if(!no_audio) {
     sound = std::make_unique<apache::audio::engine>(data);
-    sound->configure(frontend.settings);
+    sound->cinematic(true); sound->configure(frontend.settings);
     try {
       audio_device = std::make_unique<apache::platform::audio_output>([](void *context, std::span<float> buffer) noexcept {
         try { static_cast<apache::audio::engine*>(context)->render(buffer); }
@@ -124,8 +171,14 @@ int main(int const argc, char const *const argv[]) try {
       }, sound.get());
     } catch(std::exception const &error) { std::cerr << "Audio unavailable: " << error.what() << '\n'; sound.reset(); }
   }
+  std::string pending_movie;
+  std::optional<std::array<int, 5>> pending_speech;
+  frontend.movie = [&](int zone, int level){ pending_movie = apache::frontend::campaign_movie(data, zone, level); };
   if(sound) {
-    frontend.speak = [&](int kind, int flow, int zone, int level, int id){ sound->speech(kind, flow, zone, level, id); };
+    frontend.speak = [&](int kind, int flow, int zone, int level, int id){
+      if(!pending_movie.empty()) pending_speech = {kind, flow, zone, level, id};
+      else sound->speech(kind, flow, zone, level, id);
+    };
     frontend.stop_speech = [&](){ sound->stop_speech(); };
     frontend.speech_playing = [&](){ return sound->speaking(); };
   }
@@ -149,6 +202,15 @@ int main(int const argc, char const *const argv[]) try {
   glfwSetMouseButtonCallback(window.get(), [](GLFWwindow *const handle, int const button, int const action, int){
     if(button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT) static_cast<events*>(glfwGetWindowUserPointer(handle))->clicks.push_back({button == GLFW_MOUSE_BUTTON_LEFT ? 0u : 1u, action == GLFW_PRESS});
   });
+  if(!mission_id && !frame_limit && selected_menu == "_main_screen" && !quick && pressed.empty()) {
+    bool skipped{false};
+    for(auto const &clip : apache::frontend::intro_clips(data, frontend.settings.animations, skip_intro)) {
+      if(skipped && !clip.title) continue;
+      skipped = play_clip(data, clip, window, input) || skipped;
+      if(glfwWindowShouldClose(window.get())) break;
+    }
+  }
+  if(sound) sound->cinematic(false);
   bool in_flight_help{false};
   unsigned int frames{0};
   auto previous_time{std::chrono::steady_clock::now()};
@@ -220,6 +282,15 @@ int main(int const argc, char const *const argv[]) try {
       std::array<int32_t, 4> values{128, 128, 128, 128};
       for(size_t i{0}; i != values.size(); ++i) if(axes && i < static_cast<size_t>(count)) values[i] = static_cast<int32_t>(std::lround((std::clamp(axes[i], -1.0f, 1.0f) + 1.0f) * 127.5f));
       frontend.preferences.calibration(values, hat && hats ? *hat : 0u);
+    }
+    if(!pending_movie.empty()) {
+      if(sound) sound->cinematic(true);
+      play_clip(data, {std::exchange(pending_movie, {}), true, false}, window, input);
+      if(sound) {
+        sound->cinematic(false);
+        if(pending_speech) { auto const s{*pending_speech}; pending_speech.reset(); sound->speech(s[0], s[1], s[2], s[3], s[4]); }
+      }
+      previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
     }
     if(in_flight_help && menu.current() != "_help_screen") {
       in_flight_help = false; mission->views->modes.changed = true;

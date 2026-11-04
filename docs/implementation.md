@@ -256,7 +256,11 @@ Joystick button and hat handling matches all 24,576 original decoder cases. Anot
 
 The F1 manual uses its original 800×600 layout, with contents links, chapter/page controls, index and control summary. All 108 authored pages and 227 navigation results agree with the original. Eighteen complete frames match 8,640,000 indexed and RGB pixels. The in-flight yes/no exit prompt matches all 384,000 pixels at both resolutions; unrelated keys leave it open, N resumes the unchanged mission and Y exits. Normal and sanitizer checks pass, alongside seven frontend journeys. Isolated display tests cover manual entry/exit, pause/view changes and both quit choices.
 
-Next: movie playback, first-launch asset setup and complete game journeys. CI follows once integration is finished.
+Original ANIM movies now play at 12.5 frames per second, including the introduction, publisher stills/title fades and all 24 campaign sequences. Keyboard or mouse input skips the sequence and returns to the appropriate menu. Briefing speech starts after the campaign movie; menu audio retains its position during playback. The original 50-retrace still-image fades use a 60 Hz presentation clock.
+
+All 26 authored movies match 5,217 frames, 306,913,280 pixels and 4,006,656 palette bytes. The unused delta path also matches the original for all 256 byte masks. Campaign selection, four intro/fallback choices, audio suspension and malformed-data bounds pass normal and sanitizer checks. A private-window journey plays and skips the intro, enters a campaign, plays its movie and takes off from the briefing.
+
+Next: first-launch asset setup, final game journeys and documentation cleanup. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

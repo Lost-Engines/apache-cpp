@@ -16,6 +16,7 @@ class engine {
   stream transport;
   std::map<std::string, std::shared_ptr<resources::bytes const>, std::less<>> cache;
   stream_source theme;
+  bool movie_active{false};
   bool music_enabled{false}, speech_enabled{false}, in_flight{false};
   enum class transition { none, start, restore, stop };
   transition pending{transition::none};
@@ -32,6 +33,7 @@ public:
   bool speaking();
   void mission(bool active);
   void pause(bool active);
+  void cinematic(bool active);
   void play(unsigned int id, int32_t volume, int32_t pan = 32768);
   void voice(unsigned int id, bool cockpit);
   void gun(bool active);

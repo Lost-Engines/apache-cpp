@@ -106,6 +106,7 @@ void mission_frontend::prepare(int const id) {
   interface.named("_map_briefing_subtitle_text").text = text(definition, "Description");
   interface.named("_map_briefing_subtitle_text").start_line = 0;
   subtitles(true); map(); interface.show("_map_screen");
+  if(flow == 4 && settings.animations && movie) movie(zone, definition.level);
   if(flow == 4 && speak) speak(3, flow, zone, definition.level, id);
 }
 void mission_frontend::subtitles(bool const expanded) {

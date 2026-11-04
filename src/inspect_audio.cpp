@@ -24,6 +24,7 @@ void inspect_audio(apache::resources::data_store const &data, std::istream &inpu
       else if(command == "enginespeech") { int kind, flow, zone, level, mission; input >> kind >> flow >> zone >> level >> mission; engine->speech(kind, flow, zone, level, mission); }
       else if(command == "enginestop") engine->stop_speech();
       else if(command == "enginemission") { bool active; input >> active; engine->mission(active); }
+      else if(command == "enginemovie") { bool active; input >> active; engine->cinematic(active); }
       else if(command == "enginepause") { bool active; input >> active; engine->pause(active); }
       else if(command == "enginegun") { bool active; input >> active; engine->gun(active); }
       else if(command == "engineplay") { unsigned int id; int volume; input >> id >> volume; engine->play(id, volume); }

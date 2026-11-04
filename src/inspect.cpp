@@ -2,6 +2,8 @@
 #include "inspect_briefing.h"
 #include "inspect_audio.h"
 #include "inspect_session.h"
+#include "resources/animation.h"
+#include "frontend/presentation.h"
 #include "inspect_logbook.h"
 #include "inspect_debrief.h"
 #include "inspect_cameras.h"
@@ -184,6 +186,24 @@ int main(int const argc, char const *const argv[]) try {
   if(command == "player-sight") { inspect_player_sight(data, std::cin, std::cout); return 0; }
   if(command == "player-mounts") { inspect_player_mounts(data, std::cin, std::cout); return 0; }
   if(command == "player-weapons") { inspect_player_weapons(data, std::cin, std::cout); return 0; }
+  if(command == "presentation") {
+    std::string action;
+    while(std::cin >> action) {
+      if(action == "intro") { bool animations, skip; std::cin >> animations >> skip; for(auto const &clip : apache::frontend::intro_clips(data, animations, skip)) std::cout << clip.path << ' ' << clip.movie << ' ' << clip.title << '\n'; }
+      else if(action == "campaign") { int zone, level; std::cin >> zone >> level; std::cout << apache::frontend::campaign_movie(data, zone, level) << '\n'; }
+      else throw std::runtime_error{"Unknown presentation inspection command"};
+    }
+    return 0;
+  }
+  if(command == "animation") {
+    if(argc < 4) throw std::runtime_error{"animation requires an original resource path"};
+    apache::resources::animation movie{data.read(argv[3])};
+    while(movie.advance()) {
+      apache::resources::bytes palette; for(auto const &c : movie.image.colours) { palette.push_back(c.r); palette.push_back(c.g); palette.push_back(c.b); }
+      std::cout << movie.position() - 1 << ' ' << apache::resources::fingerprint(movie.image.pixels) << ' ' << apache::resources::fingerprint(palette) << '\n';
+    }
+    return 0;
+  }
   if(command == "controls") { inspect_controls(std::cin, std::cout); return 0; }
   if(command == "mission-combat" || command == "mission-weapons" || command == "mission-battle") { if(argc < 5) throw std::runtime_error{"Expected zone and mission path"}; inspect_mission_combat(std::cin, std::cout, data, argv[3], argv[4], command != "mission-combat", command == "mission-battle"); return 0; }
   if(command == "mission-targets") { if(argc < 5) throw std::runtime_error{"Expected zone and mission path"}; inspect_mission_targets(std::cin, std::cout, data, argv[3], argv[4]); return 0; }

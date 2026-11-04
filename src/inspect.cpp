@@ -57,6 +57,7 @@
 #include "inspect_patrol.h"
 #include "inspect_battles.h"
 #include "inspect_war_grid.h"
+#include "inspect_combat_update.h"
 #include "simulation/battles.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
@@ -151,6 +152,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(command == "combat-update") { inspect_combat_update(std::cin, std::cout, data); return 0; }
   if(command == "war-grid") { inspect_war_grid(std::cin, std::cout, data); return 0; }
   if(command == "battles") { inspect_battles(std::cin, std::cout, data); return 0; }
   if(command == "patrol") { inspect_patrol(std::cin, std::cout, data); return 0; }

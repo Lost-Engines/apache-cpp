@@ -2,6 +2,7 @@
 #include "celestial.h"
 #include "clouds.h"
 #include "draw_queue.h"
+#include "effect_renderer.h"
 #include "feature_renderer.h"
 #include "horizon.h"
 #include "model_renderer.h"
@@ -28,6 +29,7 @@ struct landscape_options {
 class landscape {
   resources::terrain terrain;
   celestial sky_objects;
+  effect_renderer effect_drawer;
   resources::terrain_textures textures;
   resources::feature_layer features;
   math::trigonometry trig;
@@ -38,6 +40,7 @@ class landscape {
 public:
   scene_palette palette;
   int32_t sun_glare{0};
+  simulation::effects effects;
   size_t missing_normals{0};
   size_t invalid_texture_samples{0};
   landscape(resources::data_store const &data, std::string_view zone);

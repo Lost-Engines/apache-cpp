@@ -13,6 +13,7 @@
 #include "resources/models.h"
 #include "resources/terrain.h"
 #include "resources/texture.h"
+#include "simulation/effects.h"
 
 namespace {
 void require(bool const condition, char const *const message) {
@@ -53,6 +54,13 @@ int main() try {
   apache::resources::terrain const flat{grid};
   require(flat.elevation(12345678, 98765432) == 25600, "flat terrain interpolation");
   require(flat.elevation(-1, 0) == 0 && flat.elevation(256 * apache::resources::terrain_step, 0) == 0, "terrain bounds");
+  apache::simulation::effects effects;
+  uint32_t seed{17};
+  require(!effects.add_smoke({-1, 0, 0}, 10, 1, seed) && seed == 17, "out-of-world effects do not consume the random stream");
+  rejects([&]{ effects.add_smoke({0, 0, 0}, 10, 0, seed); }, "zero smoke lifetime rejected before division");
+  rejects([&]{ effects.add_smoke({0, 0, 0}, -1, 10, seed); }, "negative smoke radius rejected");
+  rejects([&]{ effects.advance(-1, flat); }, "negative visual time rejected");
+  require(seed == 17 && !effects.smoke_puffs[0].active, "rejected effects preserve state and random stream");
   apache::render::framebuffer buffer{4, 3};
   buffer.clear(9);
   apache::resources::indexed_image source;

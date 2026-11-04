@@ -126,7 +126,7 @@ void rasterizer::circle(int const centre_x, int const centre_y, int const radius
 void rasterizer::paint_scans(material const &paint) {
   if(paint.pattern == fill_pattern::remap && paint.remapping.size() != 256) throw std::runtime_error{"A translucent fill needs a 256-entry colour map"};
   if(paint.light != shading::none && paint.intensity_map.size() != 65536) throw std::runtime_error{"Shading needs the palette intensity table"};
-  if(paint.image && paint.image->pixels.size() != static_cast<size_t>(paint.image->width) * paint.image->width) throw std::runtime_error{"Texture dimensions disagree with its pixels"};
+  if(paint.image && (!paint.image->width || paint.image->pixels.empty() || paint.image->pixels.size() % paint.image->width)) throw std::runtime_error{"Texture dimensions disagree with its pixels"};
   uint8_t heat{std::array<uint8_t, 4>{204, 102, 51, 153}[paint.heat_phase & 3]};
   for(int y{std::max(first_row, target.clip.top)}; y <= std::min(last_row, target.clip.bottom); ++y) {
     int const lhs{std::min(left[y].x, right[y].x)}, rhs{std::max(left[y].x, right[y].x)};

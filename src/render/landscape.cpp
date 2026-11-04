@@ -6,7 +6,7 @@
 #include "terrain_projection.h"
 
 namespace apache::render {
-landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, textures{data, zone}, features{data, zone, false}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone} {
+landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, effect_drawer{data}, textures{data, zone}, features{data, zone, false}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone} {
   auto const placements{resources::read_scenery(data.read(std::string{zone} + ".WZ/GNDOBJS.BIN"))};
   scenery.reserve(placements.size());
   for(auto const &placement : placements) {
@@ -130,8 +130,11 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
     clouds->submit(queue, camera);
   }
   sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
+  submit_effects(queue, effects, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   for(auto const &entry : queue.ordered()) {
     if(entry.kind == draw_kind::terrain) draw_tile(tiles[entry.payload], false);
+    else if(entry.kind == draw_kind::smoke) effect_drawer.draw_smoke(effects.smoke_puffs.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
+    else if(entry.kind == draw_kind::explosion) effect_drawer.draw_explosion(effects.explosions.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
     else if(entry.kind == draw_kind::cloud) clouds->draw(cloud_raster, view, palette, entry.payload);
     else {
       object_drawer.draw(scenery[entry.payload], camera);
@@ -139,6 +142,6 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
       invalid_texture_samples += object_drawer.invalid_texture_samples;
     }
   }
-  invalid_texture_samples += terrain_drawer.invalid_texture_samples();
+  invalid_texture_samples += terrain_drawer.invalid_texture_samples() + cloud_raster.invalid_texture_samples;
 }
 } // namespace apache::render

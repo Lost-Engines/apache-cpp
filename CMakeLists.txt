@@ -38,6 +38,10 @@ add_library(apache_core
   src/render/model_renderer.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/effects.cpp
+  src/simulation/effects.h
+  src/render/effect_renderer.cpp
+  src/render/effect_renderer.h
   src/render/clouds.cpp
   src/render/clouds.h
   src/render/celestial.cpp

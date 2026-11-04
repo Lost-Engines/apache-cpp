@@ -8,6 +8,7 @@
 #include "math/trigonometry.h"
 #include "render/clouds.h"
 #include "render/draw_queue.h"
+#include "render/effect_renderer.h"
 #include "render/feature_renderer.h"
 #include "render/horizon.h"
 #include "render/landscape.h"
@@ -85,7 +86,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape" || command == "scene" || command == "atmosphere") {
+  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects") {
     apache::math::trigonometry const trig{data};
     std::string zone, loaded;
     std::unique_ptr<apache::render::landscape> world;
@@ -93,20 +94,92 @@ int main(int const argc, char const *const argv[]) try {
     uint32_t heading{0}, pitch{0}, roll{0};
     apache::render::landscape_options options;
     options.scenery = command == "scene";
-    options.celestial_bodies = command == "atmosphere";
+    options.celestial_bodies = command == "atmosphere" || command == "scene-effects";
     while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
-      if(command == "atmosphere") std::cin >> options.sky.cloud_flags >> options.sky.weather >> options.cloud_height >> options.cloud_bottom >> options.cloud_top >> options.lighting.heading >> options.lighting.pitch >> options.lighting.night;
+      if(options.celestial_bodies) std::cin >> options.sky.cloud_flags >> options.sky.weather >> options.cloud_height >> options.cloud_bottom >> options.cloud_top >> options.lighting.heading >> options.lighting.pitch >> options.lighting.night;
       if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
+      if(command == "scene-effects") {
+        world->effects.reset();
+        size_t count{0}, puffs{0}, blasts{0}; std::cin >> count;
+        for(size_t i{0}; i != count; ++i) {
+          unsigned int kind{0}; apache::math::vector3 position;
+          int32_t radius{0}, age{0}, lifetime{0}; uint32_t angle{0};
+          std::cin >> kind >> position[0] >> position[1] >> position[2] >> radius >> age >> lifetime >> angle;
+          if(kind == 3) world->effects.smoke_puffs.at(puffs++) = {true, position, radius, lifetime, age, angle};
+          else world->effects.explosions.at(blasts++) = {kind, position, {0, 0, 0}, radius, age};
+        }
+      }
       apache::render::framebuffer frame{320, 240};
       for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world->palette.colours[i * 3], world->palette.colours[i * 3 + 1], world->palette.colours[i * 3 + 2]};
       frame.clear(255);
       camera.rotation = trig.transformation(heading, pitch, roll);
       world->draw(frame, camera, options);
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec;
-      if(command == "atmosphere") std::cout << ' ' << world->sun_glare;
-      if(command == "scene") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
+      if(options.celestial_bodies) std::cout << ' ' << world->sun_glare;
+      if(command == "scene" || command == "scene-effects") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "effect-state") {
+    apache::simulation::effects effects;
+    std::optional<apache::resources::terrain> terrain;
+    uint32_t seed{1};
+    std::string operation;
+    while(std::cin >> operation) {
+      if(operation == "reset") {
+        std::string zone; std::cin >> zone >> seed;
+        terrain.emplace(data.read(zone + ".WZ/GRIDPOST.BIN")); effects.reset();
+      } else if(operation == "advance") {
+        if(!terrain) throw std::runtime_error{"Reset the effect scene before advancing it"};
+        int32_t delta{0}; std::cin >> delta; effects.advance(delta, *terrain);
+      } else if(operation == "state") {
+        apache::resources::bytes bytes;
+        size_t puffs{0}, blasts{0};
+        for(size_t i{0}; i != effects.smoke_puffs.size(); ++i) {
+          auto const &puff{effects.smoke_puffs[i]};
+          if(!puff.active) continue;
+          ++puffs; word(bytes, static_cast<uint32_t>(i)); word(bytes, 1);
+          for(auto const value : puff.position) word(bytes, static_cast<uint32_t>(value));
+          word(bytes, static_cast<uint32_t>(puff.radius)); word(bytes, static_cast<uint32_t>(puff.lifetime)); word(bytes, static_cast<uint32_t>(puff.age)); word(bytes, puff.angle);
+        }
+        for(size_t i{0}; i != effects.explosions.size(); ++i) {
+          auto const &blast{effects.explosions[i]};
+          if(!blast.kind) continue;
+          ++blasts; word(bytes, static_cast<uint32_t>(i)); word(bytes, blast.kind);
+          for(auto const value : blast.position) word(bytes, static_cast<uint32_t>(value));
+          for(auto const value : blast.velocity) word(bytes, static_cast<uint32_t>(value));
+          word(bytes, static_cast<uint32_t>(blast.radius)); word(bytes, static_cast<uint32_t>(blast.frame));
+        }
+        std::cout << seed << ' ' << puffs << ' ' << blasts << ' ' << std::hex << apache::resources::fingerprint(bytes) << std::dec << '\n';
+      } else {
+        apache::math::vector3 position;
+        int32_t radius{0};
+        std::cin >> position[0] >> position[1] >> position[2] >> radius;
+        if(operation == "smoke") { int32_t lifetime{0}; std::cin >> lifetime; effects.add_smoke(position, radius, lifetime, seed); }
+        else if(operation == "ground") { if(!terrain) throw std::runtime_error{"Reset the effect scene before ground placement"}; effects.add_ground_explosion(position, radius, *terrain); }
+        else if(operation == "air") { apache::math::vector3 velocity; for(auto &value : velocity) std::cin >> value; effects.add_air_explosion(position, radius, velocity); }
+        else throw std::runtime_error{"Unknown effect-state operation"};
+      }
+    }
+  } else if(command == "billboards") {
+    apache::math::trigonometry const trig{data};
+    apache::render::effect_renderer const effects{data};
+    int kind{0};
+    apache::math::vector3 position;
+    int32_t radius{0}, age{0}, lifetime{0};
+    uint32_t angle{0}, heading{0}, pitch{0}, roll{0};
+    apache::math::pose camera;
+    while(std::cin >> kind >> position[0] >> position[1] >> position[2] >> radius >> age >> lifetime >> angle >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll) {
+      camera.rotation = trig.transformation(heading, pitch, roll);
+      auto const angles{trig.angles(camera.rotation)};
+      apache::render::framebuffer frame{320, 240};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>((i * 7 + 19) & 255);
+      apache::render::projection view{0, 0, 320, 240};
+      apache::render::rasterizer raster{frame};
+      if(kind == 3) effects.draw_smoke({true, position, radius, lifetime, age, angle}, camera, angles[2], trig, view, raster);
+      else effects.draw_explosion({static_cast<unsigned int>(kind), position, {0, 0, 0}, radius, age}, camera, angles[2], trig, view, raster);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << raster.invalid_texture_samples << '\n';
+      if(argc > 3) { std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
   } else if(command == "cloud-vertices" || command == "clouds") {
     apache::math::trigonometry const trig{data};

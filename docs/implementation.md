@@ -19,6 +19,7 @@ Current implementation:
 - Complete terrain, feature and placed-scenery assembly, visible-sector selection, and the original ground/sky horizon.
 - Star-map decoding, night visibility thresholds, sun/moon projection and sun glare.
 - Cloud-sector selection, quantized cloud mesh, detail transitions, horizon fading and interleaved scene sorting.
+- Smoke and explosion creation, circular storage, lifetime updates, masked billboards and scene sorting.
 - Bounded feature-record decoding, distant feature variants and 2D world-window clipping.
 - Perspective projection and five-plane clipping with interpolated texture coordinates and lighting.
 - Preference parsing, conversion and serialization.
@@ -58,6 +59,10 @@ Validation completed:
 - 296 complete cloud images match 22,732,800 pixels and all 193,639 queued cloud objects.
 - 192 assembled terrain/cloud/sky images match 14,745,600 pixels across all four warzones and weather states, including views inside and above clouds.
 - Another 120 cloud frames and 160 assembled weather scenes pass under AddressSanitizer and UndefinedBehaviorSanitizer.
+- 1,824 smoke/explosion billboard frames match 140,083,200 pixels, including all 56 active textures, rotation and clipping.
+- 4,635 effect operations match 411 original state snapshots containing 185,236 active records, including storage wraparound and expiration.
+- 96 assembled effect scenes match 7,372,800 pixels across all four warzones and weather states.
+- Effect sprite, state and combined-scene comparisons also run under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

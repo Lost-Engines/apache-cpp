@@ -38,6 +38,7 @@
 #include "resources/missions.h"
 #include "simulation/actor_types.h"
 #include "inspect_weapons.h"
+#include "inspect_navigation.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
 #include "resources/terrain.h"
@@ -203,6 +204,8 @@ int main(int const argc, char const *const argv[]) try {
       pose(unit.object.world); std::cout << '\n';
       node(node, unit.object, "root", unit.carrier_slot.has_value());
     }
+  } else if(command == "navigation") {
+    inspect_navigation(std::cin, std::cout, data);
   } else if(command == "weapon-definitions") {
     inspect_weapon_definitions(std::cout);
   } else if(command == "weapon-rules") {

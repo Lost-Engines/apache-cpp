@@ -52,6 +52,7 @@ Current implementation:
 - Actor classes and loadouts, formation expansion, variable model attachments, carrier reservations and complete starting poses.
 - All weapon definitions, projectile acceleration/drag/expiry, blast and armour damage, AI weapon selection, firing permissions and difficulty-dependent acquisition/burst timing.
 - Ground-vehicle and train movement, formation transitions, waypoint overshoot, battle stops, retreat and resumed advance.
+- AI aircraft/ship steering, bank and pitch limits, terrain/obstacle avoidance, attack-speed selection and helicopter approach/landing bounds.
 
 Validation completed:
 
@@ -139,6 +140,7 @@ Validation completed:
 - All 1,315 actor type records match 19,725 fields. Across every mission, 58,496 model instances and attachment trees match, together with all 263,868 starting transform fields for 21,989 units. A second direct execution comparison matches 483,758 actor-state fields, including ammunition, angles, velocities, route selection, carrier slots and random ordering. Both full suites also pass under sanitizers.
 - All 55 weapon definitions match original initialization. Another 67,142 fields match across 3,706 atmosphere queries, 12 difficulty rows, 8,640 speed updates, 2,160 expiry cases, 6,912 damage cases, 4,800 weapon selections, 4,000 firing decisions, 4,320 fire intervals and 600 acquisition delays. These include multiplayer damage rules, range boundaries, motor burnout and the original random sequence. The complete comparison also passes under sanitizers. Guidance, collision and live target acquisition remain separate integration work.
 - Eight continuous ground-movement traces cover all four warzones, variable frame durations, destroyed formation members and retreat/advance orders. Across 19,200 updates, 212,080 states match 4,843,050 defined fields, including 5,594 waypoint crossings. Both normal and sanitizer builds pass. The original leaves a stopped formation member's route distance uninitialized; C++ sets it to zero.
+- 6,000 AI steering cases match 144,000 output fields across aircraft, helicopters and ships, including terrain/obstacle avoidance, world-edge departures, attack speeds, acceleration easing and landing limits. The full sweep passes under sanitizers. The original turn-limitation flag can read unset locals on aligned/no-pitch paths; C++ uses zero corrections and those undefined flag bits are excluded from comparison.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

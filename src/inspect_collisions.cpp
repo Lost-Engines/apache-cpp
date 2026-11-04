@@ -42,6 +42,15 @@ void inspect_collisions(std::istream &input, std::ostream &output, apache::resou
       auto const start{point()}, end{point()}; simulation::target_identity source, target;
       for(auto *item : {&source, &target}) { unsigned int kind{0}; input >> kind >> item->layer >> item->index; item->kind = static_cast<simulation::target_kind>(kind); }
       output << simulation::line_reaches_target(start, end, source, target, *terrain, *collisions, mobiles, models, trig) << '\n';
+    } else if(command == "flight") {
+      auto const start{point()}, end{point()}; auto const player{ignored()};
+      auto const hit{simulation::check_flight_collision(start, end, player, mobiles, *collisions, craters, *terrain, models, trig)};
+      output << static_cast<unsigned int>(hit.kind) << ' ' << hit.model << ' ' << (hit.mobile ? static_cast<int64_t>(*hit.mobile) : -1) << ' ' << (hit.ground ? static_cast<int64_t>(hit.ground->layer) : -1) << ' ' << (hit.ground ? static_cast<int64_t>(hit.ground->index) : -1);
+      for(auto v : hit.ground ? hit.ground->position : math::vector3{}) output << ' ' << v;
+      output << ' ' << hit.swept << '\n';
+    } else if(command == "carrier-contact") {
+      bool registered{false}; int32_t deck{0}, previous{0}, height{0}; input >> registered >> deck >> previous >> height;
+      output << simulation::carrier_landing_contact(registered, deck, previous, height) << '\n';
     } else if(command == "maximum-height") {
       output << terrain->maximum_height() << '\n';
     } else if(command == "reset") {

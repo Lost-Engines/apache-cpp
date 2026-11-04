@@ -123,4 +123,21 @@ bool crater_line_collision(craters const &marks, resources::model_archive const 
   }
   return false;
 }
+flight_collision check_flight_collision(math::vector3 const &previous, math::vector3 const &position, std::optional<uint32_t> const player, render::mobile_scene const &mobiles, scenery_collisions const &scenery, craters const &marks, resources::terrain const &terrain, resources::model_archive const &models, math::trigonometry const &trig) {
+  auto start{previous}, end{position}; start[2] = math::subtract(start[2], 0x900); end[2] = math::subtract(end[2], 0x900);
+  flight_collision result; result.swept = approximate3(difference(start, end)) >= 0x1e00;
+  auto const mobile{result.swept ? mobile_line_collision(mobiles, models, trig, start, end, player) : mobile_point_collision(mobiles, models, end, player)};
+  if(mobile) if(auto const part{bounding_box_hit(mobiles.at(*mobile), end, models)}) {
+    result.kind = flight_collision_kind::mobile; result.model = part->id; result.mobile = mobile; result.part = part; return result;
+  }
+  if(auto const ground{result.swept ? scenery.line(start, end) : scenery.point(end)}) {
+    result.kind = flight_collision_kind::scenery; result.ground = ground; result.model = scenery.at(ground->layer, ground->index).model; return result;
+  }
+  int32_t tallest{0}; for(auto id : {11, 257, 385, 62}) tallest = std::max(tallest, models.at(id)->height);
+  if(result.swept ? crater_line_collision(marks, models, terrain, trig, start, end, tallest) : crater_point_collision(marks, models, terrain, end, tallest)) { result.kind = flight_collision_kind::crater; result.model = 11; }
+  return result;
+}
+bool carrier_landing_contact(bool const registered, int32_t const deck, int32_t const previous_height, int32_t const height) {
+  return registered && (height >= deck || previous_height >= deck);
+}
 } // namespace apache::simulation

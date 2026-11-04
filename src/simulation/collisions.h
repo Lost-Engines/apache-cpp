@@ -31,4 +31,16 @@ std::optional<uint32_t> mobile_point_collision(render::mobile_scene const &scene
 std::optional<uint32_t> mobile_line_collision(render::mobile_scene const &scene, resources::model_archive const &models, math::trigonometry const &trig, math::vector3 const &start, math::vector3 const &end, std::optional<uint32_t> ignored = {}, std::optional<uint32_t> ignored_second = {});
 bool crater_point_collision(craters const &marks, resources::model_archive const &models, resources::terrain const &terrain, math::vector3 const &position, int32_t tallest);
 bool crater_line_collision(craters const &marks, resources::model_archive const &models, resources::terrain const &terrain, math::trigonometry const &trig, math::vector3 const &start, math::vector3 const &end, int32_t tallest);
+enum class flight_collision_kind { none, mobile, scenery, crater };
+struct flight_collision {
+  flight_collision_kind kind{flight_collision_kind::none};
+  uint32_t model{0};
+  std::optional<uint32_t> mobile;
+  render::model_instance const *part{nullptr};
+  std::optional<scenery_hit> ground;
+  bool swept{false};
+};
+// Flight positions are at the pilot's eye; collision tests use a point 0x900 below it.
+flight_collision check_flight_collision(math::vector3 const &previous, math::vector3 const &position, std::optional<uint32_t> player, render::mobile_scene const &mobiles, scenery_collisions const &scenery, craters const &marks, resources::terrain const &terrain, resources::model_archive const &models, math::trigonometry const &trig);
+bool carrier_landing_contact(bool registered, int32_t deck, int32_t previous_height, int32_t height);
 } // namespace apache::simulation

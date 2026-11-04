@@ -57,6 +57,9 @@ Current implementation:
 - Scenery, mobile-object, recursive-box and crater collision queries.
 - Laser, radar and infrared seekers, designation, decoys and lock cooldowns.
 - Projectile guidance, lead estimates, lateral acceleration limits, gravity, proximity detonation and subdivided terrain impacts.
+- Player construction, shared flight/AI position, carrier takeoff and landing, collision response and carrier slot reservations.
+- Shared mission update runtime with live flight, AI, projectiles, combat damage and player subsystem failures.
+- Original keyboard ramps and view routing, control-device configuration and calibrated joystick response.
 
 Validation completed:
 
@@ -180,11 +183,17 @@ Validation completed:
 - The same continuous missions now execute live firing, projectile construction, guidance, automatic countermeasures, collision and smoke. Eight traces match 7,843,193 fields across 9,600 updates, including 3,882 launches, 5,537 incoming-missile notifications, 746 mobile hits, 461 scenery hits, 111 proximity detonations and 19,095 active smoke records. Normal and sanitizer builds agree. Overshooting a target clears the guidance binding as well as the seeker state. Impact damage remains observed in this comparison.
 - Eight complete battle traces now apply live projectile damage, casualties, destroyed scenery, explosion/crater construction and positional sound requests. All 7,629,707 fields agree over 9,600 updates, including 3,438 launches, 74 combat casualties, 89,652 actor states and 29,582 active explosion/crater records. Normal and sanitizer builds produce identical results. Debrief accounting and player flight remain separate connections.
 - Player collision dispatch matches 24,000 original cases across all four maps, including the movement threshold, rotated mobile bounds, scenery and crater priority. Another 6,000 carrier registration/deck-contact cases agree. All 222,000 fields match in normal and sanitizer builds. Collision response and carrier attachment remain separate integration work.
+- Eight live player-flight traces match 8,127,587 fields over 9,600 updates, including land/carrier starts and continuous realistic/Arcade flight alongside AI movement and targeting. Both builds produce the same output.
+- Collision-enabled flight adds 2,400 deliberate contacts, including 50 carrier attachments and slot reservation changes. All 8,188,635 fields match over the continuous traces and fixtures, with identical normal/sanitizer results. These comparisons observe collateral destruction and debrief/flight feedback separately.
+- Eight player battle traces connect flight, collision response, AI, projectile damage and player subsystem failures. All 9,399,339 fields match over 9,600 updates, including 3,712 launches, 104 combat casualties and 24 controlled player damage injections. Normal and sanitizer builds agree.
+- Eight slow-frame traces exercise the original flight substeps while movement, weapons and combat retain the full frame interval. Both builds match all 1,561,448 fields over 1,600 updates.
+- Another 600 contact fixtures carry 50 deck landings through the next flight update. Carrier-relative position, reservations, attitude and landing state match all 42,350 fields in both builds.
+- Keyboard input and camera routing match 1,000 original frames. All 128 device-selection combinations, 20,480 calibrated joystick samples and 1,280 curve entries also agree. Normal and sanitizer builds match all 36,784 fields. Platform polling and joystick-button dispatch remain to be connected.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: connect collision volumes to player flight, then complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
+Next: connect player weapons and live sensors, bring the shared mission runtime into the frontend, and complete campaign interaction, audio and persistence. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

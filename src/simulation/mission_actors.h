@@ -32,6 +32,7 @@ struct carrier_slot {
   size_t attachment{0};
   math::pose relative;
   std::optional<size_t> occupant;
+  std::optional<size_t> reserved;
 };
 struct carrier_state {
   size_t actor{0}, available{0};

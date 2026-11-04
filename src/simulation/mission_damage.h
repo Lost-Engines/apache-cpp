@@ -38,6 +38,7 @@ public:
   mission_damage(resources::mission_definition const &mission, mission_scenery &scenery, mission_actors &actors, mission_spatial &spatial, mission_targets &targets, mission_combat &combat, mission_weapons &weapons, resources::model_archive const &models, resources::terrain const &terrain, scenery_collisions const &structures, render::mobile_scene &mobiles, math::trigonometry const &trig, combat_random &war, combat_random &weapon, forces_info const &skill, std::function<uint8_t(int32_t, int32_t)> surface, mission_damage_callbacks events = {});
   mission_damage(mission_damage const &) = delete;
   mission_damage &operator=(mission_damage const &) = delete;
+  void destroy(target_identity const &target);
   void impact(projectile_record &round, projectile_event_info const &event);
 };
 } // namespace apache::simulation

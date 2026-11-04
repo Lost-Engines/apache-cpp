@@ -1,6 +1,5 @@
 #include "inspect_mission_combat.h"
-#include "simulation/mission_damage.h"
-#include "resources/features.h"
+#include "simulation/mission_runtime.h"
 #include <istream>
 #include <ostream>
 #include <iomanip>
@@ -8,26 +7,17 @@
 
 void inspect_mission_combat(std::istream &input, std::ostream &output, apache::resources::data_store const &data, std::string const &zone, std::string const &path, bool const armed, bool const hurt) {
   using namespace apache;
-  auto const bytes{data.read(path)}; auto const mission{resources::read_mission_definition(std::string{bytes.begin(), bytes.end()})};
-  resources::terrain const terrain{data.read(zone + ".WZ/GRIDPOST.BIN")}; auto models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}; resources::executable_data const executable{data}; resources::initialise_model_metadata(models, executable);
-  unsigned int const map{zone == "YEMEN" ? 1u : zone == "KOREA" ? 2u : zone == "CYPRUS" ? 3u : zone == "FORT" ? 4u : 0u};
-  simulation::mission_scenery scene{mission, resources::read_scenery(data.read(zone + ".WZ/GNDOBJS.BIN")), terrain, models, map};
-  resources::feature_layer const features{data, zone, false}, super_features{data, zone, true}; math::trigonometry const trig{data}; auto const formations{resources::read_formations(executable)};
-  simulation::actor_environment environment{.height{[&](int32_t x, int32_t y){ return terrain.elevation(x, y); }}, .surface{[&](int32_t x, int32_t y){ return resources::surface_type(features, super_features, x, y); }}};
-  simulation::combat_random random; random.next(); simulation::mission_actors actors{mission, formations, models, trig, environment, map, random.global_seed}; random.global_seed = actors.random_seed;
-  render::mobile_scene mobiles{models}; simulation::mission_spatial spatial{mission, scene, actors, mobiles, terrain};
-  environment.relocate = [&](simulation::actor_state &actor, math::vector3 const &position){ spatial.move(actor, position); };
-  simulation::scenery_collisions structures{models, trig, scene.base, scene.extra};
-  simulation::navigation_environment navigation{.height{environment.height}, .tallest_object{structures.tallest_object}, .obstacle{[&](auto const &from, auto const &to) -> std::optional<simulation::navigation_obstacle> { auto hit{structures.line(from, to)}; if(!hit) return {}; return simulation::navigation_obstacle{hit->position, models.at(structures.at(hit->layer, hit->index).model)->height}; }}, .relocate{environment.relocate}};
-  simulation::mission_targets targets{mission, scene, actors, spatial, random, terrain, structures, mobiles, models, trig};
-  simulation::combat_random weapon_random{1, random.global_seed}; simulation::combat_tables tables{executable};
-  simulation::mission_weapons *active_weapons{nullptr};
-  simulation::mission_damage *active_damage{nullptr};
+  simulation::mission_runtime runtime{data, zone, path, armed, hurt};
+  runtime.check_collisions = runtime.subdivide_flight = false;
+  auto &mission{runtime.mission}; auto &scene{runtime.scene}; auto &terrain{runtime.terrain}; auto &models{runtime.models}; auto &trig{runtime.trig};
+  auto &actors{runtime.actors}; auto &spatial{runtime.spatial}; auto &mobiles{runtime.mobiles}; auto &structures{runtime.structures}; auto &targets{runtime.targets};
+  auto &random{runtime.random}; auto &weapon_random{runtime.weapon_random}; auto &combat{runtime.combat}; auto &pilot{runtime.pilot}; auto &player_damage{runtime.player_damage};
+  auto &launched{runtime.weapons}; auto &damage{runtime.damage}; auto &check_collisions{runtime.check_collisions}; auto &collision_marks{runtime.collision_marks}; auto &timing{runtime.timing}; auto &frame{runtime.frame};
   auto const identity{[&](simulation::target_identity const &id) -> int64_t {
     if(id.kind == simulation::target_kind::scenery) return 1 + id.index + id.layer * 100000;
     if(id.kind == simulation::target_kind::mobile) {
       if(auto i{spatial.actor_index(id.index)}) return 200001 + static_cast<int64_t>(*i);
-      if(active_weapons) if(auto i{active_weapons->projectile_index(id.index)}) return 300001 + static_cast<int64_t>(*i);
+      if(launched) if(auto i{launched->projectile_index(id.index)}) return 300001 + static_cast<int64_t>(*i);
     }
     return 0;
   }};
@@ -37,36 +27,28 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     if(t.kind == simulation::target_kind::fixed) { output << " -1"; for(auto v : target->position) output << ' ' << v; }
     else output << ' ' << identity(t) << " 0 0 0";
   }};
-  size_t frame{0}; simulation::mission_combat *active{nullptr}; simulation::mission_combat_callbacks events;
-  events.visible = [&](auto const &source, auto const &target){ return simulation::line_reaches_target(targets.world.position(source), targets.world.position(target), source.identity, target.identity, terrain, structures, mobiles, models, trig); };
-  events.fire = [&](size_t i){ output << "fire " << frame << ' ' << i; reference(active->armaments[i].target.get()); output << '\n'; if(active_weapons) active_weapons->fire(i); };
-  events.ground_fire = [&](auto const &source, auto const &target, unsigned int id){ output << "groundfire " << frame << ' ' << id; reference(&source); reference(&target); output << '\n'; return active_weapons ? active_weapons->fire_ground(source, target, id) : simulation::firing_status::blocked; };
+  auto &events{runtime.events};
+  events.fire = [&](size_t i){ output << "fire " << frame << ' ' << i; reference(combat.armaments[i].target.get()); output << '\n'; };
+  events.ground_fire = [&](auto const &source, auto const &target, unsigned int id){ output << "groundfire " << frame << ' ' << id; reference(&source); reference(&target); output << '\n'; };
   events.sound = [&](unsigned int sound, bool cockpit){ output << "sound " << frame << ' ' << sound << ' ' << cockpit << '\n'; };
-  events.message = [&](std::string_view message){ output << "message " << frame << ' ' << std::quoted(std::string{message}) << '\n'; };
-  simulation::mission_combat combat{mission, scene, actors, spatial, targets, terrain, trig, tables, formations, environment, random, weapon_random, 0, events}; active = &combat;
-  targets.additional_state = [&](uint32_t id){ simulation::mobile_target_state state; if(auto i{spatial.actor_index(id)}) state.damage = combat.attention[*i].damage; return state; };
-  std::unique_ptr<simulation::mission_weapons> launched;
-  if(armed) {
-    simulation::mission_weapon_callbacks weapon_events;
-    weapon_events.launched = [&](size_t i, auto const &round){ output << "launch " << frame << ' ' << i << ' ' << round.state.weapon << '\n'; };
-    weapon_events.event = [&](size_t i, auto &round, auto const &info){ output << "event " << frame << ' ' << i << ' ' << static_cast<unsigned int>(info.kind); for(auto v : info.position) output << ' ' << v; output << ' ' << (info.target ? identity(*info.target) : 0) << '\n'; if(active_damage) active_damage->impact(round, info); };
-    launched = std::make_unique<simulation::mission_weapons>(mission, actors, spatial, targets, combat, models, terrain, structures, mobiles, trig, tables, random, weapon_random, 0, weapon_events);
-    active_weapons = launched.get();
-  }
-  std::unique_ptr<simulation::mission_damage> damage;
-  if(hurt) {
-    simulation::mission_damage_callbacks damage_events;
-    damage_events.killed = [&](auto const &target, auto const &source){ output << "kill " << frame << ' ' << identity(target) << ' ' << identity(source) << '\n'; };
-    damage_events.sound = events.sound; damage_events.message = events.message;
-    damage = std::make_unique<simulation::mission_damage>(mission, scene, actors, spatial, targets, combat, *launched, models, terrain, structures, mobiles, trig, random, weapon_random, tables.skill(0), [&](int32_t x, int32_t y){ return static_cast<uint8_t>(resources::surface_type(features, super_features, x, y)); }, damage_events);
-    damage->explosions.play_sound = [&](auto const &sound){ output << "explosion_sound " << frame << ' ' << sound.volume << ' ' << sound.pan << '\n'; };
-    active_damage = damage.get();
-  }
-  simulation::movement_callbacks callbacks{.check_air_target{[&](size_t i){ combat.check_air_lock(i); }}, .target{[&](size_t i){ return combat.movement_aim(i); }}, .kill{[&](size_t i){ combat.kill(i); }}, .fire_at_waypoint{[&](size_t i){ combat.fire_at_waypoint(i); }}, .place{[&](size_t i){ spatial.place(i); }}, .unplace{[&](size_t i){ spatial.unplace(i); }}, .weapon{[&](size_t i){ return combat.weapon(i); }}};
-  simulation::navigation_tables const performance{executable}; simulation::actor_movement movement{actors, mission, formations, models, trig, environment, navigation, performance, random, callbacks};
-  actors.synchronize_models();
+  events.message = [&](std::string_view text){ output << "message " << frame << ' ' << std::quoted(std::string{text}) << '\n'; };
+  events.launched = [&](size_t i, auto const &round){ output << "launch " << frame << ' ' << i << ' ' << round.state.weapon << '\n'; };
+  events.projectile = [&](size_t i, auto &, auto const &info){ output << "event " << frame << ' ' << i << ' ' << static_cast<unsigned int>(info.kind); for(auto v : info.position) output << ' ' << v; output << ' ' << (info.target ? identity(*info.target) : 0) << '\n'; };
+  events.killed = [&](auto const &target, auto const &source){ output << "kill " << frame << ' ' << identity(target) << ' ' << identity(source) << '\n'; };
+  events.explosion_sound = [&](auto const &sound){ output << "explosion_sound " << frame << ' ' << sound.volume << ' ' << sound.pan << '\n'; };
+  events.collision = [&](auto const &id){ output << "collisionkill " << frame << ' ' << identity(id) << '\n'; };
+  events.impact_sound = [&](bool heavy){ if(heavy) output << "explosion_sound " << frame << " 63 32768\n"; else output << "metal_sound " << frame << '\n'; };
+  events.radar_toggle = [&](unsigned int value){ output << "radar-toggle " << frame << ' ' << value << '\n'; };
   auto const snapshot{[&](){
-    output << "snapshot " << frame << ' ' << random.value << ' ' << weapon_random.value << ' ' << random.global_seed << ' ' << combat.warnings.ships_attacked << ' ' << combat.warnings.radar << ' ' << combat.warnings.bandit << ' ' << combat.bombing_message_time << '\n';
+    if(pilot) {
+      if(check_collisions) output << "contact " << pilot->collision_model << ' ' << (pilot->hit_actor ? static_cast<int64_t>(*pilot->hit_actor) : -1) << '\n';
+      auto const &readings{pilot->readings()}; output << "flight " << pilot->on_carrier() << ' ' << pilot->landed() << ' ' << pilot->death() << ' ' << (pilot->arcade.power.faults | pilot->realistic.dynamics.power.faults);
+      for(auto v : readings.angles) output << ' ' << v;
+      output << ' ' << readings.airspeed << ' ' << readings.sidespeed << ' ' << readings.climb << ' ' << readings.torque << ' ' << readings.fuel;
+      for(auto v : readings.engines) output << ' ' << static_cast<int32_t>(v); output << '\n';
+    }
+    if(player_damage) { auto const &state{player_damage->state}; output << "player-damage " << pilot->faults() << ' ' << state.random << ' ' << state.broken_mfds << ' ' << state.warning_at << ' ' << identity(player_damage->killer) << '\n'; }
+    output << "snapshot " << (frame ? frame - 1 : 0) << ' ' << random.value << ' ' << weapon_random.value << ' ' << random.global_seed << ' ' << combat.warnings.ships_attacked << ' ' << combat.warnings.radar << ' ' << combat.warnings.bandit << ' ' << combat.bombing_message_time << '\n';
     for(size_t i{0}; i != actors.units.size(); ++i) {
       auto const &a{actors.units[i]}; auto const &arm{combat.armaments[i]}; auto const &attention{combat.attention[i]};
       output << "actor " << i << ' ' << a.serial << ' ' << (a.conditions & ~0x8000u) << ' ' << a.object.status;
@@ -123,23 +105,53 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     for(size_t i{0}; i != combat.battles.size(); ++i) { output << "battle " << i << ' ' << combat.battles[i].active; for(auto const &side : combat.battles[i].sides) output << ' ' << (side.task ? static_cast<int64_t>(*side.task) : -1) << ' ' << side.initial << ' ' << side.release_time; output << '\n'; }
     output << "patrol " << combat.patrols.last_scan << ' ' << combat.patrols.visible[0].size() << ' ' << combat.patrols.visible[1].size(); for(auto const &list : combat.patrols.visible) for(auto const &t : list) reference(t.get()); for(auto const &list : combat.patrols.assigned) for(auto const &t : list) reference(t.get()); output << '\n';
   }};
-  simulation::movement_time timing; int32_t previous_time{0}; std::string command;
+  simulation::flight_input controls; std::string command;
   while(input >> command) {
     if(command == "mode") input >> timing.arcade >> timing.game_flow;
+    else if(command == "pilot") {
+      size_t index{0}; simulation::mission_flight_settings settings; input >> index >> settings.arcade >> settings.fuel >> settings.flow >> settings.faults; for(auto &id : settings.pods) input >> id;
+      runtime.start_player(index, settings);
+    }
+    else if(command == "player-damage-state") {
+      if(!player_damage) throw std::runtime_error{"Player damage is not active"};
+      auto &state{player_damage->state}; input >> state.random >> state.broken_mfds >> state.warning_at >> state.ground_radar >> state.air_radar;
+    }
+    else if(command == "player-hit") {
+      if(!player_damage) throw std::runtime_error{"Player damage is not active"};
+      unsigned int amount{0}; input >> amount; combat.attention[*timing.player].damage = static_cast<uint8_t>(amount); player_damage->apply(simulation::damage_action::player_systems, {}, targets.now);
+    }
+    else if(command == "subdivide") input >> runtime.subdivide_flight;
+    else if(command == "collisions") input >> check_collisions;
+    else if(command == "settle-carrier") {
+      if(!pilot) throw std::runtime_error{"A carrier test requires a player"};
+      pilot->advance(0.05, 107374182, {}, 0);
+      output << "settled " << pilot->on_carrier() << ' ' << pilot->landed() << ' ' << pilot->death();
+      for(auto v : pilot->readings().position.position) output << ' ' << v; for(auto v : pilot->readings().position.rotation) output << ' ' << v; for(auto v : pilot->readings().angles) output << ' ' << v; output << '\n';
+    }
+    else if(command == "contact-test") {
+      if(!pilot) throw std::runtime_error{"A contact test requires a player"};
+      math::pose pose; math::vector3 previous; std::array<uint32_t, 3> angles; double forward{0}, vertical{0}; bool landed{false}; unsigned int cause{0};
+      for(auto &v : pose.position) input >> v; for(auto &v : pose.rotation) input >> v; for(auto &v : previous) input >> v; for(auto &v : angles) input >> v; input >> forward >> vertical >> landed >> cause;
+      auto &actor{actors.units[*timing.player]}; actor.conditions &= ~0x400u;
+      pilot->realistic.on_carrier = pilot->arcade.on_carrier = false; pilot->realistic.landed = pilot->arcade.landed = landed; pilot->realistic.death = pilot->arcade.death = cause;
+      pilot->realistic.readings.position = pilot->arcade.readings.position = pose; pilot->realistic.readings.angles = pilot->arcade.readings.angles = angles;
+      pilot->realistic.dynamics.u = pilot->arcade.forward_velocity = forward; pilot->realistic.dynamics.zdot = vertical; pilot->arcade.delta_vertical_velocity = vertical / 72;
+      actor.object.world.rotation = pose.rotation; spatial.move(actor, pose.position); render::maintain_model(actor.object);
+      pilot->collide(previous, structures, mobiles, damage ? damage->marks : collision_marks, [&](auto const &id){ if(damage) damage->destroy(id); else output << "collisionkill " << frame << ' ' << identity(id) << '\n'; });
+      output << "response " << pilot->collision_model << ' ' << (pilot->hit_actor ? static_cast<int64_t>(*pilot->hit_actor) : -1) << ' ' << pilot->landed() << ' ' << pilot->death() << ' ' << pilot->on_carrier() << ' ' << (actor.carrier ? static_cast<int64_t>(*actor.carrier) : -1) << ' ' << (actor.carrier_slot ? static_cast<int64_t>(*actor.carrier_slot) : -1);
+      for(auto v : pilot->readings().position.position) output << ' ' << v; for(auto v : pilot->readings().position.rotation) output << ' ' << v; for(auto v : pilot->readings().angles) output << ' ' << v;
+      for(auto const &carrier : actors.carriers) for(auto const &slot : carrier.slots) output << ' ' << (slot.reserved ? static_cast<int64_t>(*slot.reserved) : -1);
+      output << '\n';
+    }
+    else if(command == "controls") { for(auto &v : controls.controls) input >> v; input >> controls.absolute_throttle >> controls.type; }
     else if(command == "view") { for(auto &v : combat.player_position) input >> v; input >> combat.player_heading; }
     else if(command == "kill") { size_t i{0}; input >> i; combat.kill(i); }
     else if(command == "damage") { size_t i{0}; unsigned int amount{0}; input >> i >> amount; combat.attention.at(i).damage = static_cast<uint8_t>(amount); }
     else if(command == "snapshot") snapshot();
     else if(command == "step") {
-      bool capture{false}; input >> timing.now >> timing.delta >> capture; combat.set_time(timing.now, timing.delta, static_cast<uint32_t>(frame));
-      if(launched) launched->environment.now = timing.now;
-      if(damage) damage->environment.flow = timing.game_flow;
-      movement.update(timing);
-      if(launched) launched->update({timing.now, timing.delta, static_cast<double>(timing.now - previous_time) * 0.005, 2048, 400, 2});
-      combat.update(); actors.synchronize_models();
-      if(damage) damage->marks.advance();
-      if(launched) launched->visuals.advance(timing.delta, terrain);
-      if(capture) snapshot(); previous_time = timing.now; ++frame;
+      bool capture{false}; int32_t now{0}, delta{0}; input >> now >> delta >> capture;
+      runtime.advance(now, delta, controls, [](){ return 0; });
+      if(capture) snapshot();
     }
     else throw std::runtime_error{"Unknown mission combat command"};
     if(!input) throw std::runtime_error{"Incomplete mission combat command"};

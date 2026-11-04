@@ -23,7 +23,7 @@ void mission_damage::write(target_identity const &id, damage_recipient const &st
 void mission_damage::kill(target_identity const &id, target_identity const &source) {
   if(id.kind == target_kind::scenery) {
     auto &object{(id.layer ? scenery.extra : scenery.base).at(id.index)}; if(object.status & 1) return;
-    if(events.killed) events.killed(id, source);
+    if(events.killed && source.kind != target_kind::none) events.killed(id, source);
     auto const position{math::vector3{object.x, object.y, 0}}; explosions.ground(object, position, false); object.status |= 1;
     return;
   }
@@ -35,7 +35,7 @@ void mission_damage::kill(target_identity const &id, target_identity const &sour
     if(events.player) events.player(damage_action::kill, source);
     return;
   }
-  if(events.killed) events.killed(id, source);
+  if(events.killed && source.kind != target_kind::none) events.killed(id, source);
   if(actor.object.id == 473 || (environment.mode != 4 && environment.mode != 5)) combat.kill(*index);
   explosions.mobile(actor.object.id, actor.object.world, false);
   for(size_t child{0}; child != actor.object.children.size(); ++child) if(auto &object{actor.object.children[child]}) {
@@ -72,6 +72,12 @@ void mission_damage::auxiliary(target_identity const &id, projectile_record cons
   if(actor.classification != 1 && actor.classification != 2 && actor.classification != 7) return;
   auto const choice{weapon_random.next() % 10};
   if(choice == 1 || choice == 2) sound(actor.classification == 7 ? (choice == 1 ? 0x6b : 0x6a) : (choice == 1 ? 0x62 : 0x65), false);
+}
+void mission_damage::destroy(target_identity const &target) {
+  explosions.listener = combat.player_position; explosions.listener_heading = combat.player_heading;
+  weapon_random.global_seed = war_random.global_seed;
+  kill(target, {});
+  war_random.global_seed = weapon_random.global_seed;
 }
 void mission_damage::impact(projectile_record &round, projectile_event_info const &event) {
   if(event.kind == projectile_event::notify || event.kind == projectile_event::removed) return;

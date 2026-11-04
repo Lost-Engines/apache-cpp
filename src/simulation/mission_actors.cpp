@@ -46,7 +46,7 @@ void mission_actors::register_ship(size_t const index, resources::model_archive 
   for(size_t slot{0}; slot != unit.object.children.size() && ship.slots.size() < 9; ++slot) {
     if(unit.object.children[slot]) continue;
     auto const &attachment{definition.children[slot]};
-    ship.slots.push_back({slot, {attachment.translation, attachment.rotation}, {}});
+    ship.slots.push_back({slot, {attachment.translation, attachment.rotation}, {}, {}});
   }
   if(ship.slots.empty()) return;
   ship.available = ship.slots.size(); units[index].carrier = carriers.size(); carriers.push_back(std::move(ship));
@@ -55,7 +55,7 @@ bool mission_actors::register_aircraft(size_t const index) {
   for(size_t carrier{0}; carrier != carriers.size(); ++carrier) {
     auto &ship{carriers[carrier]}; if(!ship.available) continue;
     size_t const slot{--ship.available}; auto &unit{units[index]};
-    ship.slots[slot].occupant = index; unit.carrier = carrier; unit.carrier_slot = slot;
+    ship.slots[slot].occupant = ship.slots[slot].reserved = index; unit.carrier = carrier; unit.carrier_slot = slot;
     unit.conditions |= 0x400; unit.object.relative = ship.slots[slot].relative;
     return true;
   }

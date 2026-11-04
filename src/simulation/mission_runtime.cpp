@@ -1,0 +1,111 @@
+#include "mission_runtime.h"
+#include <stdexcept>
+
+namespace apache::simulation {
+namespace {
+unsigned int map_number(std::string const &zone) {
+  if(zone == "YEMEN") return 1;
+  if(zone == "KOREA") return 2;
+  if(zone == "CYPRUS") return 3;
+  if(zone == "FORT") return 4;
+  throw std::runtime_error{"Unknown mission warzone"};
+}
+resources::mission_definition load_mission(resources::data_store const &data, std::string const &path) {
+  auto const bytes{data.read(path)};
+  return resources::read_mission_definition(std::string{bytes.begin(), bytes.end()});
+}
+resources::model_archive load_models(resources::data_store const &data, resources::executable_data const &executable) {
+  auto models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+  resources::initialise_model_metadata(models, executable); return models;
+}
+}
+mission_actors mission_runtime::make_actors(unsigned int const map) {
+  random.next();
+  mission_actors result{mission, formations, models, trig, environment, map, random.global_seed};
+  random.global_seed = result.random_seed; return result;
+}
+mission_combat_callbacks mission_runtime::combat_callbacks() {
+  mission_combat_callbacks result;
+  result.visible = [this](auto const &source, auto const &target){ return line_reaches_target(targets.world.position(source), targets.world.position(target), source.identity, target.identity, terrain, structures, mobiles, models, trig); };
+  result.fire = [this](size_t i){ if(events.fire) events.fire(i); if(weapons) weapons->fire(i); };
+  result.ground_fire = [this](auto const &source, auto const &target, unsigned int id){ if(events.ground_fire) events.ground_fire(source, target, id); return weapons ? weapons->fire_ground(source, target, id) : firing_status::blocked; };
+  result.sound = [this](unsigned int id, bool cockpit){ if(events.sound) events.sound(id, cockpit); };
+  result.message = [this](std::string_view text){ if(events.message) events.message(text); };
+  return result;
+}
+movement_callbacks mission_runtime::movement_events() {
+  return {.check_air_target{[this](size_t i){ combat.check_air_lock(i); }}, .target{[this](size_t i){ return combat.movement_aim(i); }}, .kill{[this](size_t i){ combat.kill(i); }}, .fire_at_waypoint{[this](size_t i){ combat.fire_at_waypoint(i); }}, .place{[this](size_t i){ spatial.place(i); }}, .unplace{[this](size_t i){ spatial.unplace(i); }}, .weapon{[this](size_t i){ return combat.weapon(i); }}};
+}
+mission_runtime::mission_runtime(resources::data_store const &data, std::string const &zone, std::string const &path, bool const armed, bool const hurt, int const difficulty)
+  : mission{load_mission(data, path)}, executable{data}, terrain{data.read(zone + ".WZ/GRIDPOST.BIN")}, models{load_models(data, executable)},
+    scene{mission, resources::read_scenery(data.read(zone + ".WZ/GNDOBJS.BIN")), terrain, models, map_number(zone)}, features{data, zone, false}, super_features{data, zone, true}, trig{data}, formations{resources::read_formations(executable)},
+    environment{.height{[this](int32_t x, int32_t y){ return terrain.elevation(x, y); }}, .surface{[this](int32_t x, int32_t y){ return resources::surface_type(features, super_features, x, y); }}, .relocate{}},
+    actors{make_actors(map_number(zone))}, mobiles{models}, spatial{mission, scene, actors, mobiles, terrain}, structures{models, trig, scene.base, scene.extra},
+    navigation{.height{environment.height}, .tallest_object{structures.tallest_object}, .obstacle{[this](auto const &from, auto const &to) -> std::optional<navigation_obstacle> { auto hit{structures.line(from, to)}; if(!hit) return {}; return navigation_obstacle{hit->position, models.at(structures.at(hit->layer, hit->index).model)->height}; }}, .relocate{[this](auto &actor, auto const &position){ spatial.move(actor, position); }}},
+    targets{mission, scene, actors, spatial, random, terrain, structures, mobiles, models, trig}, weapon_random{1, random.global_seed}, tables{executable},
+    combat{mission, scene, actors, spatial, targets, terrain, trig, tables, formations, environment, random, weapon_random, difficulty, combat_callbacks()}, performance{executable},
+    movement{actors, mission, formations, models, trig, environment, navigation, performance, random, movement_events()} {
+  environment.relocate = [this](auto &actor, auto const &position){ spatial.move(actor, position); };
+  targets.additional_state = [this](uint32_t id){ mobile_target_state state; if(auto i{spatial.actor_index(id)}) state.damage = combat.attention[*i].damage; if(pilot) state.player_airspeed = pilot->readings().airspeed; return state; };
+  if(armed) {
+    mission_weapon_callbacks callbacks;
+    callbacks.launched = [this](size_t i, auto const &round){ if(events.launched) events.launched(i, round); };
+    callbacks.event = [this](size_t i, auto &round, auto const &info){ if(events.projectile) events.projectile(i, round, info); if(damage) damage->impact(round, info); };
+    weapons = std::make_unique<mission_weapons>(mission, actors, spatial, targets, combat, models, terrain, structures, mobiles, trig, tables, random, weapon_random, difficulty, callbacks);
+  }
+  if(hurt) {
+    if(!weapons) throw std::runtime_error{"Mission damage requires projectiles"};
+    mission_damage_callbacks callbacks;
+    callbacks.killed = [this](auto const &target, auto const &source){ if(events.killed) events.killed(target, source); };
+    callbacks.player = [this](auto action, auto const &source){ if(player_damage) player_damage->apply(action, source, targets.now); };
+    callbacks.sound = [this](unsigned int id, bool cockpit){ if(events.sound) events.sound(id, cockpit); };
+    callbacks.message = [this](std::string_view text){ if(events.message) events.message(text); };
+    damage = std::make_unique<mission_damage>(mission, scene, actors, spatial, targets, combat, *weapons, models, terrain, structures, mobiles, trig, random, weapon_random, tables.skill(difficulty), [this](int32_t x, int32_t y){ return static_cast<uint8_t>(resources::surface_type(features, super_features, x, y)); }, callbacks);
+    damage->explosions.play_sound = [this](auto const &sound){ if(events.explosion_sound) events.explosion_sound(sound); };
+  }
+  actors.synchronize_models();
+}
+void mission_runtime::start_player(size_t const index, mission_flight_settings const &settings) {
+  player_damage.reset(); timing.player = index;
+  pilot = std::make_unique<mission_flight>(mission, actors, spatial, models, terrain, trig, environment.surface, index, settings);
+  combat.player_position = pilot->readings().position.position; combat.player_heading = pilot->readings().angles[0];
+  if(damage) {
+    player_damage_callbacks callbacks;
+    callbacks.feedback = [this](auto const &event){
+      if(event.kind == damage_feedback_kind::message) { if(events.message) events.message(event.text); }
+      else if(event.kind == damage_feedback_kind::cockpit_sound) { if(events.sound) events.sound(event.value, true); }
+      else if(events.radar_toggle) events.radar_toggle(event.value);
+    };
+    callbacks.impact_sound = [this](bool heavy){ if(events.impact_sound) events.impact_sound(heavy); };
+    player_damage = std::make_unique<mission_player_damage>(*pilot, actors, spatial, targets, combat, models, callbacks);
+  }
+}
+void mission_runtime::advance(int32_t const now, int32_t const delta, flight_input const &input, std::function<unsigned int()> const &flight_random) {
+  int32_t const elapsed{math::subtract(now, previous_time)};
+  if(elapsed <= 0 || delta <= 0) throw std::runtime_error{"Mission time must advance"};
+  timing.now = now; timing.delta = delta; combat.set_time(now, delta, static_cast<uint32_t>(frame));
+  if(weapons) weapons->environment.now = now;
+  if(damage) damage->environment.flow = timing.game_flow;
+  movement.update(timing);
+  double const dt{static_cast<double>(elapsed) * 0.005};
+  if(pilot) {
+    int32_t flight_delta{delta}; double flight_dt{dt}; unsigned int substeps{1};
+    if(subdivide_flight) while(flight_delta > 0x3fffffff) { flight_delta /= 2; flight_dt *= 0.5; substeps *= 2; }
+    for(unsigned int i{0}; i != substeps; ++i) {
+      auto const previous{pilot->readings().position.position};
+      auto const result{pilot->advance(flight_dt, flight_delta, input, flight_random ? flight_random() : 0)};
+      if(events.flight) events.flight(result);
+      combat.player_position = pilot->readings().position.position; combat.player_heading = pilot->readings().angles[0];
+      if(check_collisions) {
+        auto const landing{pilot->collide(previous, structures, mobiles, damage ? damage->marks : collision_marks, [this](auto const &id){ if(damage) damage->destroy(id); else if(events.collision) events.collision(id); })};
+        if(landing && events.landing) events.landing(*landing);
+      }
+    }
+  }
+  if(weapons) weapons->update({now, delta, dt, 2048, 400, 2});
+  combat.update(); actors.synchronize_models();
+  if(damage) damage->marks.advance();
+  if(weapons) weapons->visuals.advance(delta, terrain);
+  previous_time = now; ++frame;
+}
+} // namespace apache::simulation

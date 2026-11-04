@@ -1,4 +1,5 @@
 #include "inspect_flight.h"
+#include "inspect_controls.h"
 #include "inspect_arcade.h"
 #include <cstdlib>
 #include <fstream>
@@ -157,6 +158,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(command == "controls") { inspect_controls(std::cin, std::cout); return 0; }
   if(command == "mission-combat" || command == "mission-weapons" || command == "mission-battle") { if(argc < 5) throw std::runtime_error{"Expected zone and mission path"}; inspect_mission_combat(std::cin, std::cout, data, argv[3], argv[4], command != "mission-combat", command == "mission-battle"); return 0; }
   if(command == "mission-targets") { if(argc < 5) throw std::runtime_error{"Expected zone and mission path"}; inspect_mission_targets(std::cin, std::cout, data, argv[3], argv[4]); return 0; }
   if(command == "mission-spatial") { if(argc < 5) throw std::runtime_error{"Expected zone and mission path"}; inspect_mission_spatial(std::cin, std::cout, data, argv[3], argv[4]); return 0; }

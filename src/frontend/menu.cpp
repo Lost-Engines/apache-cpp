@@ -39,6 +39,7 @@ void menu::bounds(std::string_view const global, render::rectangle const area) {
   widgets[index].area = area;
 }
 void menu::show(std::string_view const global) {
+  active_popup.reset();
   auto const found{globals.find(global)};
   if(found == globals.end()) throw std::runtime_error{"Unknown menu screen: " + std::string{global}};
   auto const index{found->second};
@@ -50,6 +51,7 @@ void menu::show(std::string_view const global) {
   hovered = pressed = -1;
 }
 void menu::back() {
+  if(dismiss_popup()) return;
   if(!screens.empty() && screens.back() == globals.at("_main_screen") && (widgets[globals.at("_quick_start_options")].flags & 1)) {
     toggle_quick(false);
     return;
@@ -64,6 +66,16 @@ void menu::back() {
   widgets[index].flags |= 1;
   hovered = pressed = -1;
 }
+void menu::popup(std::vector<std::pair<std::string, int>> choices, std::function<void(int)> selected) {
+  if(choices.empty()) return;
+  int width{0}; for(auto const &choice : choices) width = std::max(width, font.width(choice.first) + 8);
+  int const height{static_cast<int>(choices.size()) * 19 + 3};
+  int const x{std::clamp(cursor_x - width / 2, 0, std::max(0, 639 - width))};
+  int const y{std::clamp(cursor_y - height / 2, 0, std::max(0, 479 - height))};
+  active_popup = popup_state{std::move(choices), std::move(selected), {x, y, x + width, y + height}};
+  move(cursor_x, cursor_y);
+}
+bool menu::dismiss_popup() { if(!active_popup) return false; active_popup.reset(); return true; }
 void menu::toggle_quick(bool const visible) {
   auto &object{widgets.at(globals.at("_quick_start_options"))};
   object.flags = (object.flags & ~1u) | static_cast<unsigned int>(visible);
@@ -195,39 +207,70 @@ void menu::render(render::framebuffer &target) {
   std::array<resources::rgb, 7> constexpr colours{{{66, 97, 100}, {76, 112, 116}, {135, 169, 171}, {102, 151, 154}, {178, 203, 204}, {255, 255, 255}, {0, 127, 127}}};
   std::ranges::copy(colours, palette.begin() + 246);
   target.reset_clip();
+  if(active_popup) {
+    auto const &popup{*active_popup}; auto const &r{popup.area};
+    target.fill(r, 249); target.surround(r);
+    for(size_t i{0}; i != popup.choices.size(); ++i) {
+      int const y{r.top + 2 + static_cast<int>(i) * 19};
+      if(static_cast<int>(i) == popup.hovered) target.surround({r.left + 2, y, r.right - 2, y + 18});
+      font.draw(target, popup.choices[i].first, r.left + 4, y + 2, 251);
+    }
+  }
 }
 int menu::hit(int const x, int const y) const {
   for(size_t i{widgets.size()}; i-- > 0;) if((widgets[i].flags & 0x8000) && clips[i].contains(x, y)) return static_cast<int>(i);
   return -1;
 }
 void menu::move(int const x, int const y) {
-  cursor_y = y;
+  cursor_x = x; cursor_y = y;
+  if(active_popup) {
+    auto &p{*active_popup};
+    p.hovered = p.area.contains(x, y) && y >= p.area.top + 2 && y < p.area.bottom - 1 ? (y - p.area.top - 2) / 19 : -1;
+    return;
+  }
+  if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 14 && scroll_direction == 0) {
+    auto &bar{widgets[static_cast<size_t>(pressed)]};
+    bar.range[2] = std::clamp(drag_position + x - drag_y, bar.range[0], bar.range[1]);
+    if(activated) activated(bar, bar.range[2]);
+  }
   if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 13 && scroll_direction == 0) {
     auto &bar{widgets[static_cast<size_t>(pressed)]};
     bar.range[2] = std::clamp(drag_position + (y - drag_y) * (bar.range[1] - bar.range[0] + 1) / std::max(1, bar.area.bottom - bar.area.top - 4), bar.range[0], bar.range[1]);
     scroll_changed(static_cast<size_t>(pressed));
   }
   hovered = hit(x, y);
-  for(size_t i{0}; i != widgets.size(); ++i) if(widgets[i].type == 9) widgets[i].on = static_cast<int>(i) == hovered;
+  for(size_t i{0}; i != widgets.size(); ++i) if(widgets[i].type == 9 && !widgets[i].picture.empty()) widgets[i].on = static_cast<int>(i) == hovered;
 }
 void menu::button(bool const down) {
+  if(active_popup) {
+    if(!down) { auto selected{std::move(active_popup->selected)}; auto const line{active_popup->hovered}; auto choices{std::move(active_popup->choices)}; active_popup.reset(); if(line >= 0 && static_cast<size_t>(line) < choices.size()) selected(choices[static_cast<size_t>(line)].second); }
+    return;
+  }
   if(down) {
     pressed = hovered;
-    if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 13) {
+    if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 9) widgets[static_cast<size_t>(pressed)].on = true;
+    if(pressed >= 0 && (widgets[static_cast<size_t>(pressed)].type == 13 || widgets[static_cast<size_t>(pressed)].type == 14)) {
       auto &bar{widgets[static_cast<size_t>(pressed)]}; auto const &r{bar.area};
-      int const length{r.bottom - r.top - 4}, denominator{std::max(1, bar.range[1] - bar.range[0] + 1)};
-      int top{r.top + 2 + (bar.range[2] - bar.range[0]) * length / denominator};
+      bool const horizontal{bar.type == 14};
+      int const start{horizontal ? r.left : r.top}, end{horizontal ? r.right : r.bottom}, cursor{horizontal ? cursor_x : cursor_y};
+      int const length{end - start - 4}, denominator{std::max(1, bar.range[1] - bar.range[0] + 1)};
+      int top{start + 2 + (bar.range[2] - bar.range[0]) * length / denominator};
       int bottom{top + std::max(12, bar.range[3] * length / denominator)};
-      if(bottom > r.bottom - 2) { bottom = r.bottom - 2; if(top + 12 > bottom) top = r.bottom - 14; }
-      scroll_direction = cursor_y < top ? -1 : cursor_y > bottom ? 1 : 0;
-      drag_y = cursor_y; drag_position = bar.range[2]; bar.on = scroll_direction == 0;
+      if(bottom > end - 2) { bottom = end - 2; if(top + 12 > bottom) top = end - 14; }
+      scroll_direction = cursor < top ? -1 : cursor > bottom ? 1 : 0;
+      drag_y = cursor; drag_position = bar.range[2]; bar.on = scroll_direction == 0;
     }
   } else {
-    if(pressed >= 0 && widgets[static_cast<size_t>(pressed)].type == 13) {
+    if(pressed >= 0 && (widgets[static_cast<size_t>(pressed)].type == 13 || widgets[static_cast<size_t>(pressed)].type == 14)) {
       auto &bar{widgets[static_cast<size_t>(pressed)]};
       if(pressed == hovered && scroll_direction) bar.range[2] = std::clamp(bar.range[2] + scroll_direction * bar.range[3], bar.range[0], bar.range[1]);
       bar.on = false; scroll_changed(static_cast<size_t>(pressed));
-    } else if(pressed >= 0 && pressed == hovered) activate(static_cast<size_t>(pressed));
+      if(bar.type == 14 && activated) activated(bar, bar.range[2]);
+    } else if(pressed >= 0) {
+      auto &object{widgets[static_cast<size_t>(pressed)]};
+      if(object.type == 9 && object.picture.empty()) object.on = false;
+      if(pressed == hovered) activate(static_cast<size_t>(pressed));
+    }
     pressed = -1;
   }
 }

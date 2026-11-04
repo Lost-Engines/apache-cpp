@@ -1,6 +1,7 @@
 #include "inspect_menu.h"
 #include "frontend/mission_frontend.h"
 #include <iomanip>
+#include <fstream>
 #include <istream>
 #include <ostream>
 #include <stdexcept>
@@ -40,6 +41,20 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
   while(input >> command) {
     if(command == "click") {
       int x, y; input >> x >> y; menu.move(x, y); menu.button(true); menu.button(false); menu.move(-1, -1);
+    } else if(command == "move") { int x, y; input >> x >> y; menu.move(x, y); }
+    else if(command == "drag") { int x, y, xx, yy; input >> x >> y >> xx >> yy; menu.move(x, y); menu.button(true); menu.move(xx, yy); menu.button(false); menu.move(-1, -1); }
+    else if(command == "preference") { std::string name; int value; input >> std::quoted(name) >> value; app.settings.set(name, value); app.preferences.update(); }
+    else if(command == "previewzone") input >> app.preferences.zone;
+    else if(command == "previewissues") { auto const [normals, textures]{app.preferences.preview_issues()}; output << normals << ' ' << textures << '\n'; }
+    else if(command == "indicators") {
+      output << "indicators";
+      for(auto name : {"_preferences_cyclic_sprite", "_preferences_throttle_vt_sprite", "_preferences_throttle_hz_sprite", "_preferences_coolie_c_sprite", "_preferences_coolie_t_sprite", "_preferences_coolie_r_sprite", "_preferences_coolie_b_sprite", "_preferences_coolie_l_sprite"}) { auto const &object{menu.named(name)}; output << ' ' << (object.flags & 1) << ' ' << object.area.left << ' ' << object.area.top << ' ' << object.area.right << ' ' << object.area.bottom; }
+      output << '\n';
+    }
+    else if(command == "calibration") { std::array<int32_t, 4> axes; unsigned int hat; for(auto &v : axes) input >> v; input >> hat; app.preferences.calibration(axes, hat); }
+    else if(command == "settings") {
+      auto const &s{app.settings}; output << "settings " << s.video_mode << ' ' << s.detail << ' ' << s.model << ' ' << s.forces << ' ' << s.volume << ' ' << s.planner << ' ' << s.animations << ' ' << s.speech << ' ' << s.music << ' ' << s.effects << ' ' << s.minimal_effects << ' ' << s.controls.cyclic << ' ' << s.controls.collective << ' ' << s.controls.tail_rotor << '\n';
+      if(mission) output << "flight " << mission->frame.image.width << ' ' << mission->frame.image.height << ' ' << app.options.arcade << ' ' << mission->controls.configuration.cyclic << ' ' << mission->controls.configuration.collective << ' ' << mission->controls.configuration.tail_rotor << '\n';
     } else if(command == "profiles") { std::string path; input >> std::quoted(path); app.load_profiles(path); }
     else if(command == "text") { std::string text; input >> std::quoted(text); for(unsigned char ch : text) app.text_input(ch); }
     else if(command == "editkey") { unsigned int value; input >> value; app.text_input(value); }
@@ -66,7 +81,10 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
     } else if(command == "draw") {
       std::string file; input >> std::quoted(file);
       auto const &image{mission ? mission->frame.image : frame.image};
-      if(file != "-") apache::resources::write_ppm(file, image);
+      if(file != "-") {
+        apache::resources::write_ppm(file, image);
+        std::ofstream raw{file + ".pixels", std::ios::binary}; raw.write(reinterpret_cast<char const*>(image.pixels.data()), static_cast<std::streamsize>(image.pixels.size()));
+      }
       output << "frame " << apache::resources::fingerprint(image.pixels) << '\n';
     } else if(command == "state") {
       output << std::quoted(menu.current()) << ' ' << (mission ? mission->briefing.id : 0) << ' ' << app.pilot().total_time << ' ' << app.pilot().missions.size();

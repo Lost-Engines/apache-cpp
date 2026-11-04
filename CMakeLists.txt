@@ -216,6 +216,10 @@ add_library(apache_core
   src/resources/texture.h
   src/resources/terrain.cpp
   src/resources/terrain.h
+  src/configuration/settings.cpp
+  src/configuration/settings.h
+  src/frontend/preferences_menu.cpp
+  src/frontend/preferences_menu.h
   src/configuration/profiles.cpp
   src/configuration/profiles.h
   src/configuration/preferences.cpp

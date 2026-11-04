@@ -38,7 +38,8 @@ mission_session::mission_session(resources::data_store const &data, int const mi
   runtime.equip_player(runtime.mission.weapons); runtime.enable_player_sensors();
   runtime.player_damage->state.random = initial_seeds.damage;
   runtime.sensors->state.tads = false;
-  controls.configuration.resolve();
+  controls.configuration = options.controls; controls.configuration.resolve();
+  controls.curve = simulation::joystick_curve{options.deadband}; controls.joystick = options.axes;
   views = std::make_unique<simulation::player_views>(runtime.executable, runtime.trig, runtime.environment.height, runtime.sensors->state);
   runtime.player_armament->helmet_direction = [this](){
     if(views->modes.mode == 12) return runtime.player_armament->helmet;

@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -22,7 +23,14 @@ class menu {
   std::vector<render::rectangle> clips;
   int hovered{-1};
   int pressed{-1};
-  int cursor_y{0};
+  int cursor_x{0}, cursor_y{0};
+  struct popup_state {
+    std::vector<std::pair<std::string, int>> choices;
+    std::function<void(int)> selected;
+    render::rectangle area;
+    int hovered{-1};
+  };
+  std::optional<popup_state> active_popup;
   int drag_y{0}, drag_position{0}, scroll_direction{0};
   std::vector<std::pair<size_t, size_t>> scroll_links;
   void scroll_changed(size_t index);
@@ -40,6 +48,8 @@ public:
   std::span<widget> objects() { return widgets; }
   std::string_view current() const;
   void show(std::string_view global);
+  void popup(std::vector<std::pair<std::string, int>> choices, std::function<void(int)> selected);
+  bool dismiss_popup();
   void link_scroll(std::string_view text, std::string_view scrollbar);
   void bounds(std::string_view global, render::rectangle area);
   void back();

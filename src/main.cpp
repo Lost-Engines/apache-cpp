@@ -36,7 +36,7 @@ int main(int const argc, char const *const argv[]) try {
   std::string capture;
   std::string pressed;
   unsigned int scale{0}, frame_limit{0};
-  bool quick{false};
+  bool quick{false}, override_model{false}, override_detail{false}, override_video{false};
   int mission_id{0};
   apache::frontend::mission_options mission_options;
   for(int i{1}; i < argc; ++i) {
@@ -74,14 +74,14 @@ int main(int const argc, char const *const argv[]) try {
     else if(key == "--press") pressed = value();
     else if(key == "--quick") quick = true;
     else if(key == "--mission") mission_id = static_cast<int>(number(value()));
-    else if(key == "--realistic") mission_options.arcade = false;
-    else if(key == "--detail") mission_options.detail = number(value());
-    else if(key == "--video-mode") mission_options.video_mode = number(value());
+    else if(key == "--realistic") { mission_options.arcade = false; override_model = true; }
+    else if(key == "--detail") { mission_options.detail = number(value()); override_detail = true; }
+    else if(key == "--video-mode") { mission_options.video_mode = number(value()); override_video = true; }
     else throw std::runtime_error{"Unknown option: " + std::string{key}};
   }
   apache::resources::data_store const data{directory};
   std::unique_ptr<apache::frontend::mission_session> mission;
-  if(mission_id) mission = std::make_unique<apache::frontend::mission_session>(data, mission_id, mission_options);
+  if(mission_id && !capture.empty()) mission = std::make_unique<apache::frontend::mission_session>(data, mission_id, mission_options);
   apache::frontend::mission_frontend frontend{data, mission_options};
   auto &menu{frontend.interface};
   bool launched_from_menu{false};
@@ -100,6 +100,10 @@ int main(int const argc, char const *const argv[]) try {
   auto const relative{save_root.lexically_relative(data_root)};
   if(relative.empty() || (!relative.empty() && *relative.begin() != "..")) throw std::runtime_error{"Save directory must be outside the original game data"};
   frontend.load_profiles(save_directory);
+  if(override_model) frontend.options.arcade = mission_options.arcade;
+  if(override_detail) frontend.options.detail = mission_options.detail;
+  if(override_video) frontend.options.video_mode = mission_options.video_mode;
+  if(mission_id) mission = std::make_unique<apache::frontend::mission_session>(data, mission_id, frontend.options);
   apache::platform::window window{scale};
   events input;
   glfwSetWindowUserPointer(window.get(), &input);
@@ -149,6 +153,12 @@ int main(int const argc, char const *const argv[]) try {
       else if(key.value == GLFW_KEY_F1) menu.show("_help_screen");
     }
     input.keys.clear();
+    if(menu.current() == "_preferences_screen") {
+      int count{0}, hats{0}; auto const *axes{glfwGetJoystickAxes(GLFW_JOYSTICK_1, &count)}; auto const *hat{glfwGetJoystickHats(GLFW_JOYSTICK_1, &hats)};
+      std::array<int32_t, 4> values{128, 128, 128, 128};
+      for(size_t i{0}; i != values.size(); ++i) if(axes && i < static_cast<size_t>(count)) values[i] = static_cast<int32_t>(std::lround((std::clamp(axes[i], -1.0f, 1.0f) + 1.0f) * 127.5f));
+      frontend.preferences.calibration(values, hat && hats ? *hat : 0u);
+    }
     menu.render(frame);
     window.present(frame);
     if(auto launched{frontend.takeoff()}) {
@@ -158,7 +168,7 @@ int main(int const argc, char const *const argv[]) try {
     }
     if(frame_limit && ++frames == frame_limit) break;
   }
-  frontend.logs.save();
+  frontend.logs.save(); frontend.settings.save();
   return EXIT_SUCCESS;
 } catch(std::exception const &error) {
   std::cerr << "ERROR: " << error.what() << std::endl;

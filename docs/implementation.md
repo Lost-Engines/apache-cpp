@@ -224,7 +224,9 @@ Pilot profiles use the original `log/current.log`, `log/user.N` and binary `log/
 
 The four-warzone session comparison is complete: 1,896 frames, 142,200 state fields, 1,456,128 palette bytes and 106,255,220 defined panel pixels. The 326 complete frames free of invalid original reads match 62,592,000 pixels. Remaining frames are checked outside individually identified invalid model or FLIR reads.
 
-Next: complete briefing/map interaction, editable preferences, Quickstart and audio playback. Complete game journeys and CI follow once integration is finished.
+Preferences now expose the original resolution, detail, flight model, difficulty, animation, planner, audio and device selectors, with saved choices applied at takeoff. Thirteen populated preference/popup frames match 3,993,600 original pixels; joystick indicators match 12,000 fields in 300 axis/hat cases. Slider input, cancellation, restart and live mission settings pass normal and sanitizer checks. All sixteen terrain previews run in both builds: the Yemen low-detail frame matches exactly, while the other fifteen encounter the previously documented missing model normals. The traced Korea discrepancy is the `copsed` tree model referring to normal 0 in an empty table. The renderer retains bounded handling. Audio selections are saved; playback is still pending.
+
+Next: complete briefing/map interaction, Quickstart and audio playback. Complete game journeys and CI follow once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

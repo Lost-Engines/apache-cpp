@@ -2,6 +2,7 @@
 #include <filesystem>
 #include "menu.h"
 #include "pilot_menu.h"
+#include "preferences_menu.h"
 #include "mission_session.h"
 
 namespace apache::frontend {
@@ -18,6 +19,7 @@ class mission_frontend {
   std::optional<simulation::campaign_progress> transferred_campaign;
   void show_pilots(bool transfer_campaign);
   void show_awards(unsigned int mask);
+  void apply_preferences();
   void visible(std::string_view name, bool show);
   void list();
   void select(int row);
@@ -30,6 +32,8 @@ class mission_frontend {
 public:
   menu interface;
   mission_options options;
+  configuration::settings settings;
+  preferences_menu preferences;
   configuration::profiles logs;
   pilot_menu pilots;
   simulation::pilot_log &pilot() { return logs.current(); }

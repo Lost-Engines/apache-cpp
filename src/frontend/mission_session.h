@@ -13,6 +13,9 @@ struct mission_options {
   bool arcade{true};
   unsigned int video_mode{1}, detail{0};
   int difficulty{0};
+  simulation::control_configuration controls;
+  unsigned int deadband{10};
+  std::array<simulation::joystick_axis, 4> axes;
 };
 // Platform-independent live mission. Elapsed time is supplied in original 200 Hz ticks.
 class mission_session {

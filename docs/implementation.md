@@ -189,7 +189,7 @@ Validation completed:
 - Eight player battle traces connect flight, collision response, AI, projectile damage and player subsystem failures. All 9,399,339 fields match over 9,600 updates, including 3,712 launches, 104 combat casualties and 24 controlled player damage injections. Normal and sanitizer builds agree.
 - Eight slow-frame traces exercise the original flight substeps while movement, weapons and combat retain the full frame interval. Both builds match all 1,561,448 fields over 1,600 updates.
 - Another 600 contact fixtures carry 50 deck landings through the next flight update. Carrier-relative position, reservations, attitude and landing state match all 42,350 fields in both builds.
-- Keyboard input and camera routing match 1,000 original frames. All 128 device-selection combinations, 20,480 calibrated joystick samples and 1,280 curve entries also agree. Normal and sanitizer builds match all 36,784 fields. Platform polling and joystick-button dispatch remain to be connected.
+- Keyboard input and camera routing match 1,000 original frames. All 128 device-selection combinations, 20,480 calibrated joystick samples and 1,280 curve entries also agree. Normal and sanitizer builds match all 36,784 fields. Platform axes, buttons and hat polling are connected.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
@@ -252,7 +252,9 @@ The editor matches 3,050 original operations and 2,618,694 state fields. Thirty 
 
 The briefing audit covers all 149 shipped mission text/bundle files, including the English, French and German bundles. None contains a `:Briefing` section or brace commands. The executable retains a camera-tour parser, but the supplied game uses descriptions and recorded speech. There is no scripted tour to connect for this data set.
 
-Next: remaining frontend screens, joystick buttons/hat, movie playback and complete game journeys. CI follows once integration is finished.
+Joystick button and hat handling matches all 24,576 original decoder cases. Another 6,000 device combinations cover physical hats, legacy analogue hats, absent hardware and keyboard-only controls. Ten live flight sequences (50 frames) agree with the equivalent original key events. Normal and sanitizer builds pass all 101,904 decoder/device fields. A centered physical hat stays neutral even when an unrelated axis is present.
+
+Next: remaining frontend screens, movie playback and complete game journeys. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

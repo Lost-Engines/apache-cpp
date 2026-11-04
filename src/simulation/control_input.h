@@ -17,6 +17,12 @@ public:
   explicit joystick_curve(unsigned int deadband = 10);
   int32_t sample(unsigned int mode, joystick_axis const &axis) const;
 };
+struct joystick_commands {
+  std::array<uint32_t, 6> keys{};
+  size_t count{0};
+  bool alternate{false};
+};
+joystick_commands decode_joystick_buttons(unsigned int mode, unsigned int buttons, bool analogue_hat, unsigned int hat_position);
 class control_input {
 public:
   control_configuration configuration;
@@ -27,6 +33,10 @@ public:
   std::array<int32_t, 4> external{};
   std::array<joystick_axis, 4> joystick;
   joystick_curve curve;
+  bool joystick_present{false}, hat_present{false};
+  unsigned int axis_count{0};
+  unsigned int buttons{0}, hat{0};
+  joystick_commands button_commands() const;
   void key(unsigned int scan, bool down);
   void timer(uint32_t ticks);
   void update(unsigned int view_moves, bool gunner, bool joystick_alt = false, bool throttle_reversed = false);

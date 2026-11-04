@@ -158,8 +158,24 @@ int main(int const argc, char const *const argv[]) try {
       for(auto const &key : input.keys) if(!key.character && !key.repeat) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
       input.keys.clear(); input.clicks.clear();
       if(!window.focused()) { mission->controls.held.fill(false); mission->controls.counts.fill(0); }
+      mission->controls.joystick_present = window.focused() && glfwJoystickPresent(GLFW_JOYSTICK_1);
+      mission->controls.buttons = mission->controls.hat = 0;
+      mission->controls.hat_present = false; mission->controls.axis_count = 0;
       if(mission->controls.configuration.input_type != 1) {
+        int button_count{0}, hat_count{0};
+        auto const *buttons{glfwGetJoystickButtons(GLFW_JOYSTICK_1, &button_count)};
+        for(int i{0}; buttons && i < std::min(button_count, 4); ++i) if(buttons[i] == GLFW_PRESS) mission->controls.buttons |= 1u << i;
+        auto const *hats{glfwGetJoystickHats(GLFW_JOYSTICK_1, &hat_count)};
+        mission->controls.hat_present = hats && hat_count;
+        if(mission->controls.hat_present) switch(hats[0]) {
+          case GLFW_HAT_UP: mission->controls.hat = 1; break;
+          case GLFW_HAT_RIGHT: mission->controls.hat = 2; break;
+          case GLFW_HAT_DOWN: mission->controls.hat = 3; break;
+          case GLFW_HAT_LEFT: mission->controls.hat = 4; break;
+          default: break;
+        }
         int count{0}; auto const *axes{glfwGetJoystickAxes(GLFW_JOYSTICK_1, &count)};
+        mission->controls.axis_count = static_cast<unsigned int>(std::max(count, 0));
         for(size_t i{0}; i != mission->controls.joystick.size(); ++i) mission->controls.joystick[i].value = axes && i < static_cast<size_t>(count) ? static_cast<int32_t>(std::lround((std::clamp(axes[i], -1.0f, 1.0f) + 1.0f) * 127.5f)) : 128;
       }
       auto const now{std::chrono::steady_clock::now()};

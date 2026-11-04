@@ -34,6 +34,43 @@ int32_t joystick_curve::sample(unsigned int const mode, joystick_axis const &axi
   }
   throw std::runtime_error{"Invalid joystick sampling mode"};
 }
+joystick_commands decode_joystick_buttons(unsigned int const mode, unsigned int const buttons, bool const analogue_hat, unsigned int const hat_position) {
+  joystick_commands out; auto const emit{[&](uint32_t key){ if(key) out.keys.at(out.count++) = key; }};
+  auto const nibble{buttons & 15};
+  if(mode == 0) {
+    if(nibble & 1) emit(0x39);
+    if(nibble & 2) emit(0x1001c);
+    if(nibble & 4) emit(0xe);
+    if(nibble & 8) emit(0x10026);
+  } else if(mode == 1 || mode == 2) {
+    static std::array<uint32_t, 16> constexpr first{0, 0x39, 0xe, 0x4f, 0x10026, 0, 0, 0x47, 0x1001c, 0, 0, 0x51, 0, 0, 0, 0x49};
+    static std::array<uint32_t, 16> constexpr second{0, 0xe, 0x39, 0x4f, 0x10026, 0, 0x33, 0x47, 0x1001c, 0x21, 0x23, 0x51, 0x14, 0, 0x34, 0x49};
+    out.alternate = mode == 2 && nibble == 5;
+    if(mode == 2 && nibble == 9) emit(0x2e);
+    emit((mode == 1 ? first : second)[nibble]);
+  } else throw std::runtime_error{"Invalid joystick button mode"};
+  if(analogue_hat) {
+    auto const position{static_cast<uint64_t>(hat_position) * 100 / 256};
+    emit(position < 6 ? 0x49 : position < 31 ? 0x51 : position < 56 ? 0x47 : position < 81 ? 0x4f : 0);
+  }
+  return out;
+}
+joystick_commands control_input::button_commands() const {
+  if(!joystick_present || configuration.input_type == 1) return {};
+  unsigned int bits{buttons & 15}, position{255};
+  if(configuration.button_mode && hat >= 1 && hat <= 4) bits |= std::array<unsigned int, 4>{15, 11, 7, 3}[hat - 1];
+  if(configuration.analogue_hat) {
+    if(hat_present && hat >= 1 && hat <= 4) position = (hat - 1) * 64;
+    else if(!hat_present && axis_count >= 4) {
+      auto const &axis{joystick[3]}; int32_t const centre{static_cast<int32_t>((int64_t{axis.minimum} + axis.maximum) / 2)};
+      if(axis.minimum < centre && centre < axis.maximum) {
+        int32_t const value{std::clamp(axis.value, axis.minimum, axis.maximum)};
+        position = static_cast<unsigned int>(value > centre ? 255 - int64_t{axis.maximum - value} * 127 / (axis.maximum - centre) : int64_t{value - axis.minimum} * 127 / (centre - axis.minimum));
+      }
+    }
+  }
+  return decode_joystick_buttons(configuration.button_mode, bits, configuration.analogue_hat, position);
+}
 void control_input::key(unsigned int const scan, bool const down) { if(scan < held.size()) held[scan] = down; }
 void control_input::timer(uint32_t const ticks) { for(size_t i{0}; i != held.size(); ++i) if(held[i]) counts[i] += ticks; }
 void control_input::update(unsigned int const view_moves, bool const gunner, bool const joystick_alt, bool const throttle_reversed) {

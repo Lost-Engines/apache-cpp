@@ -265,7 +265,9 @@ void mission_session::step(unsigned int const ticks) {
   if(paused || finished) return;
   if(controls.held[0x39]) runtime.fire_player(runtime.timing.now, frame_time, 0x39);
   for(unsigned int i{0}; i != accelerated_time; ++i) {
-    controls.update(views->modes.movement, views->modes.crew == 1);
+    auto const buttons{controls.button_commands()};
+    for(size_t j{0}; j != buttons.count; ++j) post(static_cast<uint16_t>(buttons.keys[j]));
+    controls.update(views->modes.movement, views->modes.crew == 1, buttons.alternate);
     runtime.pilot->realistic.acceleration = static_cast<int32_t>(accelerated_time);
     runtime.weapons->night = daylight.light.night != 0;
     runtime.frame = frame_number;

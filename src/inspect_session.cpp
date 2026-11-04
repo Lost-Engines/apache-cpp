@@ -15,6 +15,9 @@ void inspect_session(apache::resources::data_store const &data, int const missio
     if(command == "step") { unsigned int ticks; input >> ticks; session.step(ticks); }
     else if(command == "key") { unsigned int key; bool down; input >> key >> down; session.key(static_cast<uint16_t>(key), down, false); }
     else if(command == "post") { unsigned int key; input >> key; session.post(static_cast<uint16_t>(key)); }
+    else if(command == "joystick") {
+      auto &c{session.controls}; input >> c.configuration.cyclic >> c.joystick_present >> c.hat_present >> c.hat >> c.buttons; c.configuration.resolve();
+    }
     else if(command == "view") { unsigned int mode; input >> mode; session.select_view(mode); }
     else if(command == "detail") { unsigned int value; input >> value; session.detail(value); }
     else if(command == "flight") {

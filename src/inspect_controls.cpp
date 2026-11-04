@@ -17,6 +17,14 @@ void inspect_controls(std::istream &input, std::ostream &output) {
       for(unsigned int i{0}; i != count; ++i) { unsigned int key{0}; uint32_t value{0}; input >> key >> value; state.counts.at(key) = value; }
       state.held[0x38] = alt; state.update(view, gunner);
       for(auto v : state.keyboard) output << v << ' '; for(auto v : state.flight.controls) output << v << ' '; for(auto v : state.external) output << v << ' '; output << '\n';
+    } else if(command == "buttons") {
+      unsigned int mode, bits, position; bool hat; input >> mode >> bits >> hat >> position;
+      auto const out{decode_joystick_buttons(mode, bits, hat, position)};
+      output << out.alternate << ' ' << out.count; for(size_t i{0}; i != out.count; ++i) output << ' ' << out.keys[i]; output << '\n';
+    } else if(command == "device") {
+      input >> state.configuration.cyclic >> state.joystick_present >> state.hat_present >> state.hat >> state.axis_count >> state.joystick[3].value >> state.buttons;
+      state.configuration.resolve(); auto const out{state.button_commands()};
+      output << out.alternate << ' ' << out.count; for(size_t i{0}; i != out.count; ++i) output << ' ' << out.keys[i]; output << '\n';
     } else if(command == "setup") {
       control_configuration config; input >> config.cyclic >> config.collective >> config.tail_rotor; config.resolve();
       output << config.cyclic << ' ' << config.collective << ' ' << config.tail_rotor << ' ' << config.input_type << ' ' << config.absolute_throttle << ' ' << config.rudder << ' ' << config.analogue_hat << ' ' << config.button_mode << '\n';

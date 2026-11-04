@@ -40,6 +40,12 @@ add_library(apache_core
   src/render/shadows.h
   src/render/model_renderer.cpp
   src/render/model_renderer.h
+  src/render/panel_instruments.cpp
+  src/render/panel_instruments.h
+  src/render/cockpit.cpp
+  src/render/cockpit.h
+  src/render/instrument_font.cpp
+  src/render/instrument_font.h
   src/render/palette_effects.cpp
   src/render/palette_effects.h
   src/resources/executable.cpp

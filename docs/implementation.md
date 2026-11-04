@@ -16,7 +16,11 @@ Current implementation:
 - Original palette, intensity ramps and glass remaps for all four warzones.
 - Ordered palette fades, night/weather/glare transitions, grassy terrain colours and infrared/HUD remaps.
 - Complete RGB scene output, including thermal-view detail and visibility rules.
-- Bounded reads of embedded palette data from the supported original executable.
+- Bounded reads of embedded palette and instrument-font data from the supported original executable.
+- All pilot/gunner cockpit panels, full and incremental redraws, night lighting and night-vision brightness.
+- Both original instrument fonts, including every glyph and screen-edge clipping.
+- Mechanical compass, artificial horizon, airspeed indicator, altimeter and analogue clock at both original resolutions.
+- Fixed-point 2D line clipping and unclipped text positioning.
 - Terrain grid projection, 7,200-entry scene queue, texture selection and fog shading tables.
 - Seven terrain drawing paths, including 64-triangle subdivision and perspective correction in 16-pixel spans.
 - Complete terrain, feature and placed-scenery assembly, visible-sector selection, and the original ground/sky horizon.
@@ -85,11 +89,16 @@ Validation completed:
 - 2,400 palette compositions with 9,591 faders match all 1,843,200 RGB bytes.
 - 2,304 scene-palette cases match 5,898,240 bytes across weather, altitude, night, glare and infrared settings.
 - 84 complete RGB scenes match 6,451,200 pixels. Twelve further scenes contain the same original invalid model reads already identified above. The complete fader/palette checks and another 48 RGB scenes also pass under sanitizers.
+- 1,280 cockpit-panel cases match 245,760,000 pixels and 983,040 palette bytes across both original resolutions, all views, redraw modes and lighting states.
+- 1,560 instrument-font cases match 1,597,440 pixels, covering all 130 glyphs in both fonts and drawing at the edges of the screen.
+- 2,532 mechanical-instrument frames match 486,144,000 pixels, covering both resolutions, dial limits, heading wraparound, clock rollover and normal/inverted attitudes.
+- 10,980 2D line/text cases match 78,668 fields; the existing 6,245 polygon-clipping comparisons still match after sharing the transformation code.
+- The complete cockpit, font, mechanical-instrument and 2D line comparisons also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: cockpit and live-instrument integration, simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
+Next: live avionics and cockpit integration, simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

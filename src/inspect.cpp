@@ -12,10 +12,13 @@
 #include "render/effect_renderer.h"
 #include "render/feature_renderer.h"
 #include "render/horizon.h"
+#include "render/cockpit.h"
+#include "render/instrument_font.h"
 #include "render/landscape.h"
 #include "render/model_renderer.h"
 #include "render/projection.h"
 #include "render/projection2.h"
+#include "render/panel_instruments.h"
 #include "render/rasterizer.h"
 #include "render/sector_scan.h"
 #include "render/shadows.h"
@@ -159,6 +162,46 @@ int main(int const argc, char const *const argv[]) try {
       }
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "instruments") {
+    apache::resources::executable_data const executable{data};
+    apache::math::trigonometry const trig{data};
+    std::array<apache::render::cockpit, 2> const panels{apache::render::cockpit{data, 0}, apache::render::cockpit{data, 1}};
+    std::array<apache::render::panel_instruments, 2> const gauges{apache::render::panel_instruments{panels[0], trig, executable}, apache::render::panel_instruments{panels[1], trig, executable}};
+    unsigned int mode{0}, which{0}; int32_t speed{0}, altitude{0}, seconds{0}; uint32_t heading{0}, pitch{0}, roll{0};
+    while(std::cin >> mode >> which >> speed >> altitude >> seconds >> heading >> pitch >> roll) {
+      if(mode > 1 || which > 5) throw std::runtime_error{"Invalid instrument selection"};
+      apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
+      auto const &gauge{gauges[mode]};
+      if(which == 0 || which == 5) gauge.airspeed(frame, speed);
+      if(which == 1 || which == 5) gauge.altimeter(frame, altitude);
+      if(which == 2 || which == 5) gauge.clock(frame, seconds);
+      if(which == 3 || which == 5) gauge.compass(frame, heading);
+      if(which == 4 || which == 5) gauge.attitude(frame, trig.transformation(heading, pitch, roll));
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc > 3) { std::ofstream file{argv[3], std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "cockpits") {
+    std::array<apache::render::cockpit, 2> const cockpits{apache::render::cockpit{data, 0}, apache::render::cockpit{data, 1}};
+    unsigned int mode{0}, view{0}, pattern{0}; bool fresh{false}, pnvs{false}; int32_t night{0};
+    while(std::cin >> mode >> view >> fresh >> pattern >> night >> pnvs) {
+      if(mode > 1) throw std::runtime_error{"Invalid cockpit mode"};
+      apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = pattern ? static_cast<uint8_t>(i * 7 + i / frame.image.width * 13) : 0;
+      cockpits[mode].draw(frame, view, fresh); apache::render::palette_rgb colours{}; cockpits[mode].install_palette(colours);
+      colours = apache::render::apply_faders(colours, cockpits[mode].faders(night, pnvs));
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << ' ' << apache::resources::fingerprint(colours) << std::dec << '\n';
+      if(argc > 3) { for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {colours[i * 3], colours[i * 3 + 1], colours[i * 3 + 2]}; apache::resources::write_ppm(argv[3], frame.image); }
+    }
+  } else if(command == "instrument-fonts") {
+    apache::resources::executable_data const executable{data};
+    std::array<apache::render::instrument_font, 2> const fonts{apache::render::instrument_font{executable, false}, apache::render::instrument_font{executable, true}};
+    unsigned int large{0}, code{0}, colour{0}; int x{0}, y{0};
+    apache::render::framebuffer frame{32, 32};
+    while(std::cin >> large >> code >> x >> y >> colour) {
+      frame.clear(0); fonts.at(large).character(frame, static_cast<uint8_t>(code), x, y, static_cast<uint8_t>(colour));
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
     }
   } else if(command == "scene-palette") {
     std::string zone, loaded; bool overcast{false}, previous{false};
@@ -477,7 +520,7 @@ int main(int const argc, char const *const argv[]) try {
       std::cout << apache::resources::fingerprint(frame.image.pixels) << '\n';
       if(argc > 3) { std::ofstream file{argv[3], std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
-  } else if(command == "projection2") {
+  } else if(command == "projection2" || command == "projection2-line") {
     apache::math::trigonometry const trig{data};
     apache::render::window2 window;
     apache::render::rectangle viewport;
@@ -489,10 +532,18 @@ int main(int const argc, char const *const argv[]) try {
       view.origin = {origin_x, origin_y}; view.cosine = trig.cosine(angle); view.sine = trig.sine(angle);
       std::vector<apache::render::vertex2> polygon(count);
       for(auto &point : polygon) std::cin >> point.x >> point.y >> point.intensity;
-      auto const result{view.clip(polygon)};
-      std::cout << result.size();
-      for(auto const &point : result) std::cout << ' ' << point.x << ' ' << point.y << ' ' << point.intensity;
-      std::cout << '\n';
+      if(command == "projection2-line") {
+        if(count != 2) throw std::runtime_error{"A line needs two endpoints"};
+        auto const line{view.clip_line(polygon[0], polygon[1])}; std::cout << static_cast<bool>(line);
+        if(line) for(auto const &point : *line) std::cout << ' ' << point.x << ' ' << point.y;
+        for(auto const &point : polygon) { auto const text{view.project(point)}; std::cout << ' ' << text.x << ' ' << text.y; }
+        std::cout << '\n';
+      } else {
+        auto const result{view.clip(polygon)};
+        std::cout << result.size();
+        for(auto const &point : result) std::cout << ' ' << point.x << ' ' << point.y << ' ' << point.intensity;
+        std::cout << '\n';
+      }
     }
   } else if(command == "sectors") {
     apache::math::trigonometry const trig{data};

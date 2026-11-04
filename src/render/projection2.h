@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <optional>
 #include <span>
 #include <vector>
 #include "rasterizer.h"
@@ -22,11 +23,16 @@ class projection2 {
   std::array<int32_t, 2> centre{0, 0};
   std::array<int32_t, 2> scale{0, 0};
   uint8_t outcode(vertex2 const &point) const;
+  vertex2 transform(vertex2 const &point) const;
+  screen_vertex screen(vertex2 const &point) const;
+  bool clip_endpoint(vertex2 &point, vertex2 const &other) const;
 public:
   std::array<int32_t, 2> origin{0, 0};
   int32_t cosine{INT32_MAX};
   int32_t sine{0};
   projection2(rectangle viewport, window2 window);
+  screen_vertex project(vertex2 const &point) const;
+  std::optional<std::array<screen_vertex, 2>> clip_line(vertex2 const &a, vertex2 const &b) const;
   std::vector<screen_vertex> clip(std::span<vertex2 const> vertices) const;
 };
 } // namespace apache::render

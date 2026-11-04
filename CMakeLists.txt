@@ -70,7 +70,7 @@ add_library(apache_core
   src/simulation/projectile_dynamics.h
   src/simulation/projectile_launch.cpp
   src/simulation/projectile_launch.h
-  src/simulation/mission_combat.cpp src/simulation/mission_weapons.cpp
+  src/simulation/mission_combat.cpp src/simulation/mission_weapons.cpp src/simulation/mission_damage.cpp
   src/simulation/mission_targets.cpp
   src/simulation/mission_spatial.cpp
   src/simulation/mission_radar.cpp

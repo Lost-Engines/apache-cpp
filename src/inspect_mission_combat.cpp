@@ -1,12 +1,12 @@
 #include "inspect_mission_combat.h"
-#include "simulation/mission_weapons.h"
+#include "simulation/mission_damage.h"
 #include "resources/features.h"
 #include <istream>
 #include <ostream>
 #include <iomanip>
 #include <stdexcept>
 
-void inspect_mission_combat(std::istream &input, std::ostream &output, apache::resources::data_store const &data, std::string const &zone, std::string const &path, bool const armed) {
+void inspect_mission_combat(std::istream &input, std::ostream &output, apache::resources::data_store const &data, std::string const &zone, std::string const &path, bool const armed, bool const hurt) {
   using namespace apache;
   auto const bytes{data.read(path)}; auto const mission{resources::read_mission_definition(std::string{bytes.begin(), bytes.end()})};
   resources::terrain const terrain{data.read(zone + ".WZ/GRIDPOST.BIN")}; auto models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}; resources::executable_data const executable{data}; resources::initialise_model_metadata(models, executable);
@@ -22,6 +22,7 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
   simulation::mission_targets targets{mission, scene, actors, spatial, random, terrain, structures, mobiles, models, trig};
   simulation::combat_random weapon_random{1, random.global_seed}; simulation::combat_tables tables{executable};
   simulation::mission_weapons *active_weapons{nullptr};
+  simulation::mission_damage *active_damage{nullptr};
   auto const identity{[&](simulation::target_identity const &id) -> int64_t {
     if(id.kind == simulation::target_kind::scenery) return 1 + id.index + id.layer * 100000;
     if(id.kind == simulation::target_kind::mobile) {
@@ -48,9 +49,18 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
   if(armed) {
     simulation::mission_weapon_callbacks weapon_events;
     weapon_events.launched = [&](size_t i, auto const &round){ output << "launch " << frame << ' ' << i << ' ' << round.state.weapon << '\n'; };
-    weapon_events.event = [&](size_t i, auto &, auto const &info){ output << "event " << frame << ' ' << i << ' ' << static_cast<unsigned int>(info.kind); for(auto v : info.position) output << ' ' << v; output << ' ' << (info.target ? identity(*info.target) : 0) << '\n'; };
+    weapon_events.event = [&](size_t i, auto &round, auto const &info){ output << "event " << frame << ' ' << i << ' ' << static_cast<unsigned int>(info.kind); for(auto v : info.position) output << ' ' << v; output << ' ' << (info.target ? identity(*info.target) : 0) << '\n'; if(active_damage) active_damage->impact(round, info); };
     launched = std::make_unique<simulation::mission_weapons>(mission, actors, spatial, targets, combat, models, terrain, structures, mobiles, trig, tables, random, weapon_random, 0, weapon_events);
     active_weapons = launched.get();
+  }
+  std::unique_ptr<simulation::mission_damage> damage;
+  if(hurt) {
+    simulation::mission_damage_callbacks damage_events;
+    damage_events.killed = [&](auto const &target, auto const &source){ output << "kill " << frame << ' ' << identity(target) << ' ' << identity(source) << '\n'; };
+    damage_events.sound = events.sound; damage_events.message = events.message;
+    damage = std::make_unique<simulation::mission_damage>(mission, scene, actors, spatial, targets, combat, *launched, models, terrain, structures, mobiles, trig, random, weapon_random, tables.skill(0), [&](int32_t x, int32_t y){ return static_cast<uint8_t>(resources::surface_type(features, super_features, x, y)); }, damage_events);
+    damage->explosions.play_sound = [&](auto const &sound){ output << "explosion_sound " << frame << ' ' << sound.volume << ' ' << sound.pan << '\n'; };
+    active_damage = damage.get();
   }
   simulation::movement_callbacks callbacks{.check_air_target{[&](size_t i){ combat.check_air_lock(i); }}, .target{[&](size_t i){ return combat.movement_aim(i); }}, .kill{[&](size_t i){ combat.kill(i); }}, .fire_at_waypoint{[&](size_t i){ combat.fire_at_waypoint(i); }}, .place{[&](size_t i){ spatial.place(i); }}, .unplace{[&](size_t i){ spatial.unplace(i); }}, .weapon{[&](size_t i){ return combat.weapon(i); }}};
   simulation::navigation_tables const performance{executable}; simulation::actor_movement movement{actors, mission, formations, models, trig, environment, navigation, performance, random, callbacks};
@@ -91,6 +101,23 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       }
       output << "smoke " << count << ' ' << resources::fingerprint(smoke) << '\n';
     }
+    if(damage) {
+      resources::bytes raw; size_t count{0};
+      auto const word{[&](uint32_t value){ for(unsigned int j{0}; j != 4; ++j) raw.push_back(static_cast<uint8_t>(value >> (j * 8))); }};
+      auto const vector{[&](math::vector3 const &v){ for(auto x : v) word(static_cast<uint32_t>(x)); }};
+      for(size_t i{0}; i != launched->visuals.explosions.size(); ++i) {
+        auto const &e{launched->visuals.explosions[i]}; if(!e.kind) continue;
+        ++count; word(static_cast<uint32_t>(i)); word(e.kind); vector(e.position); vector(e.velocity); word(static_cast<uint32_t>(e.radius)); word(static_cast<uint32_t>(e.frame));
+      }
+      for(size_t i{0}; i != 256; ++i) {
+        auto const &c{i < 128 ? damage->marks.short_lived[i] : damage->marks.long_lived[i - 128]}; if(c.model < 0) continue;
+        ++count; word(static_cast<uint32_t>(i + 128)); vector(c.position); word(static_cast<uint32_t>(c.model)); word(c.heading); word(static_cast<uint32_t>(c.age)); vector(c.scale);
+      }
+      output << "effects " << count << ' ' << resources::fingerprint(raw) << '\n';
+      raw.clear();
+      for(auto const &layer : {std::cref(scene.base), std::cref(scene.extra)}) for(auto const &object : layer.get()) { word(object.model); word(object.heading); word(object.status); }
+      output << "scenery " << resources::fingerprint(raw) << '\n';
+    }
     output << "alive"; for(auto v : combat.alive) output << ' ' << v; output << '\n';
     for(size_t i{0}; i != scene.objects.size(); ++i) { auto const &g{scene.objects[i].combat}; output << "defence " << i << ' ' << g.heading << ' ' << g.deadline << ' ' << g.shots; reference(g.target.get()); output << '\n'; }
     for(size_t i{0}; i != combat.battles.size(); ++i) { output << "battle " << i << ' ' << combat.battles[i].active; for(auto const &side : combat.battles[i].sides) output << ' ' << (side.task ? static_cast<int64_t>(*side.task) : -1) << ' ' << side.initial << ' ' << side.release_time; output << '\n'; }
@@ -106,9 +133,11 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     else if(command == "step") {
       bool capture{false}; input >> timing.now >> timing.delta >> capture; combat.set_time(timing.now, timing.delta, static_cast<uint32_t>(frame));
       if(launched) launched->environment.now = timing.now;
+      if(damage) damage->environment.flow = timing.game_flow;
       movement.update(timing);
       if(launched) launched->update({timing.now, timing.delta, static_cast<double>(timing.now - previous_time) * 0.005, 2048, 400, 2});
       combat.update(); actors.synchronize_models();
+      if(damage) damage->marks.advance();
       if(launched) launched->visuals.advance(timing.delta, terrain);
       if(capture) snapshot(); previous_time = timing.now; ++frame;
     }

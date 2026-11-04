@@ -62,6 +62,12 @@ void inspect_collisions(std::istream &input, std::ostream &output, apache::resou
       unsigned int iterations{0}; input >> target.speed >> iterations;
       auto const result{simulation::intercept_point(origin, speed, target, iterations)};
       output << result[0] << ' ' << result[1] << ' ' << result[2] << '\n';
+    } else if(command == "range") {
+      auto const p{point()}; int32_t radius{0}; input >> radius; auto const hits{collisions->in_range(p, radius)};
+      output << hits.size(); for(auto const &hit : hits) { output << ' ' << hit.layer << ' ' << hit.index; for(auto x : hit.position) output << ' ' << x; } output << '\n';
+    } else if(command == "mobile-range") {
+      auto const p{point()}; int32_t radius{0}; input >> radius; auto const hits{simulation::mobiles_in_range(mobiles, p, radius)};
+      output << hits.size(); for(auto id : hits) output << ' ' << id; output << '\n';
     } else if(command == "point") {
       auto const p{point()}; auto const ignore{ignored_scenery()}; print_scenery(collisions->point(p, ignore));
     } else if(command == "line") {

@@ -22,9 +22,11 @@ public:
   bool contains(size_t layer, size_t index) const { return layer < layers.size() && index < layers[layer].size(); }
   resources::scenery_placement const &at(size_t layer, size_t index) const { if(!contains(layer, index)) throw std::out_of_range{"Unavailable scenery target"}; return layers[layer][index]; }
   scenery_collisions(resources::model_archive const &objects, math::trigonometry const &angles, std::span<resources::scenery_placement const> scenery, std::span<resources::scenery_placement const> extra = {});
+  std::vector<scenery_hit> in_range(math::vector3 const &position, int32_t radius) const;
   std::optional<scenery_hit> point(math::vector3 const &position, std::optional<std::array<size_t, 2>> ignored = {}) const;
   std::optional<scenery_hit> line(math::vector3 const &start, math::vector3 const &end, std::optional<std::array<size_t, 2>> ignored = {}) const;
 };
+std::vector<uint32_t> mobiles_in_range(render::mobile_scene const &scene, math::vector3 const &position, int32_t radius);
 std::optional<uint32_t> mobile_point_collision(render::mobile_scene const &scene, resources::model_archive const &models, math::vector3 const &position, std::optional<uint32_t> ignored = {}, std::optional<uint32_t> ignored_second = {});
 std::optional<uint32_t> mobile_line_collision(render::mobile_scene const &scene, resources::model_archive const &models, math::trigonometry const &trig, math::vector3 const &start, math::vector3 const &end, std::optional<uint32_t> ignored = {}, std::optional<uint32_t> ignored_second = {});
 bool crater_point_collision(craters const &marks, resources::model_archive const &models, resources::terrain const &terrain, math::vector3 const &position, int32_t tallest);

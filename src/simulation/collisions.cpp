@@ -11,6 +11,9 @@ int32_t approximate2(int32_t const x, int32_t const y) {
   return math::add(std::bit_cast<int32_t>(static_cast<uint32_t>(std::max(a, b)) * 4), std::min(a, b)) >> 2;
 }
 int32_t approximate3(math::vector3 v) { for(auto &x : v) if(x < 0) x = math::negate(x); std::ranges::sort(v); return math::add(math::add(v[2], v[1] >> 2), v[0] >> 2); }
+std::array<int32_t, 2> search_bounds(int32_t coordinate, int32_t radius) {
+  return {std::max(0, std::min(coordinate >> 22, math::subtract(coordinate, radius) >> 22)), std::min(63, std::max(coordinate >> 22, math::add(coordinate, radius) >> 22))};
+}
 bool interval(int32_t value, int32_t a, int32_t b, int32_t radius) { return math::subtract(std::min(a, b), radius) <= value && value <= math::add(std::max(a, b), radius); }
 bool box_contains(render::model_instance const &object, math::vector3 const &point, resources::model_archive const &models, bool const inclusive) {
   auto const local{math::transform(object.world.rotation, difference(point, object.world.position))}; auto const &bounds{models.at(object.id)->bounds};
@@ -34,6 +37,27 @@ render::model_instance const *bounding_box_hit(render::model_instance const &obj
 scenery_collisions::scenery_collisions(resources::model_archive const &objects, math::trigonometry const &angles, std::span<resources::scenery_placement const> const scenery, std::span<resources::scenery_placement const> const extra) : models{objects}, trig{angles}, layers{scenery, extra} {
   for(auto const &model : models) if(model) tallest_object = std::max(tallest_object, model->height);
   for(size_t layer{0}; layer != layers.size(); ++layer) for(size_t i{0}; i != layers[layer].size(); ++i) sectors[layer].at(layers[layer][i].sector).push_back(i);
+}
+std::vector<scenery_hit> scenery_collisions::in_range(math::vector3 const &position, int32_t const radius) const {
+  std::vector<scenery_hit> result;
+  if(outside(position) || radius < position[2]) return result;
+  auto const xs{search_bounds(position[0], radius)}, ys{search_bounds(position[1], radius)};
+  for(int32_t x{xs[0]}; x <= xs[1]; ++x) for(int32_t y{ys[0]}; y <= ys[1]; ++y) for(size_t layer{0}; layer != layers.size(); ++layer) {
+    for(auto const index : sectors[layer][static_cast<size_t>(x * 64 + y)]) {
+      auto const &object{layers[layer][index]};
+      if(object.model && approximate3({math::subtract(object.x, position[0]), math::subtract(object.y, position[1]), position[2]}) < radius) result.push_back({layer, index, {object.x, object.y, 0}});
+    }
+  }
+  return result;
+}
+std::vector<uint32_t> mobiles_in_range(render::mobile_scene const &scene, math::vector3 const &position, int32_t const radius) {
+  std::vector<uint32_t> result;
+  if(outside(position)) return result;
+  auto const xs{search_bounds(position[0], radius)}, ys{search_bounds(position[1], radius)};
+  for(int32_t x{xs[0]}; x <= xs[1]; ++x) for(int32_t y{ys[0]}; y <= ys[1]; ++y) {
+    for(auto const id : scene.sector(static_cast<size_t>(x * 64 + y))) if(approximate3(difference(scene.at(id).world.position, position)) < radius) result.push_back(id);
+  }
+  return result;
 }
 std::optional<scenery_hit> scenery_collisions::point(math::vector3 const &position, std::optional<std::array<size_t, 2>> const ignored) const {
   if(outside(position) || position[2] > tallest_object) return {};

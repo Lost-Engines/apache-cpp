@@ -46,6 +46,7 @@
 #include "inspect_targets.h"
 #include "inspect_tracking.h"
 #include "inspect_countermeasures.h"
+#include "inspect_damage.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
 #include "simulation/actor_movement.h"
@@ -139,7 +140,8 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "countermeasures") { inspect_countermeasures(std::cin, std::cout, data); return 0; }
+  if(command == "damage") { inspect_damage(std::cin, std::cout, data); return 0; }
+    if(command == "countermeasures") { inspect_countermeasures(std::cin, std::cout, data); return 0; }
     if(command == "tracking") { inspect_tracking(std::cin, std::cout, data); return 0; }
     if(command == "targets") {
     inspect_targets(std::cin, std::cout, data);

@@ -70,6 +70,40 @@ void panel_instruments::compass(framebuffer &target, uint32_t const heading) con
   shade(target, high ? "COMSHADE.640" : "COMSHADE.320", x, y, 229, 225);
   target.blit(panels.sprite(high ? "COMBEZEL.640" : "COMBEZEL.320"), x, y, true);
 }
+void panel_instruments::warnings(framebuffer &target, bool const gunner, uint32_t const faults) const {
+  target.reset_clip();
+  int const y{high ? (gunner ? 267 : 272) : (gunner ? 133 : 136)}, size{high ? 11 : 6};
+  std::array<int, 3> const positions{high ? (gunner ? std::array{111, 162, 136} : std::array{205, 256, 230}) : (gunner ? std::array{55, 80, 67} : std::array{102, 127, 115})};
+  std::array<uint32_t, 3> const bits{0x100000, 0x200000, 0xc00000};
+  for(size_t i{0}; i != bits.size(); ++i) {
+    size_t const offset{static_cast<size_t>(high ? 58364 : 14773) + ((faults & bits[i]) ? (high ? 15 : 10) : 0)};
+    panels.copy(target, high ? "CPG_1.640" : "CPG_1.320", offset, {positions[i], y, positions[i] + size - 1, y + size - 1});
+  }
+}
+void panel_instruments::communications(framebuffer &target, bool const gunner, std::array<std::string, 3> lines) const {
+  int const x{high ? (gunner ? 474 : 324) : (gunner ? 236 : 161)}, y{high ? (gunner ? 267 : 272) : (gunner ? 132 : 134)};
+  int const width{high ? 101 : 67}, height{high ? (gunner ? 28 : 29) : (gunner ? 17 : 18)};
+  size_t const offset{static_cast<size_t>(high ? (gunner ? 17754 : 15684) : (gunner ? 4076 : 3361))};
+  target.reset_clip();
+  panels.copy(target, gunner ? (high ? "CPG_1.640" : "CPG_1.320") : (high ? "PLT_1.640" : "PLT_1.320"), offset, {x, y, x + width - 1, y + height - 1});
+  target.clip = intersect(target.clip, {x, y, x + (high ? 100 : (gunner ? 68 : 66)), y + (high ? 28 : (gunner ? 17 : 16))});
+  for(size_t i{0}; i != lines.size(); ++i) {
+    for(char &letter : lines[i]) if(letter >= 'a' && letter <= 'z') letter = static_cast<char>(letter - 'a' + 'A');
+    font.draw(target, lines[i], x, y + (high ? 1 : 0) + static_cast<int>(i) * (high ? 10 : 6), 219);
+  }
+  target.reset_clip();
+}
+void panel_instruments::accelerated_time(framebuffer &target, unsigned int const factor) const {
+  if(factor == 1) return;
+  std::string text{"x"};
+  if(factor >= 10) text += static_cast<char>('0' + factor / 10);
+  text += static_cast<char>('0' + factor % 10);
+  int const width{font.width(text)}, height{high ? 9 : 6};
+  target.reset_clip();
+  target.fill({14, 14, 14 + width + 2, 14 + height + 2}, 0);
+  target.fill({15, 15, 15 + width, 15 + height}, 1);
+  font.draw(target, text, 16, 16, 0);
+}
 void panel_instruments::attitude(framebuffer &target, math::matrix3 const &rotation) const {
   int const x{high ? 548 : 274}, y{high ? 373 : 186}, size{high ? 43 : 22};
   target.reset_clip(); target.clip = intersect(target.clip, {x, y, x + size - 1, y + size - 1});

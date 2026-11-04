@@ -19,6 +19,9 @@ public:
   void altimeter(framebuffer &target, int32_t altitude) const;
   void clock(framebuffer &target, int32_t seconds) const;
   void compass(framebuffer &target, uint32_t heading) const;
+  void warnings(framebuffer &target, bool gunner, uint32_t faults) const;
+  void communications(framebuffer &target, bool gunner, std::array<std::string, 3> lines) const;
+  void accelerated_time(framebuffer &target, unsigned int factor) const;
   void attitude(framebuffer &target, math::matrix3 const &rotation) const;
 };
 } // namespace apache::render

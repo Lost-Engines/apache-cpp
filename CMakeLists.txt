@@ -40,6 +40,8 @@ add_library(apache_core
   src/render/shadows.h
   src/render/model_renderer.cpp
   src/render/model_renderer.h
+  src/render/mfd.cpp
+  src/render/mfd.h
   src/render/panel_instruments.cpp
   src/render/panel_instruments.h
   src/render/cockpit.cpp
@@ -52,6 +54,8 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/mfd_state.cpp
+  src/simulation/mfd_state.h
   src/simulation/fragments.cpp
   src/simulation/fragments.h
   src/render/fragment_renderer.cpp

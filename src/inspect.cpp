@@ -19,6 +19,8 @@
 #include "render/projection.h"
 #include "render/projection2.h"
 #include "render/panel_instruments.h"
+#include "render/mfd.h"
+#include "simulation/mfd_state.h"
 #include "render/rasterizer.h"
 #include "render/sector_scan.h"
 #include "render/shadows.h"
@@ -162,6 +164,56 @@ int main(int const argc, char const *const argv[]) try {
       }
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "mfd-state") {
+    unsigned int operation{0}, game_mode{0}; bool gunner{false}, right{false}, forward{false}, requested{false}; uint32_t faults{0};
+    while(std::cin >> operation >> game_mode >> gunner >> right >> forward >> requested >> faults) {
+      apache::simulation::mfd_state state; state.forwards = forward;
+      for(auto &seat : state.pages) for(auto &page : seat) {
+        unsigned int value{0}; std::cin >> value;
+        if(value > 9) throw std::runtime_error{"Invalid MFD page"};
+        page = static_cast<apache::simulation::mfd_page>(value);
+      }
+      if(operation == 0) state.initialise(game_mode);
+      else if(operation == 1) state.cycle(gunner, right, requested);
+      else if(operation == 2) state.toggle(gunner, right, faults);
+      else if(operation == 3) state.show_radar(gunner, faults);
+      else if(operation == 4) state.apply_faults(gunner, faults);
+      else if(operation == 5) state.reset();
+      else throw std::runtime_error{"Invalid MFD control operation"};
+      for(auto const &seat : state.pages) for(auto const page : seat) std::cout << static_cast<unsigned int>(page) << ' ';
+      std::cout << state.forwards << '\n';
+    }
+  } else if(command == "panel-status" || command == "mfd-basic") {
+    apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};
+    std::array<apache::render::cockpit, 2> const panels{apache::render::cockpit{data, 0}, apache::render::cockpit{data, 1}};
+    std::array<apache::render::panel_instruments, 2> const gauges{apache::render::panel_instruments{panels[0], trig, executable}, apache::render::panel_instruments{panels[1], trig, executable}};
+    std::array<apache::render::mfd_renderer, 2> const mfds{apache::render::mfd_renderer{panels[0], executable}, apache::render::mfd_renderer{panels[1], executable}};
+    unsigned int mode{0}, which{0};
+    while(std::cin >> mode >> which) {
+      if(mode > 1) throw std::runtime_error{"Invalid panel mode"};
+      apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
+      uint32_t seed{0};
+      if(command == "panel-status") {
+        bool gunner{false}; uint32_t faults{0}; unsigned int acceleration{0}; std::array<std::string, 3> lines;
+        std::cin >> gunner >> faults >> acceleration; for(auto &line : lines) std::cin >> std::quoted(line);
+        if(which == 0 || which == 3) gauges[mode].warnings(frame, gunner, faults);
+        if(which == 1 || which == 3) gauges[mode].communications(frame, gunner, lines);
+        if(which == 2 || which == 3) gauges[mode].accelerated_time(frame, acceleration);
+      } else {
+        unsigned int panel{0}; uint32_t faults{0}; bool ground{false}, air{false}; apache::render::engine_instruments state;
+        std::cin >> panel >> faults >> ground >> air >> seed >> state.torque_left >> state.torque_right >> state.temperature_left >> state.temperature_right >> state.rpm_left >> state.rpm_right >> state.rotor_rpm >> state.collective;
+        auto const area{mfds[mode].area(static_cast<apache::render::mfd_panel>(panel))};
+        if(which == 0) mfds[mode].off(frame, area);
+        else if(which == 1) mfds[mode].damaged(frame, area, seed);
+        else if(which == 8) mfds[mode].engines(frame, area, state);
+        else if(which == 9) mfds[mode].status(frame, area, faults, ground, air);
+        else if(which == 10) mfds[mode].corners(frame, panel != 0);
+        else throw std::runtime_error{"Invalid MFD page"};
+      }
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << seed << '\n';
+      if(argc > 3) { std::ofstream file{argv[3], std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
   } else if(command == "instruments") {
     apache::resources::executable_data const executable{data};

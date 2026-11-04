@@ -156,6 +156,10 @@ resources::indexed_image const &cockpit::sprite(std::string_view const name) con
   if(found == sprites.end()) throw std::runtime_error{"Unknown cockpit sprite"};
   return found->second;
 }
+void cockpit::copy(framebuffer &target, std::string_view const name, size_t const source_offset, rectangle const destination) const {
+  auto const &image{sprite(name)};
+  for(int y{destination.top}; y <= destination.bottom; ++y) for(int x{destination.left}; x <= destination.right; ++x) target.point(x, y, image.pixels.at(source_offset + static_cast<size_t>(y - destination.top) * image.width + x - destination.left));
+}
 void cockpit::install_palette(palette_rgb &palette) const { std::ranges::copy(colours, palette.begin() + 224 * 3); }
 std::array<palette_fader, 3> cockpit::faders(int32_t const night, bool const night_vision) const {
   int32_t const light{night_vision ? 0 : night};

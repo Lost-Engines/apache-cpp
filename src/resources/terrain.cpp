@@ -43,6 +43,12 @@ int32_t terrain::elevation(int32_t const x, int32_t const y) const {
   return a + static_cast<int32_t>((int64_t{fx} * (edge - a)) >> 20);
 }
 
+int32_t terrain::approximate_elevation(int32_t const x, int32_t const y) const {
+  if(x < 0 || y < 0 || x >= 256 * terrain_step || y >= 256 * terrain_step) return 0;
+  auto const ix{static_cast<unsigned int>(x >> 20)}, iy{static_cast<unsigned int>(y >> 20)};
+  return std::max({post(ix, iy).height, post(ix + 1, iy).height, post(ix, iy + 1).height, post(ix + 1, iy + 1).height}) * 256;
+}
+
 void initialise_scenery(std::span<scenery_placement> const placements) {
   // The original loader marks these authored structures non-targetable.
   std::array<uint16_t, 11> constexpr protected_models{125, 127, 387, 441, 442, 482, 483, 505, 890, 906, 908};

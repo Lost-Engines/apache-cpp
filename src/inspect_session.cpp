@@ -18,6 +18,7 @@ void inspect_session(apache::resources::data_store const &data, int const missio
     else if(command == "joystick") {
       auto &c{session.controls}; input >> c.configuration.cyclic >> c.joystick_present >> c.hat_present >> c.hat >> c.buttons; c.configuration.resolve();
     }
+    else if(command == "modal") { output << "modal " << session.quit_prompt << ' ' << session.help_requested << ' ' << session.finished << ' ' << session.runtime.timing.now << '\n'; }
     else if(command == "view") { unsigned int mode; input >> mode; session.select_view(mode); }
     else if(command == "detail") { unsigned int value; input >> value; session.detail(value); }
     else if(command == "flight") {

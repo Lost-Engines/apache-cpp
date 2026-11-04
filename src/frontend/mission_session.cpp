@@ -186,6 +186,11 @@ void mission_session::key(uint16_t const scan, bool const down, bool const dispa
   controls.key(scan & 127, down); if(down && dispatch) post(scan);
 }
 void mission_session::command(uint16_t const key) {
+  if(quit_prompt) {
+    if((key & 255) == 0x15) finished = true;
+    else if((key & 255) == 0x31) { quit_prompt = false; quit_drawn = false; views->modes.changed = true; }
+    return;
+  }
   auto &arm{*runtime.player_armament}; auto &sensors{runtime.sensors->state}; auto &displays{instruments->state.displays};
   auto const mode{arm.control_mode}; auto const faults{runtime.pilot->faults()}; bool const gunner{views->modes.crew == 1};
   simulation::targeting_events const target_events{.key_event{}, .cockpit_sound{runtime.events.sound ? std::function<void(unsigned int)>{[this](unsigned int id){ runtime.events.sound(id, true); }} : nullptr}, .show_radar{[&](){ displays.show_radar(gunner, faults); }}};
@@ -198,7 +203,8 @@ void mission_session::command(uint16_t const key) {
     return;
   }
   switch(key) {
-    case 0x2001: case 0x2010: case 0x102d: finished = true; break;
+    case 0x2001: case 0x2010: case 0x102d: quit_prompt = true; break;
+    case 0x3b: help_requested = true; break;
     case 1: case 0x200f: accelerated_time = 1; break;
     case 0x400f: accelerated_time = 8; break;
     case 0xf: accelerated_time = accelerated_time == 8 ? 1 : accelerated_time * 2; break;
@@ -260,9 +266,10 @@ void mission_session::step(unsigned int const ticks) {
   last_delta = static_cast<int32_t>(std::min(frame_time * 2147483648.0, static_cast<double>(INT32_MAX)));
   controls.timer((keyboard_remainder + ticks) / 2); keyboard_remainder = (keyboard_remainder + ticks) % 2;
   daylight.update(runtime.timing.now);
-  for(auto key : commands) command(key);
+  bool const was_prompt{quit_prompt};
+  for(auto key : commands) { command(key); if(quit_prompt != was_prompt || help_requested || finished) break; }
   commands.clear();
-  if(paused || finished) return;
+  if(paused || finished || was_prompt || help_requested) return;
   if(controls.held[0x39]) runtime.fire_player(runtime.timing.now, frame_time, 0x39);
   for(unsigned int i{0}; i != accelerated_time; ++i) {
     auto const buttons{controls.button_commands()};
@@ -280,6 +287,8 @@ void mission_session::step(unsigned int const ticks) {
   runtime.player_armament->update_hydra(runtime.timing.now, last_delta, controls.keyboard[4]);
 }
 void mission_session::draw() {
+  if(quit_prompt && quit_drawn) return;
+  if(help_requested) return;
   camera = views->update(sources(), {controls.external[3], controls.external[2], controls.keyboard[5], paused ? 0 : last_delta}, runtime.random.global_seed);
   finished = finished || camera.finished;
   visual.lighting = daylight.light; visual.infrared = night_vision || camera.infrared ? 1 : 0;
@@ -311,5 +320,9 @@ void mission_session::draw() {
   frame.reset_clip(); panels.draw(frame, views->modes.mode, views->modes.changed); avionics.draw(frame, state, world, visual.lighting);
   for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world.palette.modified[i * 3], world.palette.modified[i * 3 + 1], world.palette.modified[i * 3 + 2]};
   views->modes.changed = false;
+  if(quit_prompt) {
+    auto const &prompt{panels.sprite(settings.video_mode ? "END_YN.640" : "END_YN.320")};
+    frame.reset_clip(); frame.blit(prompt, settings.video_mode ? 210 : 86, settings.video_mode ? 116 : 54, true); quit_drawn = true;
+  }
 }
 } // namespace apache::frontend

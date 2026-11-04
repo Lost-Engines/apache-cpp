@@ -45,6 +45,7 @@ add_library(apache_core
   src/frontend/map_routes.h
   src/frontend/map_layers.cpp
   src/frontend/map_layers.h
+  src/frontend/help_menu.cpp src/frontend/help_menu.h
   src/frontend/menu.cpp
   src/frontend/menu.h
   src/frontend/widget.cpp

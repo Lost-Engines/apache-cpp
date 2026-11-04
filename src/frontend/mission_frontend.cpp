@@ -27,7 +27,7 @@ std::string zone_name(int const zone) {
 }
 }
 mission_frontend::mission_frontend(resources::data_store const &data, mission_options const settings)
-  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, planner{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings} {
+  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, help{data, interface}, planner{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings} {
   interface.link_scroll("_map_briefing_subtitle_text", "_map_briefing_subtitle_scrollbar");
   interface.link_scroll("_situation_text", "_situation_scroll_bar");
   interface.number_changed = [this](widget &object, bool final){ planner.number_changed(object, final); };
@@ -226,6 +226,7 @@ bool mission_frontend::activate(widget &object, int const line) {
   if(action == "notify_log_button_" || action == "notify_mission_select_log_") {
     show_pilots(flow == 4 && interface.current() != "_main_screen" && interface.current() != "_flight_screen"); return true;
   }
+  if(help.activate(object)) return true;
   if(planner.activate(object)) return true;
   if(pilots.activate(object, line)) return true;
   if(preferences.activate(object)) { apply_preferences(); return true; }

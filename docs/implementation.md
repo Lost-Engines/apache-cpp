@@ -254,7 +254,9 @@ The briefing audit covers all 149 shipped mission text/bundle files, including t
 
 Joystick button and hat handling matches all 24,576 original decoder cases. Another 6,000 device combinations cover physical hats, legacy analogue hats, absent hardware and keyboard-only controls. Ten live flight sequences (50 frames) agree with the equivalent original key events. Normal and sanitizer builds pass all 101,904 decoder/device fields. A centered physical hat stays neutral even when an unrelated axis is present.
 
-Next: remaining frontend screens, movie playback and complete game journeys. CI follows once integration is finished.
+The F1 manual uses its original 800×600 layout, with contents links, chapter/page controls, index and control summary. All 108 authored pages and 227 navigation results agree with the original. Eighteen complete frames match 8,640,000 indexed and RGB pixels. The in-flight yes/no exit prompt matches all 384,000 pixels at both resolutions; unrelated keys leave it open, N resumes the unchanged mission and Y exits. Normal and sanitizer checks pass, alongside seven frontend journeys. Isolated display tests cover manual entry/exit, pause/view changes and both quit choices.
+
+Next: movie playback, first-launch asset setup and complete game journeys. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

@@ -110,9 +110,13 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
       auto const &p{app.pilot().campaign}; output << "campaign " << p.warzone << ' ' << p.level << ' ' << p.lives << ' ' << p.seed << ' ' << p.missions.size();
       for(bool won : app.pilot().victories) output << ' ' << won;
       output << '\n';
+    } else if(command == "help") { menu.show("_help_screen");
+    } else if(command == "helppage") { int page; input >> page; app.help.select(page);
+    } else if(command == "helpgeneric") { int page; input >> page; app.help.generic(page);
+    } else if(command == "helpstate") { output << app.help.page() << '\n';
     } else if(command == "end") {
       if(!mission) throw std::runtime_error{"No mission running"};
-      mission->post(0x2001); mission->step(1); app.complete(std::move(mission));
+      mission->post(0x2001); mission->step(1); mission->draw(); mission->post(0x15); mission->step(1); app.complete(std::move(mission));
     } else if(command == "draw") {
       std::string file; input >> std::quoted(file);
       auto const &image{mission ? mission->frame.image : frame.image};

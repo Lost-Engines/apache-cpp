@@ -29,6 +29,7 @@ class mission_session {
   std::array<unsigned int, 54> radio_effects;
   int32_t last_delta{0};
   double frame_time{0.05};
+  bool quit_drawn{false};
   std::vector<uint16_t> commands;
   std::optional<size_t> drone;
   unsigned int next_random();
@@ -54,6 +55,7 @@ public:
   render::framebuffer frame;
   simulation::view_frame camera;
   bool paused{false}, finished{false}, night_vision{false};
+  bool quit_prompt{false}, help_requested{false};
   unsigned int accelerated_time{1};
   std::function<void(unsigned int, int32_t, int32_t)> play_sound;
   std::function<void(simulation::flight_event)> flight_sound;

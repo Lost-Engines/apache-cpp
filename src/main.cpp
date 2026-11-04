@@ -149,12 +149,13 @@ int main(int const argc, char const *const argv[]) try {
   glfwSetMouseButtonCallback(window.get(), [](GLFWwindow *const handle, int const button, int const action, int){
     if(button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT) static_cast<events*>(glfwGetWindowUserPointer(handle))->clicks.push_back({button == GLFW_MOUSE_BUTTON_LEFT ? 0u : 1u, action == GLFW_PRESS});
   });
+  bool in_flight_help{false};
   unsigned int frames{0};
   auto previous_time{std::chrono::steady_clock::now()};
   double tick_fraction{0};
   if(mission) { mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title); }
   while(window.poll() && !menu.quit_requested()) {
-    if(mission) {
+    if(mission && !in_flight_help) {
       for(auto const &key : input.keys) if(!key.character && !key.repeat) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
       input.keys.clear(); input.clicks.clear();
       if(!window.focused()) { mission->controls.held.fill(false); mission->controls.counts.fill(0); }
@@ -182,8 +183,13 @@ int main(int const argc, char const *const argv[]) try {
       tick_fraction += std::chrono::duration<double>(now - previous_time).count() * 200; previous_time = now;
       auto const ticks{static_cast<unsigned int>(std::min(tick_fraction, 200.0))};
       if(ticks) { tick_fraction -= ticks; mission->step(ticks); mission->draw(); }
-      if(sound) sound->pause(mission->paused);
+      if(sound) sound->pause(mission->paused || mission->quit_prompt || mission->help_requested);
       window.present(mission->frame);
+      if(mission->help_requested) {
+        mission->help_requested = false; in_flight_help = true;
+        mission->controls.held.fill(false); mission->controls.counts.fill(0);
+        menu.show("_help_screen");
+      }
       if(mission->finished) {
         if(sound) sound->mission(false);
         if(launched_from_menu) frontend.complete(std::move(mission));
@@ -195,7 +201,7 @@ int main(int const argc, char const *const argv[]) try {
     }
     auto const now{std::chrono::steady_clock::now()};
     frontend.interface.tick(std::chrono::duration<double>(now - previous_time).count());
-    frontend.planner.tick(std::chrono::duration<double>(now - previous_time).count());
+    if(!in_flight_help) frontend.planner.tick(std::chrono::duration<double>(now - previous_time).count());
     previous_time = now; tick_fraction = 0;
     auto const cursor{window.cursor_position()};
     menu.move(cursor ? static_cast<int>(cursor->x) : -1, cursor ? static_cast<int>(cursor->y) : -1);
@@ -215,7 +221,13 @@ int main(int const argc, char const *const argv[]) try {
       for(size_t i{0}; i != values.size(); ++i) if(axes && i < static_cast<size_t>(count)) values[i] = static_cast<int32_t>(std::lround((std::clamp(axes[i], -1.0f, 1.0f) + 1.0f) * 127.5f));
       frontend.preferences.calibration(values, hat && hats ? *hat : 0u);
     }
-    if(sound) sound->configure(frontend.settings);
+    if(in_flight_help && menu.current() != "_help_screen") {
+      in_flight_help = false; mission->views->modes.changed = true;
+      if(sound) sound->pause(mission->paused);
+      previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
+      continue;
+    }
+    if(sound && !in_flight_help) sound->configure(frontend.settings);
     menu.render(frame);
     window.present(frame);
     if(auto launched{frontend.takeoff()}) {

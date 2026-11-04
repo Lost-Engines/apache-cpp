@@ -214,6 +214,9 @@ void menu::draw_widget(render::framebuffer &target, widget const &object) {
   }
 }
 void menu::render(render::framebuffer &target) {
+  unsigned int const width{current() == "_help_screen" ? 800u : 640u}, height{width == 800 ? 600u : 480u};
+  if(target.image.width != width || target.image.height != height) target = render::framebuffer{width, height};
+  widgets.front().area = {0, 0, static_cast<int>(width) - 1, static_cast<int>(height) - 1};
   for(auto const &[text, bar] : scroll_links) {
     auto const &object{widgets[text]};
     auto const count{font.lines(object.text, object.area.right - object.area.left - ((object.flags & 0x20000) ? 3 : 0), (object.flags & 0x100000) != 0).size()};

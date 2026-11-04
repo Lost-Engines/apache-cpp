@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include "menu.h"
+#include "help_menu.h"
 #include "briefing_map.h"
 #include "pilot_menu.h"
 #include "score_menu.h"
@@ -41,6 +42,7 @@ public:
   mission_options options;
   configuration::settings settings;
   preferences_menu preferences;
+  help_menu help;
   briefing_map planner;
   configuration::profiles logs;
   pilot_menu pilots;

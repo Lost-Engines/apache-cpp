@@ -276,6 +276,12 @@ The flight-state receiver and server extrapolation match 900 original-code cases
 
 The shared pilot/gunner record now includes instrument readings, attitude and position, target identities, Hydra elevation, landing reports, radio messages and queued controls. Both sender and receiver comparisons pass 1,000 cases each, covering 104,000 payload bytes and 48,006 decoded/queue fields. Another 1,000 original key-queue sequences and 147 malformed records pass normal and sanitizer builds. Key dispatch, scene placement, radio output and target lookup are observed boundaries in this comparison.
 
+Remote aircraft now use the shared mission scene for placement, target identity and firing. The dispatch comparison covers 1,520 cases across nineteen weapon types (4,720 dispatches, 81,760 fields). Eight connected firing traces match 4,519,568 fields and 360 remotely initiated launches; eight moving-aircraft traces match 4,538,391 fields across 1,920 updates. Both sets include live guidance, countermeasures, collisions, damage and effects. They pass normal and sanitizer builds.
+
+Weapon 10, the Cannon Pod, is explicitly sent through the original guided constructor despite its unguided table entry. The remote path retains that constructor's flight flag. Packet offset 112 is the projectile random seed, not a mount number. Gun bursts retain the original four staggered launch positions. Simple effect IDs 11-15 are constructed without a launch in the reference remote dispatcher.
+
+Network target lookup matches 5,567 queries across four warzones, including formation members, missing targets, both scenery layers, out-of-map positions and coordinate-cell boundaries. All six multiplayer modes match 1,536 settings cases and 18,432 fields. These cover crew permissions, rank, force level, weather, time, crashing and resource limits. Both builds pass. The application builds and all four existing CTest targets pass in normal and sanitizer configurations.
+
 Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.

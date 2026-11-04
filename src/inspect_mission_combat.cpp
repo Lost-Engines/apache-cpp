@@ -1,5 +1,6 @@
 #include "inspect_mission_combat.h"
 #include "simulation/mission_runtime.h"
+#include "simulation/mission_network.h"
 #include "simulation/mission_instruments.h"
 #include "render/landscape.h"
 #include <fstream>
@@ -12,6 +13,7 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
   using namespace apache;
   simulation::mission_runtime runtime{data, zone, path, armed, hurt};
   runtime.check_collisions = runtime.subdivide_flight = false;
+  simulation::mission_network network{runtime}; network.enabled = true;
   auto &mission{runtime.mission}; auto &scene{runtime.scene}; auto &terrain{runtime.terrain}; auto &models{runtime.models}; auto &trig{runtime.trig};
   auto &actors{runtime.actors}; auto &spatial{runtime.spatial}; auto &mobiles{runtime.mobiles}; auto &structures{runtime.structures}; auto &targets{runtime.targets};
   auto &random{runtime.random}; auto &weapon_random{runtime.weapon_random}; auto &combat{runtime.combat}; auto &pilot{runtime.pilot}; auto &player_damage{runtime.player_damage};
@@ -149,6 +151,30 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       drawing = true; runtime.look_player(view, render::projection{0, 0, 320, 240}); drawing = false;
       auto const &state{*runtime.sensors}; output << "sensor-view " << state.state.locked << ' ' << state.state.tads; reference(&state.state.current); reference(&state.optical); output << ' ' << state.optical_symbol.has_value();
       if(state.optical_symbol) for(auto v : *state.optical_symbol) output << ' ' << v; output << '\n';
+    }
+    else if(command == "network-target") {
+      multiplayer::target_state request; input >> request.kind; for(auto &v : request.data) input >> v;
+      auto const result{network.resolve(request)}; output << "network-target " << (result ? identity(result->identity) : 0) << '\n';
+    }
+    else if(command == "network-bind") {
+      uint32_t connection; size_t index; input >> connection >> index;
+      if(!network.bind(connection, index)) throw std::runtime_error{"Invalid remote actor binding"};
+    }
+    else if(command == "network-pose") {
+      size_t connection; input >> connection; auto &remote{network.state.players.at(connection)};
+      input >> remote.aircraft.speed; for(auto &v : remote.aircraft.location.position) input >> v; for(auto &v : remote.aircraft.location.rotation) input >> v;
+      input >> remote.weapon >> remote.shot_seed >> remote.shot_target.kind; for(auto &v : remote.shot_target.data) input >> v;
+    }
+    else if(command == "network-update") {
+      int32_t now; input >> now; launched->environment.now = targets.now = now; network.update();
+    }
+    else if(command == "remote-fire") {
+      size_t index; unsigned int weapon; uint32_t seed; int32_t now, target_index; math::vector3 direction;
+      input >> index >> weapon >> seed >> now >> target_index; for(auto &v : direction) input >> v;
+      std::optional<simulation::target_reference> target;
+      if(target_index >= 0) target = *spatial.targets.at(static_cast<size_t>(target_index));
+      launched->environment.now = targets.now = now;
+      launched->fire_remote(index, weapon, seed, direction, target);
     }
     else if(command == "player-target") { size_t index{0}; input >> index; *runtime.player_armament->target = *spatial.targets.at(index); }
     else if(command == "player-weapon") { input >> runtime.player_armament->inventory.current >> runtime.player_armament->inventory.armed; }

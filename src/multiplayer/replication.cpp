@@ -37,7 +37,7 @@ bool replication::receive(packet const &message, int32_t const now) {
       return true;
     case message_type::fired:
       if(!remote || !active) return false;
-      player.weapon = message.word(96); player.mount = message.word(112); player.shot_target.kind = message.word(392);
+      player.weapon = message.word(96); player.shot_seed = message.word(112); player.shot_target.kind = message.word(392);
       if(player.weapon == 1 || player.weapon == 19 || player.shot_target.kind == 1) {
         for(size_t i{0}; i < 3; ++i) player.shot_target.data[i] = signed_word(message, 396 + i * 4);
       } else if(player.shot_target.kind == 2) {

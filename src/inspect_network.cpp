@@ -2,6 +2,8 @@
 #include "multiplayer/packet.h"
 #include "multiplayer/crew.h"
 #include "multiplayer/replication.h"
+#include "multiplayer/rules.h"
+#include "simulation/remote_weapons.h"
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -20,6 +22,31 @@ void inspect_network(std::istream &input, std::ostream &output) {
   while(std::getline(input, line)) {
     if(line.empty()) continue;
     std::istringstream in{line}; std::string command; in >> command;
+    if(command == "rules") {
+      multiplayer::game_settings settings; multiplayer::mission_rules state; unsigned int mode;
+      in >> mode >> settings.second_seat >> settings.night >> settings.difficult >> settings.weather >> settings.infinite_fuel >> settings.infinite_weapons >> settings.crashes;
+      settings.mode = static_cast<multiplayer::game_mode>(mode);
+      in >> state.control >> state.rank >> state.forces >> state.radio >> state.wind_strength >> state.wind_direction >> state.weather >> state.time_of_day >> state.client_server >> state.no_crashes >> state.infinite_fuel >> state.infinite_weapons;
+      if(!in) throw std::runtime_error{"Incomplete multiplayer rules"};
+      state = multiplayer::apply_rules(settings, state);
+      output << state.control << ' ' << state.rank << ' ' << state.forces << ' ' << state.radio << ' ' << state.wind_strength << ' ' << state.wind_direction << ' ' << state.weather << ' ' << state.time_of_day << ' ' << state.client_server << ' ' << state.no_crashes << ' ' << state.infinite_fuel << ' ' << state.infinite_weapons << '\n';
+      continue;
+    }
+    if(command == "remote-fire") {
+      simulation::remote_fire_input state; int32_t height; unsigned int kind; bool found;
+      in >> state.weapon >> state.seed >> kind >> found >> height;
+      for(auto &v : state.aircraft.position) in >> v; for(auto &v : state.aircraft.rotation) in >> v;
+      for(auto &v : state.gun_direction) in >> v;
+      state.source.identity = {simulation::target_kind::mobile, 0, 1};
+      if(found && (kind == 1 || kind == 2)) state.target = simulation::target_reference{{static_cast<simulation::target_kind>(kind), 0, 2}, {}, 0};
+      auto const shots{simulation::remote_weapon_shots(state, [height](int32_t, int32_t){ return height; })};
+      output << shots.size();
+      for(auto const &shot : shots) {
+        output << ' ' << static_cast<unsigned int>(shot.kind) << ' ' << shot.request.weapon << ' ' << shot.seed << ' ' << shot.request.selected.has_value() << ' ' << shot.request.designator.has_value();
+        for(auto v : shot.request.launch.pose.position) output << ' ' << v; for(auto v : shot.request.launch.pose.rotation) output << ' ' << v;
+      }
+      output << '\n'; continue;
+    }
     if(command == "exchange") {
       multiplayer::replication state; unsigned int seat, selector; int32_t now; in >> state.local >> state.server >> state.active >> state.client_server >> state.dead >> seat >> now >> state.ping_timer >> selector;
       state.seat = static_cast<multiplayer::crew_role>(seat);
@@ -27,7 +54,7 @@ void inspect_network(std::istream &input, std::ostream &output) {
       state.synced[selector % 16] = true; state.initial_synced[selector % 16] = true;
       state.number_synced = state.number_initial_synced = 1;
       for(auto &p : state.players) {
-        in >> p.assigned >> p.flags >> p.score >> p.updated_at >> p.frame_time >> p.accumulated_frame_time >> p.weapon >> p.mount >> p.shot_target.kind;
+        in >> p.assigned >> p.flags >> p.score >> p.updated_at >> p.frame_time >> p.accumulated_frame_time >> p.weapon >> p.shot_seed >> p.shot_target.kind;
         for(auto &v : p.shot_target.data) in >> v;
         for(auto &v : p.aircraft.location.position) in >> v; for(auto &v : p.aircraft.location.rotation) in >> v;
         in >> p.aircraft.speed >> p.aircraft.model;
@@ -48,7 +75,7 @@ void inspect_network(std::istream &input, std::ostream &output) {
       output << std::setprecision(17) << state.server << ' ' << state.number_synced << ' ' << state.number_initial_synced << ' ' << state.wind_strength << ' ' << state.wind_direction << ' ' << state.war_seed << ' ' << state.weapon_seed << ' ' << state.server_in_game << ' ' << state.server_waiting << ' ' << state.new_server_data << ' ' << state.all_synced << ' ' << state.answer_deadline << ' ' << state.client_frames << ' ' << state.ping_timer << ' ' << state.interpolated_time << ' ' << crew_events << ' ' << score_events << ' ';
       for(auto v : state.synced) output << v << ' '; for(auto v : state.initial_synced) output << v << ' ';
       for(auto const &p : state.players) {
-        output << p.flags << ' ' << p.score << ' ' << p.updated_at << ' ' << p.frame_time << ' ' << p.accumulated_frame_time << ' ' << p.weapon << ' ' << p.mount << ' ' << p.shot_target.kind << ' ';
+        output << p.flags << ' ' << p.score << ' ' << p.updated_at << ' ' << p.frame_time << ' ' << p.accumulated_frame_time << ' ' << p.weapon << ' ' << p.shot_seed << ' ' << p.shot_target.kind << ' ';
         for(auto v : p.shot_target.data) output << v << ' ';
         for(auto v : p.aircraft.location.position) output << v << ' '; for(auto v : p.aircraft.location.rotation) output << v << ' ';
         output << p.aircraft.speed << ' ' << p.aircraft.model << ' ';
@@ -142,7 +169,7 @@ void inspect_network(std::istream &input, std::ostream &output) {
       else if(command == "event") { uint32_t type; int32_t first, second; in >> type >> first >> second; result = multiplayer::event(static_cast<multiplayer::message_type>(type), sender, name, first, second); }
       else if(command == "menu") { uint32_t selected; std::array<int32_t, 5> values; in >> selected; for(auto &v : values) in >> v; result = multiplayer::menu_selection(sender, name, selected, values); }
       else if(command == "initial") { math::vector3 position; uint32_t war, weapon; for(auto &v : position) in >> v; in >> war >> weapon; result = multiplayer::initial_state(sender, name, position, war, weapon); }
-      else if(command == "fire") { uint32_t weapon, mount; multiplayer::target_state target; math::vector3 gun; in >> weapon >> mount >> target.kind; for(auto &v : target.data) in >> v; for(auto &v : gun) in >> v; result = multiplayer::fired(sender, name, weapon, mount, target, gun); }
+      else if(command == "fire") { uint32_t weapon, shot_seed; multiplayer::target_state target; math::vector3 gun; in >> weapon >> shot_seed >> target.kind; for(auto &v : target.data) in >> v; for(auto &v : gun) in >> v; result = multiplayer::fired(sender, name, weapon, shot_seed, target, gun); }
       else throw std::runtime_error{"Unknown network inspection command: " + command};
     }
     if(!in) throw std::runtime_error{"Incomplete network inspection command"};

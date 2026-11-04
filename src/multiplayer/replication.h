@@ -11,7 +11,7 @@ struct player_replica {
   uint32_t flags{0};
   int32_t score{0};
   double updated_at{0}, frame_time{0}, accumulated_frame_time{0};
-  uint32_t weapon{0}, mount{0};
+  uint32_t weapon{0}, shot_seed{0};
   target_state target, shot_target;
 };
 // APNET's flight-state exchange, independent of transport and scene ownership.

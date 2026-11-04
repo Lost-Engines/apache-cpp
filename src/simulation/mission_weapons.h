@@ -51,6 +51,7 @@ public:
   std::optional<size_t> launch_player(projectile_request const &request, bool untracked);
   bool player_line_of_sight(target_reference const &source, target_reference const &target) const;
   bool fire(size_t actor);
+  bool fire_remote(size_t actor, unsigned int weapon, uint32_t seed, math::vector3 const &gun_direction, std::optional<target_reference> const &target = {});
   firing_status fire_ground(target_reference const &source, target_reference const &target, unsigned int weapon);
   shared_target target_slot(uint32_t mobile, simulation::target_slot slot) const;
   mobile_target_state state(uint32_t mobile) const;

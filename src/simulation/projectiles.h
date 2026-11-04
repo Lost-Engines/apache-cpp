@@ -21,6 +21,7 @@ struct projectile_request {
   projectile_launch_inputs launch;
   target_reference source;
   std::optional<target_reference> selected, designator;
+  bool guided_constructor{false};
 };
 struct projectile_aim {
   std::optional<movement_target> target;

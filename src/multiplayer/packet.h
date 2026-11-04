@@ -47,7 +47,7 @@ packet client_state(uint32_t sender, math::pose const &location, int32_t speed, 
 packet server_state(std::array<aircraft_state, 16> const &players);
 std::array<aircraft_state, 16> server_state(packet const &message);
 packet scores(uint32_t sender, std::string_view name, std::array<int32_t, 16> const &values);
-packet fired(uint32_t sender, std::string_view name, uint32_t weapon, uint32_t mount, target_state const &target, math::vector3 const &gun_direction);
+packet fired(uint32_t sender, std::string_view name, uint32_t weapon, uint32_t shot_seed, target_state const &target, math::vector3 const &gun_direction);
 packet event(message_type type, uint32_t sender, std::string_view name, int32_t first, int32_t second = 0);
 packet menu_selection(uint32_t sender, std::string_view name, uint32_t selection, std::array<int32_t, 5> const &arguments);
 packet initial_state(uint32_t sender, std::string_view name, math::vector3 const &position, uint32_t war_seed, uint32_t weapon_seed);

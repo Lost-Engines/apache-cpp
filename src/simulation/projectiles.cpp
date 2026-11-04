@@ -19,6 +19,13 @@ std::optional<size_t> projectiles::construct(projectile_request const &request) 
     auto input{request.launch}; input.has_target = request.selected.has_value();
     auto const &weapon{weapons.at(request.weapon)};
     construct_projectile(round.state, request.weapon, weapon, input, trig, [&](int32_t x, int32_t y){ return terrain.elevation(x, y); }, random_seed, weapon_random);
+    // Remote firing explicitly uses the guided constructor for weapon 10,
+    // whose table entry otherwise selects unguided movement.
+    if(request.guided_constructor) {
+      round.state.body.motion.flags |= 4;
+      round.state.body.seeker.flags = (round.state.body.seeker.flags & ~1u) | (input.has_target ? 1u : 0u);
+      round.state.body.seeker.retry_time = 0;
+    }
     if(weapon.movement_class != 3) {
       auto object{projectile_model(round.state, weapon, models)};
       round.mobile = mobiles.add(object.id, object.world); mobiles.at(*round.mobile) = std::move(object);

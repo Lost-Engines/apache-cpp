@@ -147,8 +147,8 @@ packet scores(uint32_t const sender, std::string_view const name, std::array<int
   for(size_t i{0}; i < values.size(); ++i) result.word(24 + i * 4, static_cast<uint32_t>(values[i]));
   return result;
 }
-packet fired(uint32_t const sender, std::string_view const name, uint32_t const weapon, uint32_t const mount, target_state const &target, math::vector3 const &gun_direction) {
-  packet result{message_type::fired, sender, name}; result.word(96, weapon); result.word(112, mount); result.word(392, target.kind);
+packet fired(uint32_t const sender, std::string_view const name, uint32_t const weapon, uint32_t const shot_seed, target_state const &target, math::vector3 const &gun_direction) {
+  packet result{message_type::fired, sender, name}; result.word(96, weapon); result.word(112, shot_seed); result.word(392, target.kind);
   size_t const count{weapon == 1 || target.kind == 1 ? 3u : target.kind == 2 ? 2u : 0u};
   for(size_t i{0}; i < count; ++i) result.word(396 + i * 4, static_cast<uint32_t>(weapon == 1 ? gun_direction[i] : target.data[i]));
   return result;

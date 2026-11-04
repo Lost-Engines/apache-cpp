@@ -1,4 +1,5 @@
 #include "mission_weapons.h"
+#include "remote_weapons.h"
 #include <algorithm>
 
 namespace apache::simulation {
@@ -60,6 +61,28 @@ bool mission_weapons::fire(size_t const index) {
   callbacks.bomb_released = events.bomb_released;
   callbacks.fired_at = [&](auto const &receiver, auto const &){ combat.notify_fired_at(receiver, spatial.targets[index]); };
   return fire_actor(actor, armament, types.at(actor.object.id), weapons, trig, tables.skill(difficulty), weapon_random, context, callbacks);
+}
+bool mission_weapons::fire_remote(size_t const index, unsigned int const weapon, uint32_t const seed, math::vector3 const &gun_direction, std::optional<target_reference> const &target) {
+  if(index >= actors.units.size() || !weapon || weapon > 19) return false;
+  auto &actor{actors.units[index]}; auto const &source{*spatial.targets[index]};
+  remote_fire_input input{weapon, seed, actor.object.world, gun_direction, source, targets.describe(source).movement, target};
+  for(auto const &shot : remote_weapon_shots(input, [this](int32_t x, int32_t y){ return terrain.elevation(x, y); })) {
+    if(shot.kind == remote_fire_kind::chaff || shot.kind == remote_fire_kind::flare) {
+      if(decoy(index, weapon)) {
+        auto const interval{weapons[weapon].fire_interval_ticks};
+        if(spatial.player != index) {
+          // Drone randomness is separate from the shared war-model generator.
+          combat_random random{actor.random, war_random.global_seed};
+          auto const delay{countermeasure_delay(weapons[weapon], tables.skill(difficulty), random)};
+          actor.random = random.value; war_random.global_seed = random.global_seed;
+          decoys[index].deadlines[weapon - 7] = math::add(environment.now, delay);
+        } else decoys[index].deadlines[weapon - 7] = math::add(environment.now, interval);
+      }
+    } else if(auto const round{construct(shot.request)}) {
+      if(shot.kind != remote_fire_kind::simple) { rounds.at(*round).state.random = shot.seed; launch(*round); }
+    }
+  }
+  return true;
 }
 firing_status mission_weapons::fire_ground(target_reference const &source, target_reference const &target, unsigned int const id) {
   auto const origin{targets.describe(source)}, destination{targets.describe(target)}; auto const &weapon{weapons.at(id)};

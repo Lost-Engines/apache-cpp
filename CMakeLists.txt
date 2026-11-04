@@ -10,6 +10,9 @@ add_library(apache_core
   src/multiplayer/packet.cpp src/multiplayer/packet.h
   src/multiplayer/crew.cpp src/multiplayer/crew.h
   src/multiplayer/replication.cpp src/multiplayer/replication.h
+  src/multiplayer/rules.cpp src/multiplayer/rules.h
+  src/simulation/remote_weapons.cpp src/simulation/remote_weapons.h
+  src/simulation/mission_network.cpp src/simulation/mission_network.h
   src/audio/engine.cpp src/audio/engine.h
   src/audio/effects.cpp src/audio/effects.h src/audio/stream.cpp src/audio/stream.h
   src/frontend/score_menu.cpp

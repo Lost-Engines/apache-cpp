@@ -112,8 +112,16 @@ void player_sensors::update(math::pose const &body, uint32_t const heading, std:
   scan_contacts(body, player); scan_radars(body, heading, faults);
   if(control_mode) {
     std::vector<target_reference> ordered; ordered.reserve(ranked.size()); for(auto const &entry : ranked) ordered.push_back(entry.target);
+    bool const radar_copy{state.automatic || (!state.tads && (state.cycle_direction || std::ranges::none_of(ranked, [&](auto const &entry){ return equivalent_targets(state.current, entry.target); })))};
+    bool optical_copy{!state.automatic && state.tads && !state.locked};
+    if(optical_copy && (optical.identity.kind == target_kind::scenery || optical.identity.kind == target_kind::mobile)) {
+      auto copy{optical}; optical_copy = !(targets.describe(copy).status & 1);
+    }
     // Name/status queries do not populate the original target classification cache.
     state.update(ordered, optical, [&](auto const &target){ auto copy{target}; return targets.describe(copy); });
+    if(radar_copy && !ranked.empty()) {
+      if(auto found{std::ranges::find_if(ranked, [&](auto const &entry){ return equivalent_targets(state.current, entry.target); })}; found != ranked.end()) current_display = found->display;
+    } else if(optical_copy) current_display = {};
   }
 }
 void player_sensors::pick_optical(math::pose const &view, uint32_t const heading, render::projection const &projection, unsigned int const control_mode, uint32_t const faults) {

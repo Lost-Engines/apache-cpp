@@ -40,6 +40,8 @@ public:
   mission_flight(mission_flight const &) = delete;
   mission_flight &operator=(mission_flight const &) = delete;
   flight_readings const &readings() const { return arcade_mode ? arcade.readings : realistic.readings; }
+  powerplant const &power() const { return arcade_mode ? arcade.power : realistic.dynamics.power; }
+  void receive_shared(flight_readings const &state, bool landed, double endurance, int32_t weight);
   bool on_carrier() const { return (actors.units[player].conditions & 0x400) != 0; }
   bool landed() const { return arcade_mode ? arcade.landed : realistic.landed; }
   uint32_t faults() const { return arcade_mode ? arcade.power.faults : realistic.dynamics.power.faults; }

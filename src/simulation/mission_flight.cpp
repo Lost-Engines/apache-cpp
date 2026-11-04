@@ -72,6 +72,16 @@ flight_step_result mission_flight::advance(double const dt, int32_t const delta,
   auto result{arcade_mode ? arcade.advance(dt, input, arcade_world, trig) : realistic.advance(dt, delta, input, realistic_world, trig, random_sample)};
   synchronize(); return result;
 }
+void mission_flight::receive_shared(flight_readings const &state, bool const landed, double const endurance, int32_t const weight) {
+  auto &current{arcade_mode ? arcade.readings : realistic.readings};
+  auto const previous{current.position}; current = state;
+  if(!death() && !actors.units[player].destroyed) {
+    auto &object{actors.units[player].object}; object.world.rotation = state.position.rotation;
+    spatial.move(actors.units[player], state.position.position); object.relative = object.world;
+  } else current.position = previous;
+  auto &engine{arcade_mode ? arcade.power : realistic.dynamics.power}; engine.endurance = endurance; engine.weight = weight;
+  if(arcade_mode) arcade.landed = landed; else realistic.landed = landed;
+}
 void mission_flight::request_death(unsigned int const cause) {
   if(!arcade_mode) realistic.request_death(cause);
   else arcade.request_death(cause);

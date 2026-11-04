@@ -1,6 +1,7 @@
 #include "inspect_mission_combat.h"
 #include "simulation/mission_runtime.h"
 #include "simulation/mission_network.h"
+#include "simulation/mission_crew.h"
 #include "simulation/mission_instruments.h"
 #include "render/landscape.h"
 #include <fstream>
@@ -14,6 +15,7 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
   simulation::mission_runtime runtime{data, zone, path, armed, hurt};
   runtime.check_collisions = runtime.subdivide_flight = false;
   simulation::mission_network network{runtime}; network.enabled = true;
+  std::unique_ptr<simulation::mission_crew> crew;
   auto &mission{runtime.mission}; auto &scene{runtime.scene}; auto &terrain{runtime.terrain}; auto &models{runtime.models}; auto &trig{runtime.trig};
   auto &actors{runtime.actors}; auto &spatial{runtime.spatial}; auto &mobiles{runtime.mobiles}; auto &structures{runtime.structures}; auto &targets{runtime.targets};
   auto &random{runtime.random}; auto &weapon_random{runtime.weapon_random}; auto &combat{runtime.combat}; auto &pilot{runtime.pilot}; auto &player_damage{runtime.player_damage};
@@ -65,6 +67,7 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     if(runtime.sensors) {
       auto const &state{*runtime.sensors};
       output << "sensors " << state.state.automatic << ' ' << state.state.cycle_direction << ' ' << state.state.laser; reference(&state.state.current);
+      for(auto v : state.current_display) output << ' ' << v;
       for(auto const *list : {&state.ground, &state.mobile, &state.missiles}) { output << ' ' << list->size(); for(auto const &entry : *list) { output << ' ' << identity(entry.target.identity); for(auto v : entry.position) output << ' ' << v; } }
       output << ' ' << state.ranked.size(); for(auto const &entry : state.ranked) output << ' ' << identity(entry.target.identity) << ' ' << entry.priority;
       output << '\n';
@@ -196,6 +199,45 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       output << "network-spatial " << resources::fingerprint(mobile_bytes) << ' ' << resources::fingerprint(war_bytes) << ' ' << resources::fingerprint(actor_bytes);
       for(auto value : spatial.grid.counts()) output << ' ' << value;
       for(auto value : spatial.grid.peak_counts()) output << ' ' << value;
+      output << '\n';
+    }
+    else if(command == "crew-role") {
+      unsigned int role; input >> role; network.state.seat = static_cast<multiplayer::crew_role>(role); runtime.player_armament->control_mode = role;
+      if(!crew) {
+        crew = std::make_unique<simulation::mission_crew>(runtime, network);
+        crew->key = [&](uint16_t key){ output << "crew-key " << key << ' ' << runtime.player_armament->control_mode << '\n'; };
+        crew->landing = [&](uint8_t grade){ output << "crew-landing " << static_cast<unsigned int>(grade) << '\n'; };
+        crew->radio = [&](std::string_view text, uint8_t sample){ output << "crew-radio " << std::quoted(std::string{text}) << ' ' << static_cast<unsigned int>(sample) << '\n'; };
+      }
+    }
+    else if(command == "crew-condition") {
+      unsigned int death; int32_t destroyed; bool invulnerable; input >> death >> destroyed >> invulnerable;
+      pilot->realistic.death = pilot->arcade.death = death; pilot->realistic.invulnerable = pilot->arcade.invulnerable = invulnerable;
+      actors.units[*runtime.spatial.player].destroyed = destroyed;
+    }
+    else if(command == "crew-receive") {
+      std::string hex; input >> hex; resources::bytes bytes;
+      for(size_t i{0}; i < hex.size(); i += 2) bytes.push_back(static_cast<uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+      auto const role{network.state.seat == multiplayer::crew_role::pilot ? multiplayer::crew_role::gunner : multiplayer::crew_role::pilot};
+      auto const value{multiplayer::decode_crew(role, bytes)}; if(!value || !crew) throw std::runtime_error{"Invalid shared cockpit record"};
+      crew->receive(*value);
+    }
+    else if(command == "crew-transmit") {
+      unsigned int ticks; input >> ticks; auto const message{crew->transmit(ticks)};
+      output << "crew-transmit "; for(auto b : message.bytes().subspan(24, 104)) output << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(b);
+      output << std::dec << '\n';
+    }
+    else if(command == "crew-state") {
+      auto const &f{pilot->readings()}; auto const &target{runtime.sensors->state.current};
+      output << "crew-state"; for(auto v : f.angles) output << ' ' << v;
+      for(auto v : f.position.position) output << ' ' << v; for(auto v : f.position.rotation) output << ' ' << v;
+      output << ' ' << f.climb << ' ' << f.fuel << ' ' << f.torque << ' ' << f.sidespeed << ' ' << f.airspeed << ' ' << std::setprecision(17) << pilot->power().weight << ' ' << pilot->power().endurance;
+      for(auto v : f.engines) output << ' ' << v;
+      output << ' ' << pilot->landed() << ' ' << static_cast<unsigned int>(crew->next_frame_ticks) << ' ' << crew->leaving << ' ' << runtime.player_armament->control_mode << ' ' << pilot->death();
+      output << ' ' << static_cast<unsigned int>(target.identity.kind) << ' ' << identity(target.identity);
+      for(auto v : target.position) output << ' ' << v;
+      output << ' ' << static_cast<uint32_t>(target.classification) << ' ' << runtime.player_armament->mounts.hydra_elevation;
+      for(auto v : runtime.sensors->current_display) output << ' ' << v;
       output << '\n';
     }
     else if(command == "network-context") {

@@ -288,6 +288,8 @@ Network lifecycle handlers match 1,800 original-code cases across twelve message
 
 The scene connection passes 360 event sequences across four warzones and the multiplayer/flag maps, including 108 restarts. Aircraft state, task counts, 18,573 debris states and 76,213 explosion/crater states match 439,192 fields. Both normal and sanitizer builds pass, as do both full application builds and all four CTest targets. Collision messages use the known participant identity instead of an uninitialized task word in the original sender. Local reports are under `network-{lifecycle,casualties,scene-events}` in the analysis checkout.
 
+The shared-cockpit scene adapter matches 640 original receives across four warzones and both flight models, including instrument readings, live pose matrices, dead-aircraft placement guards, target lookup, radio selection, landing notifications and key-dispatch permissions. Another 66,560 outgoing packet bytes and 37,092 reported state/event fields agree in normal and sanitizer builds. Frontend action dispatch and synchronized sessions remain in progress.
+
 Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.

@@ -29,6 +29,7 @@ public:
   std::vector<sensor_contact> ground, mobile, missiles;
   std::vector<radar_return> ground_radar, air_radar, tactical, ranked;
   target_reference optical;
+  math::vector3 current_display{};
   std::optional<std::array<int32_t, 2>> optical_symbol;
   std::function<void(std::string_view)> message;
   player_sensors(resources::terrain const &terrain, resources::model_archive const &models, mission_scenery const &scenery, render::mobile_scene const &mobiles, mission_targets const &targets, math::trigonometry const &trig, unsigned int game_mode = 0);

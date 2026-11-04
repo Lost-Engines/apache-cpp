@@ -1,4 +1,5 @@
 #include "mfd.h"
+#include "landscape.h"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -57,6 +58,13 @@ void mfd_renderer::engines(framebuffer &target, rectangle const area, engine_ins
     int const top{static_cast<int>(std::clamp<int64_t>(endpoint, 0, target.image.height - 1))};
     target.fill({area.left + positions[i], std::min(top, baseline), area.left + positions[i] + (high ? 1 : 0), std::max(top, baseline)}, 222);
   }
+}
+void mfd_renderer::flir(framebuffer &target, rectangle const area, landscape &world, model_instance *const object, math::vector3 const &aim, math::vector3 const &observer, sky_lighting const &lighting) const {
+  off(target, area);
+  std::string_view const name{object ? world.draw_flir(target, *object, aim, observer, lighting) : "No Target"};
+  projection2 const plane{area, object ? window2{-0x100000, -0x100000, 0x100000, 0x100000} : window2{-1000, -1000, 1000, 1000}};
+  auto const point{plane.project({0, object ? -0xccccc : -800})};
+  font.draw(target, name, point.x - (font.width(name) / 2 - 1), point.y, 222);
 }
 void mfd_renderer::status(framebuffer &target, rectangle const area, uint32_t const faults, bool const ground_radar, bool const air_radar) const {
   off(target, area);

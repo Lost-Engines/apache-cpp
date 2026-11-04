@@ -21,7 +21,8 @@ Current implementation:
 - Both original instrument fonts, including every glyph and screen-edge clipping.
 - Mechanical compass, artificial horizon, airspeed indicator, altimeter and analogue clock at both original resolutions.
 - Pilot/gunner warning lamps, clipped radio text and time-acceleration indicator.
-- MFD off/damaged, engine and system-status pages, with the original display bezels.
+- MFD off/damaged, engine, system-status, weapons, radar, tactical, isolated-target FLIR and flight-plan pages, with the original display bezels.
+- Target-camera positioning, inherited thermal colour maps, selected-contact highlighting, automatic route scaling and waypoint arrival estimates.
 - Independent pilot/gunner MFD selections, direction-aware cycling, power switches, radar requests and damage transitions.
 - Fixed-point 2D line clipping and unclipped text positioning.
 - Terrain grid projection, 7,200-entry scene queue, texture selection and fog shading tables.
@@ -100,6 +101,13 @@ Validation completed:
 - 552 warning/radio/time-indicator frames match 105,984,000 pixels.
 - 1,234 off/damaged/engine/status MFD frames match 236,928,000 pixels and every damaged-display random seed; four final bezel passes match another 768,000 pixels.
 - 4,068 MFD-control cases match 20,340 state fields, including power-on page selection and fault handling. All these display and state checks also pass under sanitizers.
+- 10,162 direction-matrix cases match all 121,944 coefficients and normalized-vector fields.
+- 5,017 isolated-target FLIR frames match 964,300,800 pixels across both resolutions and both inherited colour maps. Another 249 frames reach the previously identified missing model normals. The complete FLIR and direction-matrix sweeps also pass under sanitizers.
+- 2,240 weapons-panel frames match 430,080,000 pixels across loadouts, ammunition counts, arming and automatic countermeasure states.
+- 2,000 radar/tactical frames match 384,000,000 pixels, covering contact symbols, highlighting, clipping, heading, failures, freeze, TADS and range labels.
+- 4,452 circle-outline cases match 394,979,328 pixels, including all screen-edge clipping cases.
+- 1,150 flight-plan frames match 220,800,000 pixels across route-scale boundaries, headings, active waypoints and airspeeds; 10,487 integer square roots match original 64-bit calculations.
+- The complete weapons, radar/tactical, flight-plan, circle-outline and integer-square-root comparisons also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

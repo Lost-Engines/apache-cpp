@@ -27,6 +27,26 @@ void landscape::advance(int32_t const delta_time, uint32_t &random_seed) {
   craters.advance(); effects.advance(delta_time, terrain);
   fragments.advance(delta_time, trig, terrain, [&](int32_t const x, int32_t const y){ return surface_type(x, y); }, craters, random_seed);
 }
+std::string_view landscape::draw_flir(framebuffer &target, model_instance &object, math::vector3 const &aim, math::vector3 const &observer, sky_lighting const &lighting) {
+  auto const &definition{models.at(object.id).value()};
+  math::vector3 delta;
+  for(size_t i{0}; i != 3; ++i) delta[i] = math::subtract(aim[i], observer[i]);
+  auto const forward{math::normalise_q31(delta)};
+  math::pose camera{aim, math::direction_matrix(forward)};
+  int32_t const offset{math::negate(math::add(std::max(definition.radius, definition.height), std::max(definition.radius, definition.height)))};
+  for(size_t i{0}; i != 3; ++i) camera.position[i] = math::add(camera.position[i], math::multiply_q31(forward[i], offset));
+  auto const elevation{terrain.elevation(camera.position[0], camera.position[1])};
+  if(camera.position[2] <= elevation) camera.position[2] = elevation + 256;
+  for(size_t i{0}; i != 3; ++i) delta[i] = math::subtract(object.relative.position[i], camera.position[i]);
+  object.distance = static_cast<int32_t>(approximate_range(delta));
+  model_renderer drawer{target, models, object_textures, palette};
+  drawer.style = {.textures{false}, .gouraud{false}, .glass{false}, .light{light_vector(trig, lighting)}};
+  // The isolated-target path keeps the colour remap left by the preceding
+  // scene render. Unlike the central thermal display, it does not replace it.
+  drawer.draw(object, camera);
+  missing_normals = drawer.missing_normals; invalid_texture_samples = drawer.invalid_texture_samples;
+  return definition.name;
+}
 void landscape::draw(framebuffer &target, math::pose camera, landscape_options const &configuration) {
   auto options{configuration};
   if(options.infrared == 2) { options.terrain_detail = 0; options.models.textures = false; options.models.gouraud = false; options.models.glass = false; options.sky.cloud_flags &= ~2u; }

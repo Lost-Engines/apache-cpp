@@ -184,7 +184,30 @@ int main(int const argc, char const *const argv[]) try {
       for(auto const &seat : state.pages) for(auto const page : seat) std::cout << static_cast<unsigned int>(page) << ' ';
       std::cout << state.forwards << '\n';
     }
-  } else if(command == "panel-status" || command == "mfd-basic") {
+  } else if(command == "mfd-flir") {
+    apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    std::array<apache::render::cockpit, 2> const panels{apache::render::cockpit{data, 0}, apache::render::cockpit{data, 1}};
+    std::array<apache::render::mfd_renderer, 2> const mfds{apache::render::mfd_renderer{panels[0], executable}, apache::render::mfd_renderer{panels[1], executable}};
+    std::string zone, loaded; std::optional<apache::render::landscape> world;
+    unsigned int mode{0}, panel{0}, kind{0}, id{0}, remap{0}; uint32_t flags{0}, heading{0}, pitch{0}, roll{0}; bool alternate{false};
+    apache::math::pose position; apache::math::vector3 aim, observer; apache::render::sky_lighting lighting;
+    while(std::cin >> zone >> mode >> panel >> kind >> id >> flags >> alternate >> remap) {
+      if(mode > 1 || panel > 4 || kind > 2) throw std::runtime_error{"Invalid FLIR case"};
+      for(auto &axis : position.position) std::cin >> axis;
+      std::cin >> heading >> pitch >> roll; for(auto &axis : aim) std::cin >> axis; for(auto &axis : observer) std::cin >> axis;
+      std::cin >> lighting.heading >> lighting.pitch >> lighting.night;
+      if(zone != loaded) { world.emplace(data, zone); loaded = zone; }
+      world->palette.prepare(remap); world->missing_normals = world->invalid_texture_samples = 0;
+      position.rotation = kind == 1 ? apache::math::matrix3{trig.cosine(heading), apache::math::negate(trig.sine(heading)), 0, trig.sine(heading), trig.cosine(heading), 0, 0, 0, INT32_MAX} : trig.transformation(heading, pitch, roll);
+      auto object{apache::render::construct_model(models, id, position)}; object.flags = flags; object.alternate_colours = alternate;
+      apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
+      mfds[mode].flir(frame, mfds[mode].area(static_cast<apache::render::mfd_panel>(panel)), *world, kind ? &object : nullptr, aim, observer, lighting);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples << '\n';
+      if(argc > 3) { std::ofstream file{argv[3], std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "panel-status" || command == "mfd-basic" || command == "mfd-weapons" || command == "mfd-radar" || command == "mfd-flight-plan") {
     apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};
     std::array<apache::render::cockpit, 2> const panels{apache::render::cockpit{data, 0}, apache::render::cockpit{data, 1}};
     std::array<apache::render::panel_instruments, 2> const gauges{apache::render::panel_instruments{panels[0], trig, executable}, apache::render::panel_instruments{panels[1], trig, executable}};
@@ -195,7 +218,26 @@ int main(int const argc, char const *const argv[]) try {
       apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
       for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
       uint32_t seed{0};
-      if(command == "panel-status") {
+      if(command == "mfd-flight-plan") {
+        size_t count{0}, current{0}; int32_t x{0}, y{0}, airspeed{0}; uint32_t heading{0};
+        std::cin >> current >> x >> y >> heading >> airspeed >> count;
+        if(count > 10000) throw std::runtime_error{"Invalid waypoint count"};
+        std::vector<apache::render::waypoint_mark> route(count);
+        for(auto &point : route) { unsigned int code{0}; std::cin >> point.x >> point.y >> code; point.label = static_cast<uint8_t>(code); }
+        mfds[mode].flight_plan(frame, mfds[mode].area(static_cast<apache::render::mfd_panel>(which)), route, current, x, y, heading, airspeed, trig);
+      } else if(command == "mfd-radar") {
+        apache::render::radar_instruments state; unsigned int kind{0}; size_t count{0};
+        std::cin >> kind >> state.range >> state.corner_range >> state.mark_length >> state.heading >> state.failed >> state.frozen >> state.tads >> state.locked >> state.scan_all >> state.threat >> state.range_index >> state.has_target >> std::quoted(state.target_name) >> state.target_distance >> count;
+        if(kind > 3 || count > 1024) throw std::runtime_error{"Invalid radar case"};
+        state.mode = static_cast<apache::render::radar_mode>(kind); std::vector<apache::render::radar_contact> contacts(count);
+        for(auto &contact : contacts) std::cin >> contact.x >> contact.y >> contact.symbol >> contact.selected;
+        mfds[mode].radar(frame, mfds[mode].area(static_cast<apache::render::mfd_panel>(which)), state, contacts, trig);
+      } else if(command == "mfd-weapons") {
+        apache::render::weapon_instruments state;
+        for(auto &pair : state.pairs) std::cin >> pair.type >> pair.rounds[0] >> pair.rounds[1];
+        std::cin >> state.wingtip[0] >> state.wingtip[1] >> state.gun >> state.chaff >> state.flares >> state.armed >> state.auto_chaff >> state.auto_ecm;
+        mfds[mode].weapons(frame, mfds[mode].area(static_cast<apache::render::mfd_panel>(which)), state);
+      } else if(command == "panel-status") {
         bool gunner{false}; uint32_t faults{0}; unsigned int acceleration{0}; std::array<std::string, 3> lines;
         std::cin >> gunner >> faults >> acceleration; for(auto &line : lines) std::cin >> std::quoted(line);
         if(which == 0 || which == 3) gauges[mode].warnings(frame, gunner, faults);
@@ -310,12 +352,14 @@ int main(int const argc, char const *const argv[]) try {
         } else throw std::runtime_error{"Unknown fragment-state operation"};
       }
     }
-  } else if(command == "vector-math") {
+  } else if(command == "integer-sqrt") {
+    uint64_t value{0}; while(std::cin >> value) std::cout << apache::math::integer_sqrt(value) << '\n';
+  } else if(command == "vector-math" || command == "direction-math") {
     apache::math::trigonometry const trig{data}; apache::math::vector3 vector; uint32_t angle{0};
     while(std::cin >> vector[0] >> vector[1] >> vector[2] >> angle) {
       auto const axis{apache::math::normalise_q31(vector)};
       for(auto const v : axis) std::cout << v << ' ';
-      auto const matrix{trig.rotation(axis, angle)};
+      auto const matrix{command == "direction-math" ? apache::math::direction_matrix(axis) : trig.rotation(axis, angle)};
       for(size_t i{0}; i != matrix.size(); ++i) std::cout << matrix[i] << (i + 1 == matrix.size() ? '\n' : ' ');
     }
   } else if(command == "surface-types") {
@@ -859,7 +903,7 @@ int main(int const argc, char const *const argv[]) try {
       paint.colours = 0x8b8b8b8b;
       paint.pattern = static_cast<apache::render::fill_pattern>(mode);
       paint.remapping = remapping;
-      raster.circle(x, y, radius, paint);
+      if(mode == 5) raster.circle_outline(x, y, radius, 139); else raster.circle(x, y, radius, paint);
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
       if(argc > 3) { std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }

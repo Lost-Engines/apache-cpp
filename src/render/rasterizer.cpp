@@ -92,6 +92,21 @@ void rasterizer::fill(std::span<screen_vertex const> const vertices, material co
   scan(vertices);
   paint_scans(paint);
 }
+void rasterizer::circle_outline(int const cx, int const cy, int const radius, uint8_t const colour) {
+  if(radius <= 0) return;
+  if(radius > 1048576) throw std::runtime_error{"Circle radius exceeds the rasterizer limit"};
+  auto const &area{target.clip};
+  if(int64_t{cx} - radius > area.right || int64_t{cx} + radius < area.left || int64_t{cy} - radius > area.bottom || int64_t{cy} + radius < area.top) return;
+  int y{radius}, error{3 - radius * 2};
+  for(int x{0}; x <= y; ++x) {
+    target.point(cx + x, cy + y, colour); target.point(cx - x, cy + y, colour);
+    target.point(cx - x, cy - y, colour); target.point(cx + x, cy - y, colour);
+    target.point(cx + y, cy + x, colour); target.point(cx - y, cy + x, colour);
+    target.point(cx - y, cy - x, colour); target.point(cx + y, cy - x, colour);
+    if(error < 0) error += x * 4 + 6;
+    else { error += (x - y) * 4 + 10; --y; }
+  }
+}
 void rasterizer::circle(int const centre_x, int const centre_y, int const radius, material const &paint) {
   if(paint.image || paint.light != shading::none) throw std::runtime_error{"Circles do not carry texture or lighting coordinates"};
   if(radius <= 0) return;

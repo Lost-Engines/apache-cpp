@@ -16,7 +16,7 @@ public:
   cockpit(resources::data_store const &data, unsigned int video_mode);
   unsigned int video_mode() const { return mode; }
   resources::indexed_image const &sprite(std::string_view name) const;
-  void copy(framebuffer &target, std::string_view name, size_t source_offset, rectangle destination) const;
+  void copy(framebuffer &target, std::string_view name, size_t source_offset, rectangle destination, bool masked = false) const;
   void install_palette(palette_rgb &palette) const;
   std::array<palette_fader, 3> faders(int32_t night, bool night_vision) const;
   void draw(framebuffer &target, unsigned int view, bool new_view) const;

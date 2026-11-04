@@ -58,6 +58,7 @@ public:
   resources::terrain const &heights() const { return terrain; }
   uint8_t surface_type(int32_t x, int32_t y) const;
   void advance(int32_t delta_time, uint32_t &random_seed);
+  std::string_view draw_flir(framebuffer &target, model_instance &object, math::vector3 const &aim, math::vector3 const &observer, sky_lighting const &lighting);
   void draw(framebuffer &target, math::pose camera, landscape_options const &options);
 };
 } // namespace apache::render

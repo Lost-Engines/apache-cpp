@@ -58,6 +58,7 @@ public:
   size_t invalid_texture_samples{0};
   explicit rasterizer(framebuffer &destination);
   void line(screen_vertex a, screen_vertex b, uint8_t colour);
+  void circle_outline(int x, int y, int radius, uint8_t colour);
   void circle(int x, int y, int radius, material const &paint);
   void fill(std::span<screen_vertex const> vertices, material const &paint);
   void perspective(std::span<perspective_vertex const> vertices, resources::texture const &image, std::span<uint8_t const> intensity_map);

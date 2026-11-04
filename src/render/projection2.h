@@ -31,6 +31,7 @@ public:
   int32_t cosine{INT32_MAX};
   int32_t sine{0};
   projection2(rectangle viewport, window2 window);
+  int32_t radius(int32_t world_radius) const;
   screen_vertex project(vertex2 const &point) const;
   std::optional<std::array<screen_vertex, 2>> clip_line(vertex2 const &a, vertex2 const &b) const;
   std::vector<screen_vertex> clip(std::span<vertex2 const> vertices) const;

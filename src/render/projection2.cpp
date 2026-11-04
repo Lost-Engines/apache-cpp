@@ -21,6 +21,7 @@ vertex2 projection2::transform(vertex2 const &point) const {
 screen_vertex projection2::screen(vertex2 const &point) const {
   return {math::add(math::multiply_q31(math::subtract(point.x, window.left), scale[0]), viewport.left), math::add(math::multiply_q31(math::subtract(point.y, window.bottom), scale[1]), viewport.bottom), 0, 0, point.intensity};
 }
+int32_t projection2::radius(int32_t const world_radius) const { return math::multiply_q31(world_radius, scale[0]); }
 screen_vertex projection2::project(vertex2 const &point) const { return screen(transform(point)); }
 bool projection2::clip_endpoint(vertex2 &point, vertex2 const &other) const {
   uint8_t code{outcode(point)};

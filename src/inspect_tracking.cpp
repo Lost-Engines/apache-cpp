@@ -45,7 +45,7 @@ void inspect_tracking(std::istream &input, std::ostream &output, apache::resourc
       size_t index{0}; uint32_t model{0}, flags{0}, heading{0}, pitch{0}, roll{0}; input >> index >> model >> flags;
       math::pose pose; pose.position = point(); input >> heading >> pitch >> roll; pose.rotation = trig.transformation(heading, pitch, roll);
       auto &s{states.at(index)}; input >> s.type >> s.classification >> s.speed >> s.destroyed >> s.conditions >> s.chaff_at >> s.flare_at >> s.player >> s.player_airspeed >> s.ground_radar >> s.air_radar;
-      auto &object{mobiles.at(index)}; object.id = model; object.flags = flags; mobiles.move(index, pose);
+      auto &object{mobiles.at(index)}; object.id = model; object.status = flags; mobiles.move(index, pose);
     } else if(command == "ground") {
       size_t index{0}; input >> index; input >> placements.at(index).model >> placements.at(index).status;
     } else if(command == "reference") {

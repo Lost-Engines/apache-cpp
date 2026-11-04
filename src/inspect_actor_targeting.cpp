@@ -22,7 +22,7 @@ void inspect_actor_targeting(std::istream &input, std::ostream &output, apache::
     if(command == "behind") { math::vector3 p; read(actor.object.world.position); read(actor.object.world.rotation); read(p); output << simulation::target_behind_actor(actor, p) << '\n'; continue; }
     if(command == "path") { auto const route{path()}; math::vector3 p; read(p); output << simulation::distance_from_flight_path(route, p, trig) << '\n'; continue; }
     bool has_target{false}, clear{false}, candidate{false}; int level{0}, damage{0}, processed{0}; simulation::actor_targeting_context context; simulation::combat_random random; int32_t message_time{0}, height{0}; std::vector<int64_t> events;
-    input >> actor.object.id >> actor.conditions >> actor.object.flags >> actor.classification >> actor.weapon >> actor.weapon_slot >> actor.retreat_until >> has_target >> actor.speed >> actor.destroyed >> actor.network >> attention.range >> damage >> processed;
+    input >> actor.object.id >> actor.conditions >> actor.object.status >> actor.classification >> actor.weapon >> actor.weapon_slot >> actor.retreat_until >> has_target >> actor.speed >> actor.destroyed >> actor.network >> attention.range >> damage >> processed;
     attention.damage = static_cast<uint8_t>(damage); attention.processed_damage = static_cast<uint8_t>(processed);
     read(actor.ammunition); read(armament.deadlines); input >> armament.ground_maximum >> armament.ground_minimum >> armament.air_maximum >> armament.air_minimum;
     input >> context.now >> context.task >> context.start_time >> context.has_formation >> context.radar_model >> level >> random.value >> random.global_seed >> message_time >> clear >> candidate >> height;

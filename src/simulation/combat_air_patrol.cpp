@@ -39,7 +39,7 @@ void scan_patrol_contacts(patrol_contacts &contacts, int32_t const now, std::fun
 }
 shared_target select_patrol_target(patrol_contacts &contacts, actor_state const &actor, int32_t const attention, flight_path const &path, unsigned int const slot, int32_t const now, math::trigonometry const &trig, std::function<void()> const &scan, std::function<math::vector3(target_reference const &)> const &position) {
   if(math::add(contacts.last_scan, 2000) < now && scan) scan();
-  auto const side{(actor.object.flags & 6) == 2 ? 0u : 1u};
+  auto const side{(actor.object.status & 6) == 2 ? 0u : 1u};
   auto const &list{contacts.visible[side]}; if(list.empty()) return nullptr;
   int32_t closest{INT32_MAX}; shared_target result;
   for(auto const &candidate : list) if(candidate && actor.speed) {
@@ -53,7 +53,7 @@ shared_target select_patrol_target(patrol_contacts &contacts, actor_state const 
   return result;
 }
 void acquire_patrol_target(actor_state &actor, actor_armament &armament, shared_target const &assigned, int32_t const now, patrol_acquisition_callbacks const &callbacks) {
-  unsigned int const side{(actor.object.flags & 6) == 2 ? 1u : 2u};
+  unsigned int const side{(actor.object.status & 6) == 2 ? 1u : 2u};
   auto const release{[&](){ release_actor_target(actor, armament); if(callbacks.released) callbacks.released(); }};
   if(!armament.target) {
     if(callbacks.basic) callbacks.basic();

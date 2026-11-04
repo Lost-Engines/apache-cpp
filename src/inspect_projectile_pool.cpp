@@ -41,7 +41,7 @@ void inspect_projectile_pool(std::istream &input, std::ostream &output, apache::
       scenery = std::make_unique<simulation::scenery_collisions>(models, trig, placements);
       pool = std::make_unique<simulation::projectiles>(models, trig, tables, *terrain, *scenery, mobiles, smoke, seed, events); pool->weapon_random = weapon_random;
     } else if(command == "add") {
-      uint32_t model{0}, flags{0}; input >> model >> flags; auto const p{pose()}; auto const id{mobiles.add(model, p)}; mobiles.at(id).flags = flags; render::maintain_model(mobiles.at(id));
+      uint32_t model{0}, flags{0}; input >> model >> flags; auto const p{pose()}; auto const id{mobiles.add(model, p)}; mobiles.at(id).status = flags; render::maintain_model(mobiles.at(id));
     } else if(command == "new") {
       simulation::projectile_request request;
       input >> request.weapon; request.launch.pose = pose(); request.launch.source.position = point(); request.launch.source.direction = point();

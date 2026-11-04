@@ -15,7 +15,7 @@ int32_t distance2(math::vector3 const &a, math::vector3 const &b) {
 }
 bool acquire_attacker(actor_state &actor, actor_armament &armament, actor_type const &type, std::array<weapon_info, 55> const &weapons, uint32_t &war_random, combat_random &weapon_random, actor_reaction_context const &context, actor_reaction_callbacks const &callbacks) {
   if(!(actor.conditions & 0x40) || (actor.conditions & 0x10) || !context.reference) return false;
-  if(static_cast<int32_t>((actor.object.flags >> 1) & 3) == context.attacker_side) return false;
+  if(static_cast<int32_t>((actor.object.status >> 1) & 3) == context.attacker_side) return false;
   switch(context.task) {
     case 10: case 11: case 16: case 20: return false;
     case 13: case 14: case 18: if(actor.ammunition[1] > 0) return false; break;
@@ -46,7 +46,7 @@ void notify_actor_fired_at(actor_state &actor, actor_armament &armament, actor_t
     return;
   }
   if(actor.classification == 7) {
-    if((actor.object.flags & 6) == 2 && math::subtract(context.now, warnings.ships_attacked) > 60000 && weapon_random.next() % 10 < 2) {
+    if((actor.object.status & 6) == 2 && math::subtract(context.now, warnings.ships_attacked) > 60000 && weapon_random.next() % 10 < 2) {
       if(callbacks.sound) callbacks.sound(0x69, false);
       warnings.ships_attacked = context.now;
     }
@@ -60,7 +60,7 @@ void notify_actor_targeted(actor_state &actor, actor_armament &armament, actor_t
     if(!armament.target) acquire_attacker(actor, armament, type, weapons, war_random, weapon_random, context, callbacks);
     if(weapon_random.next() % 10 != 0) return;
   }
-  if((actor.object.flags & 6) != 2) return;
+  if((actor.object.status & 6) != 2) return;
   if(context.attacker.classification == 1) {
     if(!context.player || context.now < warnings.radar || weapon_random.next() % 10 > 2) return;
     warnings.radar = math::add(context.now, 6000);
@@ -81,8 +81,8 @@ void notify_actor_targeted(actor_state &actor, actor_armament &armament, actor_t
 }
 bool kill_actor(actor_state &actor, actor_armament &armament, int32_t &task_alive, std::span<actor_state *> const followers, std::function<void()> const &unplace, std::function<void()> const &released) {
   if(actor.destroyed == 1) return false;
-  if(!(actor.object.flags & 1) && unplace) unplace();
-  actor.destroyed = 1; actor.object.flags |= 1; task_alive = math::subtract(task_alive, 1); actor.speed = 0;
+  if(!(actor.object.status & 1) && unplace) unplace();
+  actor.destroyed = 1; actor.object.status |= 1; task_alive = math::subtract(task_alive, 1); actor.speed = 0;
   if(!(actor.conditions & 0x200)) {
     actor.conditions |= 0x40000;
     for(auto *follower : followers) { follower->speed = 0; follower->conditions |= 0x40000; }

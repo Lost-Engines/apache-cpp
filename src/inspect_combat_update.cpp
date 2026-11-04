@@ -30,7 +30,7 @@ void inspect_combat_update(std::istream &input, std::ostream &output, apache::re
       simulation::visit_ground_defence_sectors(position, [&](int x, int y){ return (x * 7 + y * 11 + seed) % 4; }, [&](int x, int y){ event({x,y}); }); output << 0;
     } else if(op == "actor") {
       simulation::actor_state actor; simulation::actor_armament arms; int32_t task{0}, serial{0}, status{0}, acquisition{0}; uint32_t frame{0}; unsigned int weapon{0}; bool target{false}, behind{false};
-      input >> actor.classification >> actor.conditions >> actor.object.flags >> actor.destroyed >> actor.speed >> actor.retreat_until >> task >> serial >> frame >> target >> status >> acquisition >> weapon >> behind; read(actor.object.world.position); read(refs[2]->position); read(refs[3]->position); if(target) arms.target = refs[2];
+      input >> actor.classification >> actor.conditions >> actor.object.status >> actor.destroyed >> actor.speed >> actor.retreat_until >> task >> serial >> frame >> target >> status >> acquisition >> weapon >> behind; read(actor.object.world.position); read(refs[2]->position); read(refs[3]->position); if(target) arms.target = refs[2];
       simulation::actor_combat_callbacks cb; cb.status = [&](auto const &t){ event({1,t.identity.index}); return status; }; cb.position = [&](auto const &t){ event({6,t.identity.index}); return t.position; };
       auto const acquire{[&](int kind){ event({kind}); if(acquisition == 1) arms.target = refs[3]; else if(acquisition == 2) arms.target.reset(); }};
       cb.air_acquire = [&](){ acquire(2); }; cb.ground_acquire = [&](){ acquire(3); }; cb.artillery_acquire = [&](){ acquire(4); };

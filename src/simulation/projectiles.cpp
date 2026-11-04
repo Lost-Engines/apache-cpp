@@ -48,7 +48,7 @@ bool projectiles::collide(size_t const index, math::vector3 const &move) {
   if(outside(bound.end)) { emit(index, projectile_event::map_edge, start); return true; }
   auto const &origin{round.source.identity};
   auto const hit{mobile_line_collision(mobiles, models, trig, start, bound.end, origin.kind == target_kind::mobile ? std::optional{origin.index} : std::nullopt, round.mobile)};
-  if(hit && !(mobiles.at(*hit).flags & 1)) { emit(index, projectile_event::mobile, mobiles.at(*hit).world.position, target_identity{target_kind::mobile, 0, *hit}); return true; }
+  if(hit && !(mobiles.at(*hit).status & 1)) { emit(index, projectile_event::mobile, mobiles.at(*hit).world.position, target_identity{target_kind::mobile, 0, *hit}); return true; }
   auto const ground{scenery.line(start, bound.end, origin.kind == target_kind::scenery ? std::optional{std::array{origin.layer, static_cast<size_t>(origin.index)}} : std::nullopt)};
   if(ground && !(scenery.at(ground->layer, ground->index).status & 1)) { emit(index, projectile_event::scenery, ground->position, target_identity{target_kind::scenery, ground->layer, static_cast<uint32_t>(ground->index)}); return true; }
   if(projectile_expired(round.state.body.motion, weapons.at(round.state.weapon))) { emit(index, projectile_event::expired, start); return true; }

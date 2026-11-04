@@ -30,8 +30,8 @@ void inspect_projectiles(std::istream &input, std::ostream &output, apache::reso
       output << random << ' ' << weapon_random << ' ';
       if(weapons.at(id).movement_class != 3) {
         auto object{simulation::projectile_model(round, weapons.at(id), models)};
-        output << object.id << ' ' << object.flags << ' ' << object.children.size(); for(auto const &child : object.children) output << ' ' << (child ? child->id : 0);
-      } else output << "0 0 0";
+        output << object.id << ' ' << object.status << ' ' << object.flags << ' ' << object.children.size(); for(auto const &child : object.children) output << ' ' << (child ? child->id : 0);
+      } else output << "0 0 0 0";
       output << '\n';
     } else if(command == "terrain") {
       std::string zone; input >> zone; terrain.emplace(data.read(zone + ".WZ/GRIDPOST.BIN"));

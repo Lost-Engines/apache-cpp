@@ -44,11 +44,11 @@ target_description target_world::describe(target_reference &target, int32_t cons
     if(!target.classification) target.classification = 1;
   } else {
     auto const &object{mobiles.at(id.index)}; auto const state{mobile_state(id.index)};
-    result.model = object.id; result.side = (object.flags & 7) >> 1;
+    result.model = object.id; result.side = (object.status & 7) >> 1;
     std::copy_n(object.world.rotation.begin() + 3, 3, result.movement.direction.begin());
     if(state.type == 1) {
       result.actor = true; result.destroyed = state.destroyed != 0;
-      result.status = object.flags & 1; result.damage = state.damage;
+      result.status = object.status & 1; result.damage = state.damage;
       result.movement.speed = state.player ? std::bit_cast<int32_t>(static_cast<uint32_t>(state.player_airspeed) * 432u) : state.speed;
       if(!target.classification) target.classification = state.classification == 1 || state.classification == 2 ? 2 : 1;
       bool const radar_model{object.id == 46 || object.id == 77 || object.id == 111 || object.id == 328 || object.id == 526};

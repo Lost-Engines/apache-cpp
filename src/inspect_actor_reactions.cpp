@@ -15,17 +15,17 @@ void inspect_actor_reactions(std::istream &input, std::ostream &output, apache::
     simulation::actor_state actor; simulation::actor_armament armament; std::vector<int64_t> events; bool target{false};
     if(command == "kill") {
       int32_t alive{0}; size_t count{0};
-      input >> actor.conditions >> actor.object.flags >> actor.destroyed >> actor.speed >> target >> actor.retreat_until >> alive >> count;
+      input >> actor.conditions >> actor.object.status >> actor.destroyed >> actor.speed >> target >> actor.retreat_until >> alive >> count;
       if(count > 100) throw std::runtime_error{"Too many follower records"};
       std::vector<simulation::actor_state> followers(count); std::vector<simulation::actor_state *> pointers;
       for(auto &f : followers) { input >> f.conditions >> f.speed; pointers.push_back(&f); }
       if(target) armament.target = std::make_shared<simulation::target_reference>();
       simulation::kill_actor(actor, armament, alive, pointers, [&](){ events.push_back(1); }, [&](){ events.push_back(2); });
-      output << actor.conditions << ' ' << actor.object.flags << ' ' << actor.destroyed << ' ' << actor.speed << ' ' << bool(armament.target) << ' ' << actor.retreat_until << ' ' << alive;
+      output << actor.conditions << ' ' << actor.object.status << ' ' << actor.destroyed << ' ' << actor.speed << ' ' << bool(armament.target) << ' ' << actor.retreat_until << ' ' << alive;
       for(auto const &f : followers) output << ' ' << f.conditions << ' ' << f.speed;
       output << ' ' << events.size(); write(events); output << '\n';
     } else {
-      input >> actor.object.id >> actor.conditions >> actor.object.flags >> actor.classification >> actor.weapon >> actor.weapon_slot >> actor.retreat_until >> target;
+      input >> actor.object.id >> actor.conditions >> actor.object.status >> actor.classification >> actor.weapon >> actor.weapon_slot >> actor.retreat_until >> target;
       read(actor.ammunition); read(armament.deadlines); input >> armament.ground_maximum >> armament.ground_minimum >> armament.air_maximum >> armament.air_minimum;
       simulation::actor_reaction_context context; bool clear{false}; simulation::combat_warning_times warnings; simulation::combat_random weapon_random; uint32_t war_random{0};
       input >> context.now >> context.task >> context.attacker_side >> context.attacker_model >> context.player >> clear >> context.attacker.classification >> context.view_heading;

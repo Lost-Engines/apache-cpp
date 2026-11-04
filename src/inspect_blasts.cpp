@@ -19,11 +19,11 @@ void inspect_blasts(std::istream &input, std::ostream &output, apache::resources
       auto const &record{placements.at(id.layer).at(id.index)};
       simulation::damage_recipient target; target.model = record.model; target.flags = record.status; target.position = {record.x, record.y, 0}; return target;
     }
-    auto result{actors.at(id.index)}; auto const &object{mobiles.at(id.index)}; result.model = object.id; result.flags = object.flags; result.position = object.world.position; return result;
+    auto result{actors.at(id.index)}; auto const &object{mobiles.at(id.index)}; result.model = object.id; result.flags = object.status; result.position = object.world.position; return result;
   }};
   auto const write{[&](simulation::target_identity const &id, simulation::damage_recipient const &target){
     if(id.kind == simulation::target_kind::scenery) { auto &record{placements.at(id.layer).at(id.index)}; record.model = static_cast<uint16_t>(target.model); record.status = static_cast<uint16_t>(target.flags); }
-    else { actors.at(id.index) = target; mobiles.at(id.index).flags = target.flags; }
+    else { actors.at(id.index) = target; mobiles.at(id.index).status = target.flags; }
   }};
   simulation::blast_callbacks callbacks;
   callbacks.read = read; callbacks.write = write;
@@ -49,10 +49,10 @@ void inspect_blasts(std::istream &input, std::ostream &output, apache::resources
       scenery = std::make_unique<simulation::scenery_collisions>(models, trig, placements[0], placements[1]);
     } else if(command == "add") {
       simulation::damage_recipient actor; unsigned int damage{0}; input >> actor.model >> actor.flags >> actor.network >> damage; actor.damage = static_cast<uint8_t>(damage); actor.position = point(); actor.mobile = actor.actor = true;
-      auto const id{mobiles.add(actor.model, {actor.position, trig.transformation(0, 0, 0)})}; mobiles.at(id).flags = actor.flags; actors.push_back(actor); initial_actors.push_back(actor);
+      auto const id{mobiles.add(actor.model, {actor.position, trig.transformation(0, 0, 0)})}; mobiles.at(id).status = actor.flags; actors.push_back(actor); initial_actors.push_back(actor);
     } else if(command == "restore") {
       for(size_t i{0}; i != placements.size(); ++i) std::ranges::copy(initial[i], placements[i].begin());
-      actors = initial_actors; for(uint32_t i{0}; i != actors.size(); ++i) mobiles.at(i).flags = actors[i].flags;
+      actors = initial_actors; for(uint32_t i{0}; i != actors.size(); ++i) mobiles.at(i).status = actors[i].flags;
     } else if(command == "explode") {
       unsigned int operation{0}, kind{0}, source_kind{0}, weapon{0}; simulation::target_identity target; simulation::damage_source source; simulation::damage_environment environment; simulation::damage_random random; int level{0};
       input >> operation >> kind >> target.layer >> target.index >> weapon >> source_kind >> source.side >> source.actor >> source.network >> environment.mode >> environment.flow >> level >> random.weapon >> random.round >> random.global;
@@ -62,7 +62,7 @@ void inspect_blasts(std::istream &input, std::ostream &output, apache::resources
       if(operation == 0) blast.detonate(impact); else blast.hit(target, impact);
       uint64_t hash{14695981039346656037ull}; auto const mix{[&](uint32_t value){ for(unsigned int i{0}; i != 4; ++i) { hash = (hash ^ (value & 255)) * 1099511628211ull; value >>= 8; } }};
       for(auto const &layer : placements) for(auto const &record : layer) { mix(record.model); mix(record.status); }
-      for(uint32_t i{0}; i != actors.size(); ++i) { mix(mobiles.at(i).id); mix(mobiles.at(i).flags); mix(actors[i].damage); }
+      for(uint32_t i{0}; i != actors.size(); ++i) { mix(mobiles.at(i).id); mix(mobiles.at(i).status); mix(actors[i].damage); }
       output << blast.limits.damage << ' ' << blast.limits.radius << ' ' << random.weapon << ' ' << random.round << ' ' << random.global << ' ' << hash << ' ' << events.size();
       for(auto x : events) output << ' ' << x; output << '\n';
     } else throw std::runtime_error{"Unknown blast inspection operation"};

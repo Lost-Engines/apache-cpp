@@ -28,7 +28,7 @@ model_instance construct_model(resources::model_archive const &models, uint32_t 
 }
 void synchronize_model(model_instance &destination, model_instance const &source) {
   if(&destination == &source) return;
-  destination.id = source.id; destination.flags = source.flags; destination.alternate_colours = source.alternate_colours;
+  destination.id = source.id; destination.flags = source.flags; destination.status = source.status; destination.alternate_colours = source.alternate_colours;
   destination.relative = source.relative; destination.world = source.world; destination.scale = source.scale; destination.distance = source.distance;
   destination.children.resize(source.children.size());
   for(size_t i{0}; i != source.children.size(); ++i) {

@@ -48,7 +48,7 @@ void visit_ground_defence_sectors(math::vector3 const &view, std::function<int32
   }
 }
 int update_actor_combat(actor_state &actor, actor_armament &armament, int32_t const task, int32_t const serial, uint32_t const frame, std::array<weapon_info, 55> const &weapons, actor_combat_callbacks const &callbacks) {
-  auto const side{actor.object.flags & 6};
+  auto const side{actor.object.status & 6};
   if(!(actor.conditions & 0x40) || actor.destroyed || (side != 2 && side != 4)) return 0;
   if(armament.target && callbacks.status(*armament.target) == 1) { release_actor_target(actor, armament); if(callbacks.released) callbacks.released(); return 0; }
   if(serial % 4 == static_cast<int32_t>(frame % 4)) {

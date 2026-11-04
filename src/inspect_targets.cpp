@@ -33,7 +33,7 @@ void inspect_targets(std::istream &input, std::ostream &output, apache::resource
       input >> state.type >> state.classification >> state.speed >> state.player_airspeed >> state.destroyed >> state.conditions >> damage >> state.player >> state.ground_radar >> state.air_radar >> state.chaff_at >> state.flare_at >> state.chaff_valid >> state.flare_valid >> std::quoted(name);
       state.damage = static_cast<uint8_t>(damage); state.user_name = name;
       placements[0].model = static_cast<uint16_t>(model); placements[0].status = static_cast<uint16_t>(flags);
-      auto &object{mobiles.at(object_id)}; object.id = model; object.flags = flags; mobiles.move(object_id, pose);
+      auto &object{mobiles.at(object_id)}; object.id = model; object.status = flags; mobiles.move(object_id, pose);
       auto const result{world->describe(target, now)};
       output << result.valid << ' '; print(result.movement.position); print(result.movement.direction);
       output << result.movement.speed << ' ' << result.movement.classification << ' ' << result.model << ' ' << result.status << ' ' << result.side << ' ' << result.damage << ' ' << result.radar << ' ' << result.designated << ' ' << result.chaff << ' ' << result.flare << ' ' << target.classification << ' ' << std::quoted(result.name) << ' ' << std::quoted(result.description) << '\n';

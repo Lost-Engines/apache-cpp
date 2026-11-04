@@ -19,6 +19,7 @@ int main() try {
   require(&scene.at(id) == &actor && scene.sector(66).size() == 1, "registered actor and scene share model state");
   for(unsigned int i{0}; i != 500; ++i) scene.add(0, {{0, 0, 0}, math::identity});
   require(&scene.at(id) == &actor, "scene storage growth does not move registered actors");
+  actor.status = 4;
   actor.flags = 17; actor.children.front()->flags = 123;
   actor.world.position = {3 << 22, 4 << 22, 300};
   scene.place(id);
@@ -29,6 +30,7 @@ int main() try {
   require(!scene.contains(id) && actor.children.front()->flags == 123, "removing a registered actor does not delete its model");
   render::model_instance attached;
   render::synchronize_model(attached, actor);
+  require(attached.flags == 17 && attached.status == 4, "animation and combat status remain independent through synchronization");
   auto *const child{attached.children.front().get()};
   actor.relative.position = {500, 600, 700};
   actor.children.front()->relative.position = {700, 800, 900};

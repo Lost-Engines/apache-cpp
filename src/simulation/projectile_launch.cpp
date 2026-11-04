@@ -62,7 +62,7 @@ render::model_instance projectile_model(projectile_launch_state const &round, we
   auto const id{static_cast<uint32_t>(weapon.model)};
   int32_t const flame{round.weapon == 4 || round.weapon == 5 ? 500 : models.at(id)->metadata[5]};
   std::array<uint32_t, 1> const children{flame > 0 ? static_cast<uint32_t>(flame) : 0};
-  auto object{render::construct_model(models, id, round.body.pose, children)}; object.flags |= 1;
+  auto object{render::construct_model(models, id, round.body.pose, children)}; object.status |= 1;
   render::maintain_model(object); return object;
 }
 void launch_projectile(projectile_launch_state &round, int32_t const now) { round.body.motion.flags |= 1; round.launched_at = now; }

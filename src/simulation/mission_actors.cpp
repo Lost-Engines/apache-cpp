@@ -79,7 +79,9 @@ mission_actors::mission_actors(resources::mission_definition const &mission, std
         if(model == 607) { attachments[0] = 614; attachments[2] = 620; }
         else if(model == 990) attachments[0] = 859;
         unit.object = render::construct_model(models, model, {}, attachments);
+        unit.object.status = static_cast<uint32_t>((task.side & 3) << 1);
         unit.object.alternate_colours = task.side == 2 && map != 2 && (type.flags & 2);
+        if(unit.object.alternate_colours) unit.object.status |= 0x10;
         unit.conditions |= definition.conditions;
         int weapons{0};
         for(size_t slot{0}; slot != type.weapons.size(); ++slot) if(type.weapons[slot]) {

@@ -70,6 +70,8 @@ add_library(apache_core
   src/simulation/projectile_dynamics.h
   src/simulation/projectile_launch.cpp
   src/simulation/projectile_launch.h
+  src/simulation/projectile_tracking.cpp
+  src/simulation/projectile_tracking.h
   src/simulation/projectiles.cpp
   src/simulation/projectiles.h
   src/simulation/terrain_visibility.cpp
@@ -166,7 +168,7 @@ add_executable(apache
 target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
-add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h src/inspect_seekers.cpp src/inspect_seekers.h src/inspect_projectiles.cpp src/inspect_projectiles.h src/inspect_projectile_pool.cpp src/inspect_projectile_pool.h src/inspect_targets.cpp src/inspect_targets.h)
+add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h src/inspect_seekers.cpp src/inspect_seekers.h src/inspect_projectiles.cpp src/inspect_projectiles.h src/inspect_projectile_pool.cpp src/inspect_projectile_pool.h src/inspect_targets.cpp src/inspect_targets.h src/inspect_tracking.cpp src/inspect_tracking.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)

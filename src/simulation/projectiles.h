@@ -4,11 +4,17 @@
 #include "effects.h"
 
 namespace apache::simulation {
+enum class target_slot : uint8_t { current, chaff, flare };
+struct projectile_target_binding {
+  bool selected{false};
+  std::shared_ptr<target_reference> target;
+};
 struct projectile_record {
   projectile_launch_state state;
   target_reference source;
   std::optional<target_reference> selected, designator;
   std::optional<uint32_t> mobile;
+  projectile_target_binding adjusted;
 };
 struct projectile_request {
   unsigned int weapon{0};

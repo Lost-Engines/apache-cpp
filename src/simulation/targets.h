@@ -19,6 +19,7 @@ struct target_description {
   uint32_t model{0};
   int32_t status{1}, side{0}, damage{0};
   bool radar{false}, designated{false}, chaff{false}, flare{false};
+  bool actor{false}, destroyed{false};
   std::string_view name{"No Target"}, description{"No Target"};
 };
 bool equivalent_targets(target_reference const &first, target_reference const &second);

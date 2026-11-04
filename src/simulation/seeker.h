@@ -21,7 +21,9 @@ struct seeker_queries {
   std::function<bool(math::vector3 const &, math::vector3 const &)> visible;
   std::function<bool()> distracted;
   std::function<int32_t()> random;
+  std::function<int32_t()> classification;
 };
 bool decoy_distracts(weapon_info const &weapon, int32_t mode, bool enemy, int32_t modifier, combat_random &random);
-void update_seeker(seeker_state &state, weapon_info const &weapon, seeker_inputs const &input, seeker_queries const &queries);
+// Returns whether the adjusted target binding was replaced.
+bool update_seeker(seeker_state &state, weapon_info const &weapon, seeker_inputs const &input, seeker_queries const &queries);
 } // namespace apache::simulation

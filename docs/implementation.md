@@ -155,11 +155,12 @@ Validation completed:
 - Projectile-capacity checks cover 259 successful allocations, fifteen rejected allocations and reuse of slots 0, 31 and 255. A failed allocation leaves the active count unchanged, avoiding the original incorrect count increment.
 - 16,000 live-target descriptions, 4,000 target-equivalence cases and 4,000 sector-range checks match the original. These cover scenery, actors, projectiles and fixed points, cached classification, player speed conversion, radar emissions, laser designation and countermeasure deadlines. User-name lookup is controlled; model metadata, trigonometry and terrain are real inputs.
 - The visibility, construction, continuous projectile, capacity and live-target comparisons all pass under AddressSanitizer and UndefinedBehaviorSanitizer.
+- 960 live missile-tracking sequences across all four warzones match 15,360 original updates, including 392 decoy-target states and 91 retained targets after selection disappears. The comparison combines original target properties, laser retargeting, radar/infrared seekers, real terrain visibility, countermeasure deadlines and random state. All target bindings and classification caches agree. Normal and sanitizer builds pass; movement and damage are separate comparisons.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: connect live target tracking, damage and countermeasures to the projectile simulation, connect collision volumes to player flight, then complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
+Next: connect damage and countermeasure responses to the projectile simulation, connect collision volumes to player flight, then complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

@@ -44,6 +44,7 @@
 #include "inspect_projectiles.h"
 #include "inspect_projectile_pool.h"
 #include "inspect_targets.h"
+#include "inspect_tracking.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
 #include "simulation/actor_movement.h"
@@ -137,7 +138,8 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "targets") {
+  if(command == "tracking") { inspect_tracking(std::cin, std::cout, data); return 0; }
+    if(command == "targets") {
     inspect_targets(std::cin, std::cout, data);
   } else if(command == "projectile-pool") {
     inspect_projectile_pool(std::cin, std::cout, data);

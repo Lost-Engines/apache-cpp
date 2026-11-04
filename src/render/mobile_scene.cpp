@@ -24,6 +24,10 @@ model_instance &mobile_scene::at(uint32_t const id) {
   if(id >= objects.size() || !objects[id]) throw std::runtime_error{"Unavailable mobile scene object"};
   return objects[id]->object;
 }
+model_instance const &mobile_scene::at(uint32_t const id) const {
+  if(id >= objects.size() || !objects[id]) throw std::runtime_error{"Unavailable mobile scene object"};
+  return objects[id]->object;
+}
 void mobile_scene::unplace(uint32_t const id) {
   auto &object{*objects.at(id)};
   if(object.sector) std::erase(sectors[*object.sector], id);
@@ -39,6 +43,7 @@ void mobile_scene::move(uint32_t const id, math::pose const &pose) {
     object.sector = sector;
   }
   model.relative = pose;
+  model.world = pose;
 }
 void mobile_scene::remove(uint32_t const id) {
   at(id); unplace(id); objects[id].reset();

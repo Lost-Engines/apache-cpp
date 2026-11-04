@@ -8,6 +8,7 @@ struct pose {
   matrix3 rotation{identity};
 };
 uint32_t integer_sqrt(uint64_t value);
+int32_t normalise_q31_in_place(vector3 &value);
 vector3 normalise_q31(vector3 value);
 matrix3 direction_matrix(vector3 const &unit);
 vector3 transform(matrix3 const &matrix, vector3 const &vector);

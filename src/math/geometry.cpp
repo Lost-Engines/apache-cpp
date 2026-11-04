@@ -14,11 +14,15 @@ uint32_t integer_sqrt(uint64_t value) {
   }
   return static_cast<uint32_t>(result);
 }
-vector3 normalise_q31(vector3 value) {
+int32_t normalise_q31_in_place(vector3 &value) {
   if(std::abs(int64_t{value[0]}) > 0x3fffffff || std::abs(int64_t{value[1]}) > 0x3fffffff || std::abs(int64_t{value[2]}) > 0x3fffffff) for(auto &axis : value) axis /= 2;
   double const x{static_cast<double>(value[0])}, y{static_cast<double>(value[1])}, z{static_cast<double>(value[2])};
   int64_t const length{static_cast<int64_t>(std::sqrt(x * x + y * y + z * z)) + 1};
   for(auto &axis : value) axis = std::abs(int64_t{axis}) < length ? static_cast<int32_t>((int64_t{axis} * 0x80000000ll) / length) : axis > 0 ? INT32_MAX : -INT32_MAX;
+  return static_cast<int32_t>(length);
+}
+vector3 normalise_q31(vector3 value) {
+  normalise_q31_in_place(value);
   return value;
 }
 matrix3 direction_matrix(vector3 const &unit) {

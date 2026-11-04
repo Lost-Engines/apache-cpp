@@ -29,6 +29,7 @@ public:
   void remove(uint32_t id);
   void clear();
   model_instance &at(uint32_t id);
+  model_instance const &at(uint32_t id) const;
   std::span<uint32_t const> sector(size_t index) const { return sectors.at(index); }
   std::optional<int32_t> shadow_receiver(math::vector3 const &position) const;
   void submit(draw_queue &queue, math::pose const &camera, mobile_visibility const &visibility, shadow_projection const &casting) const;

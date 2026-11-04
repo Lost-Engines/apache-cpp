@@ -16,7 +16,7 @@ struct actor_state {
   std::array<uint32_t, 3> angles{};
   math::vector3 velocity{};
   int32_t speed{0}, desired_speed{0}, route_distance{0};
-  int32_t destroyed{0}, network{-1}, speed_ramp_target{0};
+  int32_t destroyed{0}, network{-1}, speed_ramp_target{0}, retreat_until{0};
   std::array<int32_t, 5> ammunition{};
   int32_t weapon{0}, weapon_slot{-1};
   uint32_t random{0};
@@ -49,6 +49,8 @@ public:
   std::vector<actor_state> units;
   std::vector<carrier_state> carriers;
   uint32_t random_seed{0};
+  std::optional<std::array<size_t, 2>> selected_waypoint;
+  void synchronize_models();
   mission_actors(resources::mission_definition const &mission, std::span<std::vector<resources::formation_member> const> formations, resources::model_archive const &models, math::trigonometry const &trig, actor_environment const &environment, unsigned int map, uint32_t seed = 1);
 };
 } // namespace apache::simulation

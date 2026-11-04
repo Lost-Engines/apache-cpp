@@ -66,6 +66,10 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/collisions.cpp
+  src/simulation/collisions.h
+  src/simulation/actor_movement.cpp
+  src/simulation/actor_movement.h
   src/simulation/actor_navigation.cpp
   src/simulation/actor_navigation.h
   src/simulation/ground_movement.cpp
@@ -148,7 +152,7 @@ add_executable(apache
 target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
-add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h)
+add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)

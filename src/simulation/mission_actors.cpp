@@ -29,6 +29,22 @@ render::model_instance clone(render::model_instance const &source) {
   return result;
 }
 }
+void mission_actors::synchronize_models() {
+  for(auto &unit : units) if(!(unit.conditions & 0x400)) {
+    unit.object.relative = unit.object.world; render::maintain_model(unit.object);
+  }
+  for(auto &carrier : carriers) {
+    auto &ship{units[carrier.actor].object};
+    for(auto const &slot : carrier.slots) if(slot.occupant) {
+      auto &unit{units[*slot.occupant]};
+      auto &attached{ship.children[slot.attachment]};
+      if(!attached || attached->id != unit.object.id) attached = std::make_unique<render::model_instance>(clone(unit.object));
+      attached->flags = unit.object.flags; attached->relative = slot.relative; attached->scale = unit.object.scale;
+      render::maintain_model(*attached, &ship.world);
+      unit.object.relative = slot.relative; unit.object.world = attached->world;
+    }
+  }
+}
 void mission_actors::register_ship(size_t const index, resources::model_archive const &models) {
   if(carriers.size() == 3) return;
   auto const &unit{units[index]}; auto const &definition{models.at(unit.object.id).value()};
@@ -150,6 +166,7 @@ mission_actors::mission_actors(resources::mission_definition const &mission, std
       if(!unit.carrier_slot) unit.object.relative = unit.object.world;
     }
   }
+  if(!groups.empty() && !groups.back().definition.waypoints.empty()) selected_waypoint = std::array{groups.size() - 1, groups.back().definition.waypoints.size() - 1};
   for(auto const &ship : carriers) for(auto const &slot : ship.slots) if(slot.occupant) {
     auto &parent{units[ship.actor].object}; parent.children[slot.attachment] = std::make_unique<render::model_instance>(clone(units[*slot.occupant].object));
   }

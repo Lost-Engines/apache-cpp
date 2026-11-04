@@ -39,8 +39,10 @@
 #include "simulation/actor_types.h"
 #include "inspect_weapons.h"
 #include "inspect_navigation.h"
+#include "inspect_collisions.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
+#include "simulation/actor_movement.h"
 #include "resources/terrain.h"
 #include "resources/terrain_textures.h"
 
@@ -131,10 +133,12 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "briefings") {
+  if(command == "collisions") {
+    inspect_collisions(std::cin, std::cout, data);
+  } else if(command == "briefings") {
     if(argc != 4) throw std::runtime_error{"briefings requires a bundle resource"};
     for(auto const &mission : apache::resources::read_mission_briefings(data.read(argv[3]))) std::cout << mission.id << ' ' << mission.flow << ' ' << mission.zone << ' ' << mission.level << ' ' << std::quoted(mission.title) << '\n';
-  } else if(command == "mission-actors" || command == "mission-actor-state" || command == "ground-trace") {
+  } else if(command == "mission-actors" || command == "mission-actor-state" || command == "ground-trace" || command == "actor-trace") {
     if(argc != 5) throw std::runtime_error{"mission-actors requires a warzone and mission resource"};
     auto const bytes{data.read(argv[4])};
     auto const mission{apache::resources::read_mission_definition({reinterpret_cast<char const*>(bytes.data()), bytes.size()})};
@@ -149,7 +153,14 @@ int main(int const argc, char const *const argv[]) try {
       .surface{[&](int32_t x, int32_t y){ return apache::resources::surface_type(features, super_features, x, y); }},
     };
     apache::simulation::mission_actors actors{mission, formations, models, trig, environment, 0};
-    if(command == "ground-trace") {
+    if(command == "ground-trace" || command == "actor-trace") {
+      bool const all{command == "actor-trace"};
+      apache::simulation::navigation_environment navigation_world{.height{environment.height}};
+      apache::simulation::navigation_tables navigation_tables{apache::resources::executable_data{data}};
+      apache::simulation::combat_random movement_random;
+      apache::simulation::actor_movement movement{actors, mission, formations, models, trig, environment, navigation_world, navigation_tables, movement_random};
+      apache::simulation::movement_time timing;
+      if(all) actors.synchronize_models();
       std::string operation; size_t frame{0};
       std::vector<bool> ground_units(actors.units.size(), false);
       for(auto const &group : actors.groups) {
@@ -159,24 +170,30 @@ int main(int const argc, char const *const argv[]) try {
       while(std::cin >> operation) {
         if(operation == "step") {
           int32_t now{0}, delta{0}; bool snapshot{false}; std::cin >> now >> delta >> snapshot;
-          for(auto const &group : actors.groups) {
+          if(all) { timing.now = now; timing.delta = delta; movement.update(timing); actors.synchronize_models(); }
+          else for(auto const &group : actors.groups) {
             apache::simulation::ground_movement movement{actors.units, group, mission.tasks[group.task], formations[group.definition.formation], trig, environment};
             movement.update(now, delta);
           }
           if(snapshot) for(size_t id{0}; id != actors.units.size(); ++id) {
-            auto const &unit{actors.units[id]}; if(!ground_units[id]) continue;
+            auto const &unit{actors.units[id]}; if(!all && !ground_units[id]) continue;
             std::cout << frame << ' ' << id << ' ' << unit.conditions;
             for(auto value : unit.object.world.position) std::cout << ' ' << value;
             for(auto value : unit.object.world.rotation) std::cout << ' ' << value;
             for(auto value : unit.angles) std::cout << ' ' << value;
             for(auto value : unit.velocity) std::cout << ' ' << value;
-            std::cout << ' ' << unit.speed << ' ' << unit.route_distance << ' ' << (unit.waypoint ? static_cast<int>(*unit.waypoint) : -1) << ' ' << unit.destroyed << '\n';
+            std::cout << ' ' << unit.speed << ' ' << unit.route_distance << ' ' << (unit.waypoint ? static_cast<int>(*unit.waypoint) : -1) << ' ' << unit.destroyed;
+            if(all) std::cout << ' ' << unit.desired_speed << ' ' << unit.speed_ramp_target << ' ' << unit.retreat_until;
+            std::cout << '\n';
           }
           ++frame;
-        } else if(operation == "flags" || operation == "destroyed" || operation == "network") {
+        } else if(operation == "mode") {
+          std::cin >> timing.arcade >> timing.game_flow;
+        } else if(operation == "flags" || operation == "destroyed" || operation == "network" || operation == "retreat") {
           size_t id{0}; int32_t value{0}; std::cin >> id >> value;
           if(operation == "flags") actors.units.at(id).conditions = static_cast<uint32_t>(value);
           else if(operation == "destroyed") actors.units.at(id).destroyed = value;
+          else if(operation == "retreat") actors.units.at(id).retreat_until = value;
           else actors.units.at(id).network = value;
         } else throw std::runtime_error{"Unknown ground trace operation"};
         if(!std::cin) throw std::runtime_error{"Incomplete ground trace operation"};

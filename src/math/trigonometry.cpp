@@ -12,6 +12,7 @@ trigonometry::trigonometry(resources::data_store const &data) {
   }};
   load("SINCOS.TBL", 10241, sin_cos);
   load("ARCSIN.TBL", 8193, arc_sin);
+  load("ARCCOS.TBL", 8193, arc_cos);
   load("ARCTAN.TBL", 4097, arc_tan);
 }
 int32_t trigonometry::sine(uint32_t const angle) const {
@@ -19,6 +20,11 @@ int32_t trigonometry::sine(uint32_t const angle) const {
 }
 int32_t trigonometry::cosine(uint32_t const angle) const {
   return sin_cos[2048 + (angle >> 19) + ((angle >> 18) & 1)];
+}
+uint32_t trigonometry::arccosine(int32_t const value) const {
+  auto const magnitude{static_cast<uint32_t>(std::abs(int64_t{value}))};
+  auto const angle{static_cast<uint32_t>(arc_cos[(magnitude >> 18) + ((magnitude >> 17) & 1)])};
+  return value < 0 ? 0x7fffffffu - angle : angle;
 }
 uint32_t trigonometry::arctangent(int32_t const x, int32_t const y) const {
   if(!x) return y < 0 ? 0x80000000u : 0;

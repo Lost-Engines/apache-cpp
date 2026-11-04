@@ -266,6 +266,12 @@ A selected data location is remembered beside the user's saves. Fetched assets a
 
 Installer comparisons match all 1,504 files and 305,373,380 bytes against the independent media SHA-256 manifest. Normal and sanitizer runs cover BIN/ISO extraction, repeat installs, preservation of different files, repair of missing files, rejected corruption, path containment, fetch-helper caching and temporary-image cleanup. Private-window tests cover remembered data selection, stale-path recovery and save-directory protection.
 
+### Multiplayer packets
+
+The original APNET messages now have bounded encoders and decoders. Ordinary messages contain 408 bytes, the sixteen-player compressed state contains 516 bytes, and the two-player settings message contains 24 bytes. This includes discovery, names, preferences, weather, mission selection, positions, firing, casualties, scores, chat and the shared-cockpit envelope. Unused storage is zeroed rather than copying original stack contents.
+
+Comparison against intercepted original send routines passes 2,240 packets across 35 message types, matching 176,892 defined bytes. Sixty-four compressed-state decodes match 14,336 fields, including signed speed/model values and normalized orientation matrices. Another 1,620 malformed type, length and sender cases are rejected. Normal and sanitizer builds pass; these checks open no network sockets. Shared-cockpit contents, transport and session integration are still in progress.
+
 Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.

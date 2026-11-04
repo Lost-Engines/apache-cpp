@@ -2,9 +2,11 @@
 #include <iostream>
 #include <stdexcept>
 #include "configuration/preferences.h"
+#include "math/fixed.h"
 #include "render/framebuffer.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
+#include "resources/models.h"
 #include "resources/terrain.h"
 
 namespace {
@@ -57,6 +59,28 @@ int main() try {
   require(buffer.image.pixels == apache::resources::bytes{9, 9, 9, 9, 9, 9, 2, 9, 9, 4, 5, 9}, "transparent blit clips without losing source alignment");
   buffer.fill({-100, -100, 100, 100}, 7);
   require(buffer.image.pixels == apache::resources::bytes{9, 9, 9, 9, 9, 7, 7, 7, 9, 7, 7, 7}, "fill intersects the framebuffer and caller clip");
+  require(apache::math::rounded_q31(0x40000000ull) == 1, "positive half rounds upward");
+  require(apache::math::rounded_q31(0xffffffffc0000000ull) == 0, "negative half rounds toward zero");
+  require(apache::math::negate(INT32_MIN) == INT32_MIN, "fixed-point negation has defined wrapping");
+  apache::resources::bytes empty_model(188);
+  empty_model[68] = 188;
+  auto object{apache::resources::read_model(empty_model)};
+  require(object.grid_lighting.empty(), "empty lighting section can point to the end of a model");
+  empty_model[68] = 189;
+  rejects([&]{ apache::resources::read_model(empty_model); }, "model section beyond record rejected");
+  object.offsets[4] = 200;
+  apache::resources::drawing_node select;
+  select.opcode = 5;
+  select.mask = 3;
+  select.branches = {300};
+  select.next = 400;
+  object.program.emplace(200, select);
+  object.program.emplace(300, apache::resources::drawing_node{});
+  object.program.emplace(400, apache::resources::drawing_node{});
+  apache::resources::execute_model(object, 0, 1, {});
+  rejects([&]{ apache::resources::execute_model(object, 1, 1, {}); }, "unauthored model animation state rejected");
+  object.program.at(200).branches[0] = 200;
+  rejects([&]{ apache::resources::execute_model(object, 0, 1, {}); }, "cyclic model program bounded");
   std::cout << "Resource boundary and configuration tests passed" << std::endl;
   return EXIT_SUCCESS;
 } catch(std::exception const &error) {

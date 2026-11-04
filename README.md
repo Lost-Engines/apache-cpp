@@ -18,4 +18,4 @@ Run the menu frontend with:
 
 The menus open in a resizable window with square pixels. Click Flight, Quickstart, Preferences or Pilot’s Log; F1 opens the original help pages and Escape returns. Gameplay and editable mission/pilot state are still being connected.
 
-`apache_inspect` checks decoded images and terrain. See [implementation and validation](docs/implementation.md).
+`apache_inspect` checks decoded images, terrain, models and transforms. See [implementation and validation](docs/implementation.md).

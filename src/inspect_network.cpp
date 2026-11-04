@@ -1,5 +1,7 @@
 #include "inspect_network.h"
 #include "multiplayer/packet.h"
+#include "multiplayer/crew.h"
+#include "multiplayer/replication.h"
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -18,6 +20,85 @@ void inspect_network(std::istream &input, std::ostream &output) {
   while(std::getline(input, line)) {
     if(line.empty()) continue;
     std::istringstream in{line}; std::string command; in >> command;
+    if(command == "exchange") {
+      multiplayer::replication state; unsigned int seat, selector; int32_t now; in >> state.local >> state.server >> state.active >> state.client_server >> state.dead >> seat >> now >> state.ping_timer >> selector;
+      state.seat = static_cast<multiplayer::crew_role>(seat);
+      state.war_seed = 123; state.weapon_seed = 456;
+      state.synced[selector % 16] = true; state.initial_synced[selector % 16] = true;
+      state.number_synced = state.number_initial_synced = 1;
+      for(auto &p : state.players) {
+        in >> p.assigned >> p.flags >> p.score >> p.updated_at >> p.frame_time >> p.accumulated_frame_time >> p.weapon >> p.mount >> p.shot_target.kind;
+        for(auto &v : p.shot_target.data) in >> v;
+        for(auto &v : p.aircraft.location.position) in >> v; for(auto &v : p.aircraft.location.rotation) in >> v;
+        in >> p.aircraft.speed >> p.aircraft.model;
+      }
+      unsigned int crew_events{0}, score_events{0};
+      state.crew_received = [&](uint32_t, auto const &){ ++crew_events; };
+      state.score_changed = [&](uint32_t, int32_t){ ++score_events; };
+      std::string method; in >> method;
+      if(method == "extrapolate") state.extrapolate(now);
+      else if(method == "reset") state.reset_server();
+      else if(method == "frame") state.begin_frame();
+      else {
+        auto const value{multiplayer::packet::decode(hex_bytes(method))};
+        if(!value) throw std::runtime_error{"Invalid exchange packet"};
+        state.receive(*value, now);
+      }
+      if(!in) throw std::runtime_error{"Incomplete replication context"};
+      output << std::setprecision(17) << state.server << ' ' << state.number_synced << ' ' << state.number_initial_synced << ' ' << state.wind_strength << ' ' << state.wind_direction << ' ' << state.war_seed << ' ' << state.weapon_seed << ' ' << state.server_in_game << ' ' << state.server_waiting << ' ' << state.new_server_data << ' ' << state.all_synced << ' ' << state.answer_deadline << ' ' << state.client_frames << ' ' << state.ping_timer << ' ' << state.interpolated_time << ' ' << crew_events << ' ' << score_events << ' ';
+      for(auto v : state.synced) output << v << ' '; for(auto v : state.initial_synced) output << v << ' ';
+      for(auto const &p : state.players) {
+        output << p.flags << ' ' << p.score << ' ' << p.updated_at << ' ' << p.frame_time << ' ' << p.accumulated_frame_time << ' ' << p.weapon << ' ' << p.mount << ' ' << p.shot_target.kind << ' ';
+        for(auto v : p.shot_target.data) output << v << ' ';
+        for(auto v : p.aircraft.location.position) output << v << ' '; for(auto v : p.aircraft.location.rotation) output << v << ' ';
+        output << p.aircraft.speed << ' ' << p.aircraft.model << ' ';
+      }
+      output << '\n'; continue;
+    }
+    if(command == "crew-pack" || command == "crew-read" || command == "crew-valid") {
+      unsigned int selected; in >> selected; auto const role{static_cast<multiplayer::crew_role>(selected)};
+      multiplayer::crew_state state;
+      if(command == "crew-pack") {
+        unsigned int death, message, ticks, landing, count; in >> state.leaving >> death >> message >> count;
+        state.death = static_cast<uint8_t>(death); state.message = static_cast<uint8_t>(message);
+        for(unsigned int i{0}; i < count; ++i) { uint16_t key; in >> key; state.keys.push_back(key); }
+        if(role == multiplayer::crew_role::pilot) {
+          auto &p{state.pilot}; for(auto &v : p.angles) in >> v; for(auto &v : p.position) in >> v;
+          in >> p.flight_time >> p.climb >> p.fuel >> p.weight >> p.torque >> p.sidespeed >> p.airspeed;
+          for(auto &v : p.engines) in >> v;
+          in >> ticks >> landing >> p.landed; p.frame_ticks = static_cast<uint8_t>(ticks); p.landing = static_cast<uint8_t>(landing);
+        } else {
+          auto &g{state.gunner}; in >> g.hydra_elevation; for(auto &v : g.display_position) in >> v; for(auto &v : g.position) in >> v;
+          in >> g.target_kind >> g.target_source >> g.drone >> g.task;
+        }
+        if(!in) throw std::runtime_error{"Incomplete crew state"};
+        for(auto b : multiplayer::encode_crew(role, state)) output << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(b);
+        output << std::dec << ' ' << static_cast<unsigned int>(state.message) << ' ' << state.keys.size() << ' ' << static_cast<unsigned int>(state.pilot.landing) << '\n';
+      } else {
+        std::string hex; in >> hex; auto const value{multiplayer::decode_crew(role, hex_bytes(hex))};
+        if(command == "crew-valid") { output << value.has_value() << '\n'; continue; }
+        if(!value) throw std::runtime_error{"Invalid crew state"};
+        state = *value;
+        output << state.leaving << ' ' << static_cast<unsigned int>(state.death) << ' ' << static_cast<unsigned int>(state.message) << ' ' << state.keys.size() << ' ';
+        for(auto key : state.keys) output << key << ' ';
+        if(role == multiplayer::crew_role::pilot) {
+          auto const &p{state.pilot}; for(auto v : p.angles) output << v << ' '; for(auto v : p.position) output << v << ' ';
+          output << std::setprecision(17) << p.flight_time << ' ' << p.climb << ' ' << p.fuel << ' ' << p.weight << ' ' << p.torque << ' ' << p.sidespeed << ' ' << p.airspeed << ' ';
+          for(auto v : p.engines) output << v << ' ';
+          output << static_cast<unsigned int>(p.frame_ticks) << ' ' << static_cast<unsigned int>(p.landing) << ' ' << p.landed;
+        } else {
+          auto const &g{state.gunner}; output << g.hydra_elevation << ' '; for(auto v : g.display_position) output << v << ' '; for(auto v : g.position) output << v << ' ';
+          output << g.target_kind << ' ' << g.target_source << ' ' << g.drone << ' ' << g.task;
+        }
+        output << '\n';
+      }
+      continue;
+    }
+    if(command == "crew-keys") {
+      unsigned int mode, count; in >> mode >> count; multiplayer::crew_state state;
+      for(unsigned int i{0}; i < count; ++i) { uint16_t key; in >> key; output << state.notify_key(key, mode) << ' '; }
+      output << state.keys.size(); for(auto key : state.keys) output << ' ' << key; output << '\n'; continue;
+    }
     if(command == "unpack" || command == "valid") {
       std::string hex; in >> hex; auto const message{multiplayer::packet::decode(hex_bytes(hex))};
       if(command == "valid") { output << static_cast<int>(message.has_value()) << '\n'; continue; }

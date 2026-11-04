@@ -270,7 +270,11 @@ Installer comparisons match all 1,504 files and 305,373,380 bytes against the in
 
 The original APNET messages now have bounded encoders and decoders. Ordinary messages contain 408 bytes, the sixteen-player compressed state contains 516 bytes, and the two-player settings message contains 24 bytes. This includes discovery, names, preferences, weather, mission selection, positions, firing, casualties, scores, chat and the shared-cockpit envelope. Unused storage is zeroed rather than copying original stack contents.
 
-Comparison against intercepted original send routines passes 2,240 packets across 35 message types, matching 176,892 defined bytes. Sixty-four compressed-state decodes match 14,336 fields, including signed speed/model values and normalized orientation matrices. Another 1,620 malformed type, length and sender cases are rejected. Normal and sanitizer builds pass; these checks open no network sockets. Shared-cockpit contents, transport and session integration are still in progress.
+Comparison against intercepted original send routines passes 2,240 packets across 35 message types, matching 176,892 defined bytes. Sixty-four compressed-state decodes match 14,336 fields, including signed speed/model values and normalized orientation matrices. Another 1,620 malformed type, length and sender cases are rejected. Normal and sanitizer builds pass; these checks open no network sockets. Transport and session integration are still in progress.
+
+The flight-state receiver and server extrapolation match 900 original-code cases and 404,100 checked fields, including update gating, duplicate suppression, readiness, compressed state, scores and server nomination. The initial matrix and out-of-packet timestamp are excluded; the reconstruction preserves the known orientation and uses the supplied arrival clock. Both builds pass.
+
+The shared pilot/gunner record now includes instrument readings, attitude and position, target identities, Hydra elevation, landing reports, radio messages and queued controls. Both sender and receiver comparisons pass 1,000 cases each, covering 104,000 payload bytes and 48,006 decoded/queue fields. Another 1,000 original key-queue sequences and 147 malformed records pass normal and sanitizer builds. Key dispatch, scene placement, radio output and target lookup are observed boundaries in this comparison.
 
 Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 

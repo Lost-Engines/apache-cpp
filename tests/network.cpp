@@ -1,4 +1,5 @@
 #include "multiplayer/packet.h"
+#include "multiplayer/crew.h"
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
@@ -32,5 +33,18 @@ int main() try {
   batch.word(24, 43); require(!packet::decode(batch.bytes()), "oversized mobile casualty count rejected");
   batch = kills(0, "Pilot", true, 28, std::array<uint8_t, 336>{});
   batch.word(24, 29); require(!packet::decode(batch.bytes()), "oversized scenery casualty count rejected");
+  crew_state shared;
+  for(unsigned int i{0}; i < 10; ++i) require(!shared.notify_key(static_cast<uint16_t>(i + 1)), "ten distinct crew actions accepted");
+  require(shared.notify_key(1) && shared.notify_key(11) && shared.keys.size() == 10, "duplicate/full crew queue suppressed");
+  shared.message = 10; shared.pilot.landing = 3; shared.pilot.fuel = 2442; shared.pilot.weight = 16000;
+  auto payload{encode_crew(crew_role::pilot, shared)};
+  require(shared.message == 0 && shared.pilot.landing == 0 && shared.keys.empty(), "one-shot crew events consumed");
+  auto crew_value{decode_crew(crew_role::pilot, payload)};
+  require(crew_value && crew_value->keys.size() == 10 && crew_value->message == 10 && crew_value->pilot.landing == 3, "crew events preserved on receive");
+  for(size_t size{0}; size < payload.size(); ++size) require(!decode_crew(crew_role::pilot, std::span{payload}.first(size)), "truncated crew record rejected");
+  payload[44] = 11; require(!decode_crew(crew_role::pilot, payload), "crew key count cannot overrun record");
+  payload[44] = 10; payload[47] = 11; require(!decode_crew(crew_role::pilot, payload), "unknown radio message rejected");
+  payload[47] = 10; payload[76] = 3; require(!decode_crew(crew_role::gunner, payload), "unknown gunner target type rejected");
+  require(!decode_crew(static_cast<crew_role>(2), payload), "single-player role rejected for shared cockpit");
   return EXIT_SUCCESS;
 } catch(std::exception const &error) { std::cerr << error.what() << '\n'; return EXIT_FAILURE; }

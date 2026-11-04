@@ -1,6 +1,57 @@
 #include "mission_network.h"
+#include "render/fragment_renderer.h"
 
 namespace apache::simulation {
+mission_network::mission_network(mission_runtime &mission) : runtime{mission}, lifecycle{state} {
+  auto const link{[this](size_t index){ return multiplayer::actor_link{index, runtime.actors.units[index].destroyed, runtime.spatial.player == index}; }};
+  lifecycle.events.player = [this, link](uint32_t connection) -> std::optional<multiplayer::actor_link> {
+    if(auto index{actor(connection)}) return link(*index);
+    return {};
+  };
+  lifecycle.events.find = [this, link](int32_t serial, int32_t task) -> std::optional<multiplayer::actor_link> {
+    for(size_t index{0}; index < runtime.actors.units.size(); ++index) {
+      auto const &unit{runtime.actors.units[index]};
+      if(unit.serial == serial && static_cast<int64_t>(unit.location.task) == task) return link(index);
+    }
+    return {};
+  };
+  lifecycle.events.remove = [this](size_t index){
+    runtime.combat.kill(index);
+    render::fracture_model(runtime.actors.units[index].object, runtime.debris, runtime.random.global_seed);
+  };
+  lifecycle.events.leave = [this](size_t index){ runtime.spatial.unplace(index); runtime.actors.units[index].destroyed = 1; };
+  lifecycle.events.restart = [this](size_t index, math::pose const &position, int32_t model){
+    runtime.actors.units[index].object.world = position;
+    for(uint32_t connection{0}; connection < assignments.size(); ++connection) if(assignments[connection] == index) { revive(connection, model); break; }
+  };
+  lifecycle.events.countermeasure = [this](size_t index, bool flare){ if(runtime.weapons) runtime.weapons->fire_remote(index, flare ? 8 : 7, 0, {}, {}); };
+  lifecycle.events.death = [this](unsigned int cause){ if(runtime.pilot) runtime.pilot->request_death(cause); };
+  lifecycle.events.player_killed = [this](){
+    if(!runtime.spatial.player) return;
+    auto &object{runtime.actors.units[*runtime.spatial.player].object}; if(object.status & 1) return;
+    if(runtime.pilot) runtime.pilot->request_death(4);
+    auto const mode{lifecycle.mode};
+    if(mode != multiplayer::game_mode::combat && mode != multiplayer::game_mode::multiplayer && mode != multiplayer::game_mode::capture_the_flag) object.status |= 1;
+  };
+  lifecycle.events.mobile_killed = [this](size_t index, uint8_t source){
+    if(runtime.actors.units[index].object.status & 1) return;
+    auto const id{runtime.spatial.targets[index]->identity};
+    if(remote_killed) remote_killed(id, source);
+    if(runtime.damage) runtime.damage->destroy(id);
+  };
+  lifecycle.events.scenery_killed = [this](math::vector3 const &position, uint8_t source){
+    auto const target{resolve({1, position})}; if(!target) return;
+    auto const &id{target->identity}; auto const &object{(id.layer ? runtime.scene.extra : runtime.scene.base)[id.index]};
+    if(object.status & 1) return;
+    if(remote_killed) remote_killed(id, source);
+    if(runtime.damage) runtime.damage->destroy(id);
+  };
+  lifecycle.events.notice = [this](auto text, auto priority, auto lifetime){ if(runtime.events.notice) runtime.events.notice(text, priority, lifetime); };
+  lifecycle.events.scores = [this](){
+    std::array<int32_t, 16> values{}; for(size_t i{0}; i < values.size(); ++i) values[i] = state.players[i].score;
+    if(send) send(multiplayer::scores(state.local, state.players[state.local].name, values));
+  };
+}
 std::optional<size_t> mission_network::actor(uint32_t const connection) const {
   if(connection >= state.players.size()) return {};
   return assignments[connection];
@@ -106,7 +157,9 @@ multiplayer::target_state mission_network::identify(target_reference const &targ
   return {};
 }
 bool mission_network::receive(multiplayer::packet const &message, int32_t const now) {
-  if(!enabled || !state.receive(message, now)) return false;
+  if(!enabled) return false;
+  if(lifecycle.receive(message)) return true;
+  if(!state.receive(message, now)) return false;
   if(message.type() == multiplayer::message_type::position) {
     if(auto index{actor(message.sender())}) {
       auto const target{resolve(state.players[message.sender()].target)};

@@ -28,7 +28,7 @@ std::optional<packet> packet::decode(std::span<uint8_t const> const source) {
   uint32_t sender{0};
   if(!headerless(static_cast<message_type>(type))) { input.seek(16); sender = input.u32(); }
   if(!headerless(static_cast<message_type>(type)) && sender >= 16 && !(type == 2 && sender == UINT32_MAX)) return {};
-  if((type == 26 && source[24] > 42) || (type == 27 && source[24] > 28)) return {};
+  if((type == 26 && source[24] > 63) || (type == 27 && source[24] > 28)) return {};
   packet result{static_cast<message_type>(type), sender}; result.storage.assign(source.begin(), source.end()); return result;
 }
 message_type packet::type() const { return static_cast<message_type>(word(0)); }
@@ -82,7 +82,7 @@ packet crew(uint32_t const sender, std::string_view const name, std::span<uint8_
   packet result{message_type::crew, sender, name}; result.copy(24, payload); return result;
 }
 packet kills(uint32_t const sender, std::string_view const name, bool const scenery, uint8_t const count, std::span<uint8_t const> const records) {
-  if(count > (scenery ? 28 : 42) || records.size() != (scenery ? 336u : 252u)) throw std::runtime_error{"Invalid multiplayer casualty batch"};
+  if(count > (scenery ? 28 : 63) || records.size() != (scenery ? 336u : 252u)) throw std::runtime_error{"Invalid multiplayer casualty batch"};
   packet result{scenery ? message_type::scenery_kills : message_type::mobile_kills, sender, name};
   result.word(24, count); result.copy(scenery ? 28 : 26, records); return result;
 }

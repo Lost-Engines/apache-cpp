@@ -3,6 +3,8 @@
 #include "multiplayer/crew.h"
 #include "multiplayer/replication.h"
 #include "multiplayer/rules.h"
+#include "multiplayer/lifecycle.h"
+#include "multiplayer/casualties.h"
 #include "simulation/remote_weapons.h"
 #include <iomanip>
 #include <sstream>
@@ -46,6 +48,57 @@ void inspect_network(std::istream &input, std::ostream &output) {
         for(auto v : shot.request.launch.pose.position) output << ' ' << v; for(auto v : shot.request.launch.pose.rotation) output << ' ' << v;
       }
       output << '\n'; continue;
+    }
+    if(command == "casualties") {
+      multiplayer::casualties queue; unsigned int count, sender; bool scenery;
+      in >> scenery >> sender >> count;
+      for(unsigned int i{0}; i < count; ++i) {
+        int32_t first, second; unsigned int source; in >> first >> second >> source;
+        output << (scenery ? queue.scenery(first, second, static_cast<uint8_t>(source)) : queue.mobile(first, second, static_cast<uint8_t>(source))) << ' ';
+      }
+      auto result{scenery ? queue.take_scenery(sender, "PILOT123") : queue.take_mobile(sender, "PILOT123")};
+      if(result) for(auto b : result->bytes()) output << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(b);
+      else output << "empty";
+      output << std::dec << ' ' << queue.take_mobile(sender, "PILOT123").has_value() << ' ' << queue.take_scenery(sender, "PILOT123").has_value() << '\n'; continue;
+    }
+    if(command == "lifecycle") {
+      multiplayer::replication state; multiplayer::lifecycle life{state}; unsigned int mode;
+      in >> state.local >> state.server >> state.active >> state.client_server >> mode >> life.following >> life.other_players;
+      life.mode = static_cast<multiplayer::game_mode>(mode);
+      std::array<int, 16> assignments{}, destroyed{};
+      for(size_t i{0}; i < 16; ++i) {
+        auto &p{state.players[i]}; in >> assignments[i] >> destroyed[i] >> p.flags >> p.score >> p.aircraft.model;
+        p.name = "PLAYER" + std::to_string(i); p.assigned = assignments[i] >= 0;
+      }
+      std::ostringstream events;
+      auto link{[&](size_t id){ return multiplayer::actor_link{id, destroyed[id], id == state.local}; }};
+      life.events.player = [&](uint32_t id) -> std::optional<multiplayer::actor_link> {
+        if(id >= assignments.size() || assignments[id] < 0) return {}; return link(static_cast<size_t>(assignments[id]));
+      };
+      life.events.find = [&](int32_t serial, int32_t task) -> std::optional<multiplayer::actor_link> {
+        if(serial < 0 || serial >= 16 || task != serial % 3) return {}; return link(static_cast<size_t>(serial));
+      };
+      life.events.remove = [&](size_t id){ events << " remove " << id; destroyed[id] = 1; };
+      life.events.leave = [&](size_t id){ events << " leave " << id; destroyed[id] = 1; };
+      life.events.restart = [&](size_t id, math::pose const &pose, int32_t model){
+        events << " restart " << id << ' ' << model;
+        for(auto v : pose.position) events << ' ' << v; for(auto v : pose.rotation) events << ' ' << v;
+        destroyed[id] = 0;
+      };
+      life.events.countermeasure = [&](size_t id, bool flare){ events << (flare ? " flare " : " chaff ") << id; };
+      life.events.death = [&](unsigned int cause){ events << " death " << cause; };
+      life.events.player_killed = [&](){ events << " killed"; };
+      life.events.mobile_killed = [&](size_t id, uint8_t source){ events << " mobile " << id << ' ' << static_cast<unsigned int>(source); };
+      life.events.scenery_killed = [&](math::vector3 const &position, uint8_t source){ events << " scenery"; for(auto v : position) events << ' ' << v; events << ' ' << static_cast<unsigned int>(source); };
+      life.events.flag_won = [&](uint32_t id){ events << " flag " << id; };
+      life.events.notice = [&](std::string_view text, int32_t priority, int32_t lifetime){ events << " notice " << std::quoted(std::string{text}) << ' ' << priority << ' ' << lifetime; };
+      life.events.scores = [&](){ events << " scores"; };
+      std::string hex; in >> hex; auto const message{multiplayer::packet::decode(hex_bytes(hex))};
+      if(!in || !message) throw std::runtime_error{"Incomplete lifecycle context"};
+      life.receive(*message);
+      output << state.active << ' ' << life.following << ' ' << life.other_players;
+      for(size_t i{0}; i < 16; ++i) output << ' ' << state.players[i].flags << ' ' << state.players[i].score << ' ' << destroyed[i];
+      output << events.str() << '\n'; continue;
     }
     if(command == "exchange") {
       multiplayer::replication state; unsigned int seat, selector; int32_t now; in >> state.local >> state.server >> state.active >> state.client_server >> state.dead >> seat >> now >> state.ping_timer >> selector;

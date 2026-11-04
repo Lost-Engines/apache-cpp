@@ -284,6 +284,10 @@ Network target lookup matches 5,567 queries across four warzones, including form
 
 Aircraft allocation, carrier detachment, Apache/Hind model replacement and revival match 675 assignment attempts, 108 restarts and 785 complete mobile/contact-registry fingerprints across four warzones and the dedicated multiplayer/flag missions. The 24,857 reported fields agree in normal and sanitizer builds. Both applications build, and all four CTest targets pass. Non-aircraft assignment and repeated carrier detachment are rejected.
 
+Network lifecycle handlers match 1,800 original-code cases across twelve message types (108,955 state and event fields). Casualty queues match 400 batches, 9,963 attempted records, 196 overflow rejections and 159,528 complete packet bytes. Mobile records are four bytes each, with a capacity of 63; scenery records are twelve bytes each, with a capacity of 28. Empty queues send nothing, and successful sends consume their records.
+
+The scene connection passes 360 event sequences across four warzones and the multiplayer/flag maps, including 108 restarts. Aircraft state, task counts, 18,573 debris states and 76,213 explosion/crater states match 439,192 fields. Both normal and sanitizer builds pass, as do both full application builds and all four CTest targets. Collision messages use the known participant identity instead of an uninitialized task word in the original sender. Local reports are under `network-{lifecycle,casualties,scene-events}` in the analysis checkout.
+
 Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.

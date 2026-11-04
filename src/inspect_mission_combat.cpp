@@ -198,6 +198,57 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       for(auto value : spatial.grid.peak_counts()) output << ' ' << value;
       output << '\n';
     }
+    else if(command == "network-context") {
+      unsigned int mode;
+      input >> network.state.local >> mode >> network.lifecycle.following >> network.lifecycle.other_players;
+      network.state.active = true; network.lifecycle.mode = static_cast<multiplayer::game_mode>(mode);
+      if(damage) damage->environment.mode = static_cast<int32_t>(mode);
+      for(auto &player : network.state.players) player.aircraft.model = 64;
+      network.remote_killed = [&](auto const &target, uint8_t source){ output << "remote-kill " << identity(target) << ' ' << static_cast<unsigned int>(source) << '\n'; };
+    }
+    else if(command == "network-receive") {
+      int32_t now; std::string hex; input >> now >> hex; resources::bytes bytes;
+      for(size_t i{0}; i < hex.size(); i += 2) bytes.push_back(static_cast<uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+      auto const message{multiplayer::packet::decode(bytes)}; if(!message) throw std::runtime_error{"Invalid mission network packet"};
+      if(launched) launched->environment.now = now;
+      targets.now = now; network.receive(*message, now);
+    }
+    else if(command == "network-fragments") {
+      for(size_t i{0}; i < runtime.debris.pieces.size(); ++i) {
+        auto const &piece{runtime.debris.pieces[i]}; if(!piece.active) continue;
+        output << "network-fragment " << i << " 1 " << piece.model << ' ' << piece.flags;
+        for(auto v : piece.position.position) output << ' ' << static_cast<uint32_t>(v);
+        for(auto v : piece.position.rotation) output << ' ' << static_cast<uint32_t>(v);
+        for(auto v : piece.axis) output << ' ' << static_cast<uint32_t>(v);
+        output << ' ' << static_cast<uint32_t>(piece.spin);
+        for(auto v : piece.velocity) output << ' ' << static_cast<uint32_t>(v);
+        output << '\n';
+      }
+    }
+    else if(command == "network-summary") {
+      resources::bytes actor_data, fragment_data;
+      auto const word{[](resources::bytes &bytes, uint32_t value){ for(unsigned int i{0}; i < 4; ++i) bytes.push_back(static_cast<uint8_t>(value >> (8 * i))); }};
+      for(auto const &unit : actors.units) {
+        for(auto value : {unit.object.id, unit.object.status, static_cast<uint32_t>(unit.destroyed)}) word(actor_data, value);
+        for(auto value : unit.object.world.position) word(actor_data, static_cast<uint32_t>(value));
+        for(auto value : unit.object.world.rotation) word(actor_data, static_cast<uint32_t>(value));
+        for(auto value : unit.velocity) word(actor_data, static_cast<uint32_t>(value)); word(actor_data, static_cast<uint32_t>(unit.speed));
+        word(actor_data, static_cast<uint32_t>(unit.object.children.size()));
+        for(auto const &child : unit.object.children) word(actor_data, child ? child->id : 0);
+      }
+      size_t count{0};
+      for(size_t i{0}; i < runtime.debris.pieces.size(); ++i) {
+        auto const &piece{runtime.debris.pieces[i]}; if(!piece.active) continue; ++count;
+        word(fragment_data, static_cast<uint32_t>(i)); word(fragment_data, 1); word(fragment_data, piece.model); word(fragment_data, piece.flags);
+        for(auto v : piece.position.position) word(fragment_data, static_cast<uint32_t>(v));
+        for(auto v : piece.position.rotation) word(fragment_data, static_cast<uint32_t>(v));
+        for(auto v : piece.axis) word(fragment_data, static_cast<uint32_t>(v));
+        word(fragment_data, static_cast<uint32_t>(piece.spin));
+        for(auto v : piece.velocity) word(fragment_data, static_cast<uint32_t>(v));
+      }
+      output << "network-summary " << network.state.active << ' ' << network.lifecycle.following << ' ' << network.lifecycle.other_players << ' ' << random.global_seed << ' ' << resources::fingerprint(actor_data) << ' ' << count << ' ' << resources::fingerprint(fragment_data);
+      for(auto value : combat.alive) output << ' ' << value; output << '\n';
+    }
     else if(command == "network-target") {
       multiplayer::target_state request; input >> request.kind; for(auto &v : request.data) input >> v;
       auto const result{network.resolve(request)}; output << "network-target " << (result ? identity(result->identity) : 0) << '\n';

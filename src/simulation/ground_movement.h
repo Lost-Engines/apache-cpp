@@ -24,5 +24,6 @@ class ground_movement {
 public:
   ground_movement(std::vector<actor_state> &actors, actor_group const &actor_group, resources::mission_task const &orders, std::span<resources::formation_member const> members, math::trigonometry const &angles, actor_environment const &world);
   void update(int32_t now, int32_t delta_time);
+  void finish_battle(bool advance, int32_t delta_time);
 };
 } // namespace apache::simulation

@@ -55,6 +55,8 @@
 #include "inspect_target_search.h"
 #include "inspect_actor_targeting.h"
 #include "inspect_patrol.h"
+#include "inspect_battles.h"
+#include "simulation/battles.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
 #include "simulation/actor_movement.h"
@@ -148,6 +150,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(command == "battles") { inspect_battles(std::cin, std::cout, data); return 0; }
   if(command == "patrol") { inspect_patrol(std::cin, std::cout, data); return 0; }
   if(command == "actor-targeting") { inspect_actor_targeting(std::cin, std::cout, data); return 0; }
   if(command == "target-search") { inspect_target_search(std::cin, std::cout); return 0; }
@@ -172,7 +175,7 @@ int main(int const argc, char const *const argv[]) try {
   } else if(command == "briefings") {
     if(argc != 4) throw std::runtime_error{"briefings requires a bundle resource"};
     for(auto const &mission : apache::resources::read_mission_briefings(data.read(argv[3]))) std::cout << mission.id << ' ' << mission.flow << ' ' << mission.zone << ' ' << mission.level << ' ' << std::quoted(mission.title) << '\n';
-  } else if(command == "mission-actors" || command == "mission-actor-state" || command == "ground-trace" || command == "actor-trace") {
+  } else if(command == "mission-actors" || command == "mission-actor-state" || command == "mission-battles" || command == "ground-trace" || command == "actor-trace") {
     if(argc != 5) throw std::runtime_error{"mission-actors requires a warzone and mission resource"};
     auto const bytes{data.read(argv[4])};
     auto const mission{apache::resources::read_mission_definition({reinterpret_cast<char const*>(bytes.data()), bytes.size()})};
@@ -187,6 +190,15 @@ int main(int const argc, char const *const argv[]) try {
       .surface{[&](int32_t x, int32_t y){ return apache::resources::surface_type(features, super_features, x, y); }},
     };
     apache::simulation::mission_actors actors{mission, formations, models, trig, environment, 0};
+    if(command == "mission-battles") {
+      auto const battles{apache::simulation::initialise_battles(mission, actors.groups)};
+      for(size_t i{0}; i != battles.size(); ++i) {
+        std::cout << i << ' ' << battles[i].active;
+        for(auto const &side : battles[i].sides) std::cout << ' ' << (side.task ? static_cast<int64_t>(*side.task) : -1) << ' ' << side.initial << ' ' << side.opponent_position[0] << ' ' << side.opponent_position[1] << ' ' << side.release_time;
+        std::cout << '\n';
+      }
+      return 0;
+    }
     if(command == "ground-trace" || command == "actor-trace") {
       bool const all{command == "actor-trace"};
       apache::simulation::navigation_environment navigation_world{.height{environment.height}};
@@ -202,10 +214,10 @@ int main(int const argc, char const *const argv[]) try {
         if(kind == 3 || kind == 4 || kind == 8) for(auto id : group.units) ground_units[id] = true;
       }
       while(std::cin >> operation) {
-        if(operation == "step") {
-          int32_t now{0}, delta{0}; bool snapshot{false}; std::cin >> now >> delta >> snapshot;
-          if(all) { timing.now = now; timing.delta = delta; movement.update(timing); actors.synchronize_models(); }
-          else for(auto const &group : actors.groups) {
+        if(operation == "step" || operation == "snapshot") {
+          int32_t now{0}, delta{0}; bool snapshot{operation == "snapshot"}; if(operation == "step") std::cin >> now >> delta >> snapshot;
+          if(operation == "step" && all) { timing.now = now; timing.delta = delta; movement.update(timing); actors.synchronize_models(); }
+          else if(operation == "step") for(auto const &group : actors.groups) {
             apache::simulation::ground_movement movement{actors.units, group, mission.tasks[group.task], formations[group.definition.formation], trig, environment};
             movement.update(now, delta);
           }
@@ -221,6 +233,12 @@ int main(int const argc, char const *const argv[]) try {
             std::cout << '\n';
           }
           ++frame;
+        } else if(operation == "battle-end") {
+          size_t task{0}; bool advance{false}; int32_t delta{0}; std::cin >> task >> advance >> delta;
+          for(auto const &group : actors.groups) if(group.task == task) {
+            apache::simulation::ground_movement transition{actors.units, group, mission.tasks[group.task], formations[group.definition.formation], trig, environment};
+            transition.finish_battle(advance, delta);
+          }
         } else if(operation == "mode") {
           std::cin >> timing.arcade >> timing.game_flow;
         } else if(operation == "flags" || operation == "destroyed" || operation == "network" || operation == "retreat") {

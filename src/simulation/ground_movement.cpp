@@ -135,6 +135,22 @@ void ground_movement::move(actor_state &unit, actor_state const &leader, bool co
     if(with_members) members_past_waypoint(unit, movement, previous_distance);
   }
 }
+void ground_movement::finish_battle(bool const advance, int32_t const delta_time) {
+  if(group.units.empty()) return;
+  auto &leader{units[group.units.front()]}; auto const &route{group.definition.waypoints};
+  leader.conditions = (leader.conditions & ~6u) | (advance ? 4u : 2u);
+  if(leader.waypoint && *leader.waypoint < route.size()) {
+    auto const current{*leader.waypoint};
+    if(advance && current + 1 < route.size()) leader.waypoint = current + 1;
+    else if(!advance && current) leader.waypoint = current - 1;
+    auto const &point{route[*leader.waypoint]};
+    leader.speed = leader.destroyed ? 0 : point.speed;
+    leader.route_distance = std::max(1, distance(point.position, leader.object.world.position));
+    leader.angles[0] = trig.arctangent(math::subtract(point.position[0], leader.object.world.position[0]), math::subtract(point.position[1], leader.object.world.position[1]));
+  } else { leader.speed = 0; leader.route_distance = 1; }
+  leader.velocity = {math::multiply_q31(trig.sine(leader.angles[0]), leader.speed), math::multiply_q31(trig.cosine(leader.angles[0]), leader.speed), math::multiply_q31(trig.sine(leader.angles[1]), leader.speed)};
+  delta = delta_time; members_past_waypoint(leader, 1, 0);
+}
 void ground_movement::update(int32_t const now, int32_t const delta_time) {
   if(group.units.empty() || task.type == 10 || task.type == 11 || task.type == 16 || task.type == 20) return;
   auto &leader{units[group.units.front()]};

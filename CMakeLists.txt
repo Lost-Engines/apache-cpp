@@ -34,6 +34,10 @@ add_library(apache_core
   src/render/terrain_projection.h
   src/render/draw_queue.cpp
   src/render/draw_queue.h
+  src/render/mobile_scene.cpp
+  src/render/mobile_scene.h
+  src/render/shadows.cpp
+  src/render/shadows.h
   src/render/model_renderer.cpp
   src/render/model_renderer.h
   src/render/scene_palette.cpp

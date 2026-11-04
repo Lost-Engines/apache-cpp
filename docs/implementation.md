@@ -20,6 +20,8 @@ Current implementation:
 - Star-map decoding, night visibility thresholds, sun/moon projection and sun glare.
 - Cloud-sector selection, quantized cloud mesh, detail transitions, horizon fading and interleaved scene sorting.
 - Smoke and explosion creation, circular storage, lifetime updates, masked billboards and scene sorting.
+- Moving-object sector lists, cloud visibility, model/shadow sorting and hidden-player handling.
+- Sun-cast model shadows with clipping, attachments, detail chains and ship-deck receiving.
 - Bounded feature-record decoding, distant feature variants and 2D world-window clipping.
 - Perspective projection and five-plane clipping with interpolated texture coordinates and lighting.
 - Preference parsing, conversion and serialization.
@@ -63,11 +65,15 @@ Validation completed:
 - 4,635 effect operations match 411 original state snapshots containing 185,236 active records, including storage wraparound and expiration.
 - 96 assembled effect scenes match 7,372,800 pixels across all four warzones and weather states.
 - Effect sprite, state and combined-scene comparisons also run under AddressSanitizer and UndefinedBehaviorSanitizer.
+- 3,392 shadow frames match 260,505,600 pixels across all 848 true-coordinate models, four orientations and animation states, and both ground and cloud-layer projection.
+- 3,056 mobile-scene operations match 144 sector-list snapshots, 384 drawing queues and 400 ship-deck receiver checks.
+- 96 assembled moving-object scenes match 7,372,800 pixels, including aircraft, carrier models, shadows, hidden-player handling, terrain, clouds, smoke and explosions.
+- Shadow catalogue, mobile-state and combined-scene comparisons also pass under sanitizers.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: moving objects, scene effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
+Next: craters, fragments, remaining palette effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

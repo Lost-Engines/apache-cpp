@@ -49,7 +49,9 @@ model read_model(std::span<uint8_t const> const data) {
     if(offset && (offset < 188 || offset > data.size())) input.fail("Section leaves model payload");
   }
   result.name = input.terminated_text(16);
-  result.description = input.terminated_text(100);
+  result.description = input.terminated_text(64);
+  result.properties = input.u32();
+  for(auto &value : result.metadata) value = input.i32();
   if(result.offsets[0]) {
     input.seek(result.offsets[0]);
     auto const count{input.u32()};

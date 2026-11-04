@@ -6,7 +6,7 @@
 #include "terrain_projection.h"
 
 namespace apache::render {
-landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, effect_drawer{data}, textures{data, zone}, features{data, zone, false}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone} {
+landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, effect_drawer{data}, textures{data, zone}, features{data, zone, false}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone}, mobiles{models} {
   auto const placements{resources::read_scenery(data.read(std::string{zone} + ".WZ/GNDOBJS.BIN"))};
   scenery.reserve(placements.size());
   for(auto const &placement : placements) {
@@ -131,13 +131,25 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
   }
   sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
   submit_effects(queue, effects, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
+  shadow_projection casting{terrain, trig, options.lighting};
+  casting.cloud_mode = sky.cloud_mode; casting.cloud_top = options.cloud_top;
+  casting.receiver = [&](math::vector3 const &position){ return mobiles.shadow_receiver(position); };
+  bool const shadows{options.shadows && options.lighting.night == 0 && std::bit_cast<int32_t>(options.lighting.pitch) < -0x71c71c6 && ((sky.cloud_mode == 0 && sky.weather == 0) || sky.cloud_mode == 2)};
+  mobiles.submit(queue, camera, {.cloud_mode{sky.cloud_mode}, .cloud_flags{sky.cloud_flags}, .weather{sky.weather}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}, .shadows{shadows}}, casting);
+  shadow_renderer shadow_drawer{target, models, casting, palette};
   for(auto const &entry : queue.ordered()) {
     if(entry.kind == draw_kind::terrain) draw_tile(tiles[entry.payload], false);
     else if(entry.kind == draw_kind::smoke) effect_drawer.draw_smoke(effects.smoke_puffs.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
     else if(entry.kind == draw_kind::explosion) effect_drawer.draw_explosion(effects.explosions.at(entry.payload), camera, angles[2], trig, view, cloud_raster);
     else if(entry.kind == draw_kind::cloud) clouds->draw(cloud_raster, view, palette, entry.payload);
-    else {
-      object_drawer.draw(scenery[entry.payload], camera);
+    else if(entry.kind == draw_kind::shadow) {
+      auto &object{mobiles.at(entry.payload)}; object.distance = entry.depth;
+      shadow_drawer.draw(object, camera);
+    } else {
+      if(entry.kind == draw_kind::mobile && options.hidden_mobile == entry.payload) continue;
+      auto &object{entry.kind == draw_kind::mobile ? mobiles.at(entry.payload) : scenery[entry.payload]};
+      object.distance = entry.depth;
+      object_drawer.draw(object, camera);
       missing_normals += object_drawer.missing_normals;
       invalid_texture_samples += object_drawer.invalid_texture_samples;
     }

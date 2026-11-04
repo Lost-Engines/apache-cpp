@@ -52,6 +52,8 @@ struct model {
   std::vector<math::vector3> normals;
   uint16_t shaded_normals{0};
   std::map<uint32_t, drawing_node> program;
+  uint32_t properties{0};
+  std::array<int32_t, 8> metadata;
   bytes shadow;
   bytes grid_lighting;
 };

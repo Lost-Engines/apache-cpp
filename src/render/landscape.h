@@ -6,6 +6,7 @@
 #include "feature_renderer.h"
 #include "horizon.h"
 #include "model_renderer.h"
+#include "mobile_scene.h"
 #include "sector_scan.h"
 #include "terrain_renderer.h"
 #include "resources/features.h"
@@ -17,6 +18,8 @@ struct landscape_options {
   bool features{true};
   bool scenery{true};
   bool celestial_bodies{true};
+  bool shadows{true};
+  std::optional<uint32_t> hidden_mobile;
   sky_lighting lighting;
   int cloud_height{26000};
   int32_t cloud_bottom{6400000};
@@ -39,6 +42,7 @@ class landscape {
   std::array<std::vector<size_t>, 4096> scenery_sectors;
 public:
   scene_palette palette;
+  mobile_scene mobiles;
   int32_t sun_glare{0};
   simulation::effects effects;
   size_t missing_normals{0};

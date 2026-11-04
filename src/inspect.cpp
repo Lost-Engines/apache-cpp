@@ -17,6 +17,7 @@
 #include "render/projection2.h"
 #include "render/rasterizer.h"
 #include "render/sector_scan.h"
+#include "render/shadows.h"
 #include "render/terrain_projection.h"
 #include "render/terrain_renderer.h"
 #include "render/terrain_shading.h"
@@ -86,7 +87,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects") {
+  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles") {
     apache::math::trigonometry const trig{data};
     std::string zone, loaded;
     std::unique_ptr<apache::render::landscape> world;
@@ -94,11 +95,11 @@ int main(int const argc, char const *const argv[]) try {
     uint32_t heading{0}, pitch{0}, roll{0};
     apache::render::landscape_options options;
     options.scenery = command == "scene";
-    options.celestial_bodies = command == "atmosphere" || command == "scene-effects";
+    options.celestial_bodies = command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles";
     while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
       if(options.celestial_bodies) std::cin >> options.sky.cloud_flags >> options.sky.weather >> options.cloud_height >> options.cloud_bottom >> options.cloud_top >> options.lighting.heading >> options.lighting.pitch >> options.lighting.night;
       if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
-      if(command == "scene-effects") {
+      if(command == "scene-effects" || command == "scene-mobiles") {
         world->effects.reset();
         size_t count{0}, puffs{0}, blasts{0}; std::cin >> count;
         for(size_t i{0}; i != count; ++i) {
@@ -109,6 +110,17 @@ int main(int const argc, char const *const argv[]) try {
           else world->effects.explosions.at(blasts++) = {kind, position, {0, 0, 0}, radius, age};
         }
       }
+      if(command == "scene-mobiles") {
+        world->mobiles.clear();
+        size_t count{0}; int64_t hidden{-1}; std::cin >> count >> hidden;
+        options.hidden_mobile = hidden < 0 ? std::nullopt : std::optional{static_cast<uint32_t>(hidden)};
+        for(size_t i{0}; i != count; ++i) {
+          uint32_t model{0}, flags{0}, h{0}, p{0}, r{0}; bool alternate{false}; apache::math::pose pose;
+          std::cin >> model >> flags >> pose.position[0] >> pose.position[1] >> pose.position[2] >> h >> p >> r >> alternate;
+          pose.rotation = trig.transformation(h, p, r);
+          auto &object{world->mobiles.at(world->mobiles.add(model, pose))}; object.flags = flags; object.alternate_colours = alternate;
+        }
+      }
       apache::render::framebuffer frame{320, 240};
       for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world->palette.colours[i * 3], world->palette.colours[i * 3 + 1], world->palette.colours[i * 3 + 2]};
       frame.clear(255);
@@ -116,9 +128,80 @@ int main(int const argc, char const *const argv[]) try {
       world->draw(frame, camera, options);
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec;
       if(options.celestial_bodies) std::cout << ' ' << world->sun_glare;
-      if(command == "scene" || command == "scene-effects") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
+      if(command == "scene" || command == "scene-effects" || command == "scene-mobiles") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "mobile-state") {
+    apache::math::trigonometry const trig{data};
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    apache::render::mobile_scene mobiles{models};
+    std::optional<apache::resources::terrain> terrain;
+    std::string operation;
+    auto const pose_input{[&]{
+      apache::math::pose pose; uint32_t h{0}, p{0}, r{0};
+      std::cin >> pose.position[0] >> pose.position[1] >> pose.position[2] >> h >> p >> r;
+      pose.rotation = trig.transformation(h, p, r); return pose;
+    }};
+    while(std::cin >> operation) {
+      if(operation == "reset") {
+        std::string zone; std::cin >> zone; terrain.emplace(data.read(zone + ".WZ/GRIDPOST.BIN")); mobiles.clear();
+      } else if(operation == "add") {
+        uint32_t model{0}; std::cin >> model; mobiles.add(model, pose_input());
+      } else if(operation == "move") {
+        uint32_t id{0}; std::cin >> id; mobiles.move(id, pose_input());
+      } else if(operation == "remove") {
+        uint32_t id{0}; std::cin >> id; mobiles.remove(id);
+      } else if(operation == "state") {
+        apache::resources::bytes trace;
+        for(size_t sector{0}; sector != 4096; ++sector) {
+          auto const ids{mobiles.sector(sector)};
+          if(ids.empty()) continue;
+          word(trace, static_cast<uint32_t>(sector)); word(trace, static_cast<uint32_t>(ids.size()));
+          for(auto const id : ids) word(trace, id);
+        }
+        std::cout << std::hex << apache::resources::fingerprint(trace) << std::dec << '\n';
+      } else if(operation == "receiver") {
+        apache::math::vector3 position; for(auto &v : position) std::cin >> v;
+        auto const height{mobiles.shadow_receiver(position)}; std::cout << (height ? *height : -1) << '\n';
+      } else if(operation == "queue") {
+        auto camera{pose_input()};
+        apache::render::mobile_visibility visibility; apache::render::sky_lighting light; size_t prefill{0};
+        std::cin >> visibility.cloud_mode >> visibility.cloud_flags >> visibility.weather >> visibility.cloud_bottom >> visibility.cloud_top >> visibility.near_depth >> visibility.far_depth >> light.heading >> light.pitch >> visibility.shadows >> prefill;
+        if(!terrain) throw std::runtime_error{"Reset the mobile scene before drawing it"};
+        camera.position[2] = std::max(camera.position[2], terrain->elevation(camera.position[0], camera.position[1]) + 256);
+        apache::render::shadow_projection casting{*terrain, trig, light}; casting.cloud_mode = visibility.cloud_mode; casting.cloud_top = visibility.cloud_top;
+        apache::render::draw_queue queue;
+        for(size_t i{0}; i != prefill; ++i) if(!queue.consume_unused_slot()) break;
+        mobiles.submit(queue, camera, visibility, casting);
+        apache::resources::bytes trace;
+        for(auto const &draw : queue.ordered()) { word(trace, static_cast<uint32_t>(draw.kind)); word(trace, draw.payload); word(trace, static_cast<uint32_t>(draw.depth)); }
+        std::cout << 7200 - queue.available() << ' ' << trace.size() / 12 << ' ' << std::hex << apache::resources::fingerprint(trace) << std::dec << '\n';
+      } else throw std::runtime_error{"Unknown mobile-state operation"};
+    }
+  } else if(command == "shadows") {
+    apache::math::trigonometry const trig{data};
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    std::string zone, loaded;
+    std::optional<apache::resources::terrain> terrain;
+    std::optional<apache::render::scene_palette> palette;
+    uint32_t id{0}, flags{0}, heading{0}, pitch{0}, roll{0}, ch{0}, cp{0}, cr{0};
+    int32_t distance{0};
+    unsigned int mode{0};
+    apache::math::pose object, camera;
+    apache::render::sky_lighting light;
+    while(std::cin >> zone >> id >> flags >> object.position[0] >> object.position[1] >> object.position[2] >> heading >> pitch >> roll >> camera.position[0] >> camera.position[1] >> camera.position[2] >> ch >> cp >> cr >> light.heading >> light.pitch >> mode >> distance) {
+      if(loaded != zone) { terrain.emplace(data.read(zone + ".WZ/GRIDPOST.BIN")); palette.emplace(data, zone); loaded = zone; }
+      object.rotation = trig.transformation(heading, pitch, roll);
+      camera.rotation = trig.transformation(ch, cp, cr);
+      camera.position[2] = std::max(camera.position[2], terrain->elevation(camera.position[0], camera.position[1]) + 256);
+      apache::render::shadow_projection casting{*terrain, trig, light}; casting.cloud_mode = mode;
+      apache::render::framebuffer frame{320, 240};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>((i * 7 + 19) & 255);
+      auto instance{apache::render::construct_model(models, id, object)}; instance.flags = flags; instance.distance = distance;
+      apache::render::shadow_renderer renderer{frame, models, casting, *palette}; renderer.draw(instance, camera);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << casting.cast[0] << ' ' << casting.cast[1] << '\n';
+      if(argc > 3) { std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
   } else if(command == "effect-state") {
     apache::simulation::effects effects;

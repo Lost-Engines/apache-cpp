@@ -16,6 +16,7 @@ struct actor_state {
   std::array<uint32_t, 3> angles{};
   math::vector3 velocity{};
   int32_t speed{0}, desired_speed{0}, route_distance{0};
+  int32_t destroyed{0}, network{-1};
   std::array<int32_t, 5> ammunition{};
   int32_t weapon{0}, weapon_slot{-1};
   uint32_t random{0};

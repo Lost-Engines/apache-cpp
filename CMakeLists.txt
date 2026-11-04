@@ -66,6 +66,8 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/ground_movement.cpp
+  src/simulation/ground_movement.h
   src/simulation/mission_actors.cpp
   src/simulation/mission_actors.h
   src/simulation/weapon_info.cpp

@@ -14,6 +14,9 @@ Current implementation:
 - Software line, circle, polygon, mesh, translucent, heat-haze, affine-textured and Gouraud-shaded rasterization.
 - Complete model drawing with authored attachments, fixed-point grid coordinates, lighting, animation branches, level-of-detail chains and faction colour/texture swaps.
 - Original palette, intensity ramps and glass remaps for all four warzones.
+- Ordered palette fades, night/weather/glare transitions, grassy terrain colours and infrared/HUD remaps.
+- Complete RGB scene output, including thermal-view detail and visibility rules.
+- Bounded reads of embedded palette data from the supported original executable.
 - Terrain grid projection, 7,200-entry scene queue, texture selection and fog shading tables.
 - Seven terrain drawing paths, including 64-triangle subdivision and perspective correction in 16-pixel spans.
 - Complete terrain, feature and placed-scenery assembly, visible-sector selection, and the original ground/sky horizon.
@@ -79,12 +82,17 @@ Validation completed:
 - 44,384 terrain-material queries match across all four warzones, including distant super-features.
 - 3,268 fragment operations match 792 snapshots with 36,638 active fragments and 3,180 splash records. These include circular replacement, attached-part separation and ground settling.
 - 83 combined debris scenes match 6,374,400 pixels. The other 13 cases encounter the original invalid model reads already described above. Vector, material and fragment-state comparisons also pass under sanitizers, as do another 48 complete debris scenes.
+- 2,400 palette compositions with 9,591 faders match all 1,843,200 RGB bytes.
+- 2,304 scene-palette cases match 5,898,240 bytes across weather, altitude, night, glare and infrared settings.
+- 84 complete RGB scenes match 6,451,200 pixels. Twelve further scenes contain the same original invalid model reads already identified above. The complete fader/palette checks and another 48 RGB scenes also pass under sanitizers.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: remaining palette effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
+Next: cockpit and live-instrument integration, simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 
 The reference engine loads and projects super-feature vertices but never submits their faces. The resource inspection commands can render those records; the game scene preserves their absence.
+
+Embedded resources currently use the January 1998 software `APACHE95.EXE`, loaded from `SOFTWARE/APACHE95.EXE` on the selected CD or from the installation root. Other executable layouts are not silently interpreted using those offsets.

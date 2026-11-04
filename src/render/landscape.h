@@ -21,6 +21,8 @@ struct landscape_options {
   bool scenery{true};
   bool celestial_bodies{true};
   bool shadows{true};
+  unsigned int infrared{0};
+  int32_t cockpit_glass{0};
   std::optional<uint32_t> hidden_mobile;
   sky_lighting lighting;
   int cloud_height{26000};

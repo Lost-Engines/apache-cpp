@@ -40,6 +40,10 @@ add_library(apache_core
   src/render/shadows.h
   src/render/model_renderer.cpp
   src/render/model_renderer.h
+  src/render/palette_effects.cpp
+  src/render/palette_effects.h
+  src/resources/executable.cpp
+  src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
   src/simulation/fragments.cpp

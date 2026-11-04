@@ -27,7 +27,10 @@ void landscape::advance(int32_t const delta_time, uint32_t &random_seed) {
   craters.advance(); effects.advance(delta_time, terrain);
   fragments.advance(delta_time, trig, terrain, [&](int32_t const x, int32_t const y){ return surface_type(x, y); }, craters, random_seed);
 }
-void landscape::draw(framebuffer &target, math::pose camera, landscape_options const &options) {
+void landscape::draw(framebuffer &target, math::pose camera, landscape_options const &configuration) {
+  auto options{configuration};
+  if(options.infrared == 2) { options.terrain_detail = 0; options.models.textures = false; options.models.gouraud = false; options.models.glass = false; options.sky.cloud_flags &= ~2u; }
+  palette.prepare(options.infrared);
   if(options.terrain_detail > 3) throw std::runtime_error{"Terrain quality must be between zero and three"};
   missing_normals = invalid_texture_samples = 0;
   projection const view{target.clip.left, target.clip.top, target.clip.right - target.clip.left + 1, target.clip.bottom - target.clip.top + 1};
@@ -137,7 +140,7 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
   }
   sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
   submit_craters(queue, craters, camera, {.cloud_mode{sky.cloud_mode}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
-  submit_effects(queue, effects, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
+  submit_effects(queue, effects, camera, {.cloud_mode{sky.cloud_mode}, .infra_red{options.infrared}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   submit_fragments(queue, fragments, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   shadow_projection casting{terrain, trig, options.lighting};
   casting.cloud_mode = sky.cloud_mode; casting.cloud_top = options.cloud_top;
@@ -166,5 +169,7 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
     }
   }
   invalid_texture_samples += terrain_drawer.invalid_texture_samples() + cloud_raster.invalid_texture_samples;
+  palette.update({.cloud_mode{sky.cloud_mode}, .cloud_flags{sky.cloud_flags}, .weather{sky.weather}, .altitude{camera.position[2]}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .night{options.lighting.night}, .infrared{options.infrared}, .sun_glare{sun_glare}, .cockpit_glass{options.cockpit_glass}});
+  for(size_t i{0}; i != target.image.colours.size(); ++i) target.image.colours[i] = {palette.modified[i * 3], palette.modified[i * 3 + 1], palette.modified[i * 3 + 2]};
 }
 } // namespace apache::render

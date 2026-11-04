@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include "resources/executable.h"
 
 namespace apache::render {
 void scene_palette::spread(unsigned int const colour, unsigned int const first, unsigned int const count) {
@@ -97,12 +98,69 @@ scene_palette::scene_palette(resources::data_store const &data, std::string_view
 
   std::string const prefix{std::string{zone} + ".WZ/"};
   load(prefix + "TERRAIN.RGB", 71, 64);
+  // Infrared mappings are built before fog and sky colours are installed.
+  mfd_infrared.fill(208);
+  auto const ramp{[](uint8_t const value, int const low = 32){ return static_cast<uint8_t>((std::clamp(static_cast<int>(value), low, 223) - 32) / 12 + 208); }};
+  for(size_t i{2}; i != 192; ++i) {
+    auto const light{luminance(colours[i * 3], colours[i * 3 + 1], colours[i * 3 + 2])};
+    infrared[i] = ramp(light);
+    mfd_infrared[i] = i <= 71 ? ramp(static_cast<uint8_t>(light + 90), 170) : i >= 155 && i <= 168 ? ramp(static_cast<uint8_t>(light + 126)) : i > 168 ? ramp(static_cast<uint8_t>(light - 24)) : ramp(light);
+    hud_nvs[i] = i <= 71 ? ramp(static_cast<uint8_t>(light - 60), 150) : i >= 155 && i <= 168 ? static_cast<uint8_t>(208 + (i - 155) / 2) : i > 168 ? ramp(static_cast<uint8_t>(light - 24)) : i >= 135 && i <= 138 ? static_cast<uint8_t>(i + 332) : ramp(static_cast<uint8_t>(light - 60));
+  }
+  grassy = zone == "FORT" || zone == "KOREA";
+  resources::executable_data const embedded{data};
+  std::ranges::copy(embedded.at(0x4ef37c, grassy_colours.size()), grassy_colours.begin());
+  std::array<std::string_view, 3> constexpr names{"CLEAR.RGB", "OVERCAST.RGB", "ABOVE.RGB"};
+  for(size_t i{0}; i != names.size(); ++i) {
+    auto const file{data.read("3DDATA/" + std::string{names[i]})};
+    if(file.size() != sky_colours[i].size()) throw std::runtime_error{"Invalid sky palette"};
+    std::ranges::copy(file, sky_colours[i].begin());
+  }
   load(prefix + (overcast ? "FOGDULL.RGB" : "FOG.RGB"), 135, 20);
   auto const mapping{data.read(prefix + "GLASS.CMP")};
   if(mapping.size() != glass.size()) throw std::runtime_error{"Invalid glass colour map"};
   std::ranges::copy(mapping, glass.begin());
+  modified = colours;
+  if(grassy) std::ranges::copy(grassy_colours, modified.begin() + 83 * 3);
   glass[155] = 155;
   for(size_t i{156}; i != 168; ++i) glass[i] = static_cast<uint8_t>(i - 1);
   for(size_t i{224}; i != 256; ++i) glass[i] = static_cast<uint8_t>(i);
+}
+void scene_palette::prepare(unsigned int const infrared_mode) {
+  if(infrared_mode > 2) throw std::runtime_error{"Invalid infrared mode"};
+  for(size_t i{0}; i != visual_remap.size(); ++i) visual_remap[i] = infrared_mode == 2 ? mfd_infrared[i] : static_cast<uint8_t>(i);
+}
+void scene_palette::update(palette_conditions const &conditions) {
+  if(conditions.cloud_mode > 2 || conditions.weather > 3 || conditions.infrared > 2) throw std::runtime_error{"Invalid palette conditions"};
+  size_t sky{conditions.weather && conditions.cloud_mode != 2 ? 1u : 0u};
+  if(conditions.cloud_mode == 2 && ((conditions.cloud_flags & 2) || conditions.weather == 1)) sky = 2;
+  std::ranges::copy(sky_colours[sky], colours.begin() + 155 * 3);
+  int32_t weather_level{0}; uint8_t weather_colour{187};
+  if((conditions.cloud_flags & 2) || conditions.weather) {
+    if(conditions.cloud_mode == 0) {
+      int64_t const distance{int64_t{conditions.cloud_bottom} - conditions.altitude};
+      if(distance < 0x20000) weather_level = static_cast<int32_t>(std::clamp((0x1ffff - distance) * 0x4000, int64_t{0}, int64_t{INT32_MAX}));
+      if(conditions.weather == 2) weather_level = (weather_level >> 1) + 0x20000000;
+      else if(conditions.weather == 3) weather_level = (weather_level >> 3) + 0x30000000;
+    } else if(conditions.cloud_mode == 1) {
+      int64_t const distance{int64_t{conditions.cloud_top} - conditions.altitude};
+      if(distance < 0x10000) { weather_colour = 255; weather_level = static_cast<int32_t>(std::clamp((0xffff - distance) * 0x8000, int64_t{0}, int64_t{INT32_MAX})); }
+      else weather_level = INT32_MAX;
+    } else {
+      weather_colour = 255;
+      int64_t const distance{int64_t{conditions.altitude} - conditions.cloud_top};
+      if(distance < 0x20000) weather_level = static_cast<int32_t>(std::clamp((0x1ffff - distance) * 0x4000, int64_t{0}, int64_t{INT32_MAX}));
+    }
+  }
+  std::array<palette_fader, 5> const faders{{
+    {false, 1000, 2, 190, weather_level, {weather_colour, weather_colour, weather_colour}},
+    {false, 2000, 2, 190, conditions.sun_glare, {255, 255, 215}},
+    {false, 3000, 2, 166, conditions.infrared == 1 ? 0 : std::clamp(conditions.night, 0, 1964947537), {0, 0, 0}},
+    {false, 3000, 255, 1, conditions.cockpit_glass, {0, 0, 0}},
+    {true, 4000, 2, 190, conditions.infrared == 1 ? 1 : 0, {0, 1, 1}}
+  }};
+  auto base{colours};
+  if(grassy) std::ranges::copy(grassy_colours, base.begin() + 83 * 3);
+  modified = apply_faders(base, faders);
 }
 } // namespace apache::render

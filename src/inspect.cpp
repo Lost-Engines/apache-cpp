@@ -88,20 +88,21 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") {
+  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb")) {
     apache::math::trigonometry const trig{data};
-    auto const fragment_models{command == "scene-fragments" ? apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN")) : apache::resources::model_archive{}};
+    auto const fragment_models{(command == "scene-fragments" || command == "scene-rgb") ? apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN")) : apache::resources::model_archive{}};
     std::string zone, loaded;
     std::unique_ptr<apache::render::landscape> world;
     apache::math::pose camera;
     uint32_t heading{0}, pitch{0}, roll{0};
     apache::render::landscape_options options;
     options.scenery = command == "scene";
-    options.celestial_bodies = command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments";
+    options.celestial_bodies = command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb");
     while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
       if(options.celestial_bodies) std::cin >> options.sky.cloud_flags >> options.sky.weather >> options.cloud_height >> options.cloud_bottom >> options.cloud_top >> options.lighting.heading >> options.lighting.pitch >> options.lighting.night;
+      if(command == "scene-rgb") std::cin >> options.infrared >> options.cockpit_glass;
       if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
-      if(command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") {
+      if(command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb")) {
         world->effects.reset();
         size_t count{0}, puffs{0}, blasts{0}; std::cin >> count;
         for(size_t i{0}; i != count; ++i) {
@@ -112,7 +113,7 @@ int main(int const argc, char const *const argv[]) try {
           else world->effects.explosions.at(blasts++) = {kind, position, {0, 0, 0}, radius, age};
         }
       }
-      if(command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") {
+      if(command == "scene-mobiles" || command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb")) {
         world->mobiles.clear();
         size_t count{0}; int64_t hidden{-1}; std::cin >> count >> hidden;
         options.hidden_mobile = hidden < 0 ? std::nullopt : std::optional{static_cast<uint32_t>(hidden)};
@@ -123,7 +124,7 @@ int main(int const argc, char const *const argv[]) try {
           auto &object{world->mobiles.at(world->mobiles.add(model, pose))}; object.flags = flags; object.alternate_colours = alternate;
         }
       }
-      if(command == "scene-craters" || command == "scene-fragments") {
+      if(command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb")) {
         world->craters.reset(); size_t count{0}, short_count{0}, long_count{0}; std::cin >> count;
         for(size_t i{0}; i != count; ++i) {
           bool temporary{false}; apache::simulation::crater item;
@@ -131,7 +132,7 @@ int main(int const argc, char const *const argv[]) try {
           (temporary ? world->craters.short_lived.at(short_count++) : world->craters.long_lived.at(long_count++)) = item;
         }
       }
-      if(command == "scene-fragments") {
+      if((command == "scene-fragments" || command == "scene-rgb")) {
         world->fragments.reset(); uint32_t seed{0}; int32_t delta{0}; size_t steps{0}, count{0};
         std::cin >> seed >> delta >> steps >> count;
         for(size_t i{0}; i != count; ++i) {
@@ -150,9 +151,33 @@ int main(int const argc, char const *const argv[]) try {
       world->draw(frame, camera, options);
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec;
       if(options.celestial_bodies) std::cout << ' ' << world->sun_glare;
-      if(command == "scene" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || command == "scene-fragments") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
+      if(command == "scene" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb")) std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
+      if(command == "scene-rgb") {
+        apache::resources::bytes rgb; rgb.reserve(frame.image.pixels.size() * 3);
+        for(auto const pixel : frame.image.pixels) { auto const &colour{frame.image.colours[pixel]}; rgb.push_back(colour.r); rgb.push_back(colour.g); rgb.push_back(colour.b); }
+        std::cout << ' ' << std::hex << apache::resources::fingerprint(rgb) << ' ' << apache::resources::fingerprint(world->palette.modified) << std::dec;
+      }
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "scene-palette") {
+    std::string zone, loaded; bool overcast{false}, previous{false};
+    apache::render::palette_conditions conditions; std::optional<apache::render::scene_palette> palette;
+    while(std::cin >> zone >> overcast >> conditions.cloud_mode >> conditions.cloud_flags >> conditions.weather >> conditions.altitude >> conditions.cloud_bottom >> conditions.cloud_top >> conditions.night >> conditions.infrared >> conditions.sun_glare >> conditions.cockpit_glass) {
+      if(!palette || loaded != zone || previous != overcast) { palette.emplace(data, zone, overcast); loaded = zone; previous = overcast; }
+      palette->prepare(conditions.infrared); palette->update(conditions);
+      std::cout << std::hex << apache::resources::fingerprint(palette->colours) << ' ' << apache::resources::fingerprint(palette->modified) << ' ' << apache::resources::fingerprint(palette->infrared) << ' ' << apache::resources::fingerprint(palette->mfd_infrared) << ' ' << apache::resources::fingerprint(palette->hud_nvs) << ' ' << apache::resources::fingerprint(palette->visual_remap) << std::dec << '\n';
+      if(argc > 3) { std::ofstream file{argv[3], std::ios::binary}; file.write(reinterpret_cast<char const *>(palette->modified.data()), palette->modified.size()); }
+    }
+  } else if(command == "faders") {
+    uint32_t seed{0}; size_t count{0};
+    while(std::cin >> seed >> count) {
+      apache::render::palette_rgb colours;
+      for(auto &value : colours) { seed = seed * 0x41c64e6du + 0x3039u; value = static_cast<uint8_t>(seed >> 16); }
+      std::vector<apache::render::palette_fader> faders(count);
+      for(auto &fader : faders) { unsigned int r{0}, g{0}, b{0}; std::cin >> fader.monochrome >> fader.priority >> fader.first >> fader.count >> fader.level >> r >> g >> b; fader.colour = {static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b)}; }
+      auto const result{apache::render::apply_faders(colours, faders)};
+      std::cout << std::hex << apache::resources::fingerprint(result) << std::dec << '\n';
     }
   } else if(command == "fragment-state") {
     apache::math::trigonometry const trig{data};

@@ -15,7 +15,7 @@ landscape::landscape(resources::data_store const &data, std::string_view const z
     uint32_t const angle{static_cast<uint32_t>(placement.heading) << 16};
     int32_t const sine{trig.sine(angle)}, cosine{trig.cosine(angle)};
     math::pose const position{{placement.x, placement.y, 0}, {cosine, math::negate(sine), 0, sine, cosine, 0, 0, 0, INT32_MAX}};
-    auto object{construct_model(models, placement.model, position)};
+    auto object{construct_scenery_model(models, placement.model, position)};
     object.flags = placement.animation;
     object.alternate_colours = (placement.status & 0x2000) != 0;
     scenery_sectors[placement.sector].push_back(scenery.size());
@@ -40,7 +40,7 @@ void landscape::refresh_scenery(size_t const index) {
   if(source.model && (source.model != object.id || source.heading != cached.heading || source.x != cached.x || source.y != cached.y)) {
     uint32_t const angle{static_cast<uint32_t>(source.heading) << 16};
     int32_t const sine{trig.sine(angle)}, cosine{trig.cosine(angle)};
-    object = construct_model(models, source.model, {{source.x, source.y, 0}, {cosine, math::negate(sine), 0, sine, cosine, 0, 0, 0, INT32_MAX}});
+    object = construct_scenery_model(models, source.model, {{source.x, source.y, 0}, {cosine, math::negate(sine), 0, sine, cosine, 0, 0, 0, INT32_MAX}});
   }
   cached = source; object.flags = source.animation; object.alternate_colours = (source.status & 0x2000) != 0;
 }

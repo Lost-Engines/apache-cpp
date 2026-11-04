@@ -26,6 +26,15 @@ model_instance construct(resources::model_archive const &models, uint32_t const 
 model_instance construct_model(resources::model_archive const &models, uint32_t const id, math::pose const &position, std::span<uint32_t const> variable_children) {
   return construct(models, id, position, 0, variable_children);
 }
+model_instance construct_scenery_model(resources::model_archive const &models, uint32_t const id, math::pose const &position) {
+  auto const &definition{model_at(models, id)};
+  model_instance object;
+  object.id = id; object.relative = object.world = position;
+  // Ground placements use a temporary original instance without attached parts.
+  // Keep empty slots for attachment instructions in the shared model program.
+  object.children.resize(definition.children.size());
+  return object;
+}
 void synchronize_model(model_instance &destination, model_instance const &source) {
   if(&destination == &source) return;
   destination.id = source.id; destination.flags = source.flags; destination.status = source.status; destination.alternate_colours = source.alternate_colours;

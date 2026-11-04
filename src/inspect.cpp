@@ -1213,7 +1213,7 @@ int main(int const argc, char const *const argv[]) try {
       for(auto const shift : {19u, 25u}) for(auto const value : apache::math::subdivide_grid(a[0], shift)) std::cout << value << ' ';
       std::cout << '\n';
     }
-  } else if((command == "model-renders" || command == "model-renders-alternate")) {
+  } else if(command == "model-renders" || command == "model-renders-alternate" || command == "model-renders-scenery") {
     auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
     auto const textures{apache::resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))};
     apache::render::scene_palette const palette{data, "FORT"};
@@ -1229,7 +1229,7 @@ int main(int const argc, char const *const argv[]) try {
     while(std::cin >> id >> flags >> position[0] >> position[1] >> position[2] >> heading >> pitch >> roll >> camera_heading >> camera_pitch >> camera_roll >> quality) {
       renderer.style.textures = (quality & 1) != 0;
       renderer.style.gouraud = (quality & 2) != 0;
-      auto object{apache::render::construct_model(models, id, {position, trig.transformation(heading, pitch, roll)})};
+      auto object{command == "model-renders-scenery" ? apache::render::construct_scenery_model(models, id, {position, trig.transformation(heading, pitch, roll)}) : apache::render::construct_model(models, id, {position, trig.transformation(heading, pitch, roll)})};
       object.flags = flags;
       object.alternate_colours = command == "model-renders-alternate";
       apache::math::pose const camera{{0, 0, 1000000}, trig.transformation(camera_heading, camera_pitch, camera_roll)};

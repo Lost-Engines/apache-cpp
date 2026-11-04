@@ -19,6 +19,7 @@ struct model_instance {
   std::vector<std::unique_ptr<model_instance>> children;
 };
 model_instance construct_model(resources::model_archive const &models, uint32_t id, math::pose const &position, std::span<uint32_t const> variable_children = {});
+model_instance construct_scenery_model(resources::model_archive const &models, uint32_t id, math::pose const &position);
 void maintain_model(model_instance &object, math::pose const *parent = nullptr);
 void synchronize_model(model_instance &destination, model_instance const &source);
 struct model_style {

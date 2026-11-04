@@ -44,6 +44,7 @@ struct fire_conditions {
 bool can_fire(fire_conditions const &conditions, weapon_info const &weapon);
 struct combat_random {
   uint32_t value{1}, global_seed{1};
+  uint32_t *shared_seed{nullptr};
   int32_t next();
 };
 int32_t firing_interval(weapon_info const &weapon, int32_t ammunition, forces_info const &skill, combat_random &random);

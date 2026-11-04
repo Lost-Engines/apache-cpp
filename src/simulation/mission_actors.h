@@ -13,6 +13,7 @@ struct actor_state {
   actor_location location;
   render::model_instance object;
   uint32_t classification{0}, conditions{0x30004};
+  int32_t serial{0};
   std::array<uint32_t, 3> angles{};
   math::vector3 velocity{};
   int32_t speed{0}, desired_speed{0}, route_distance{0};

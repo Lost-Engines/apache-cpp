@@ -78,6 +78,7 @@ bool can_fire(fire_conditions const &c, weapon_info const &weapon) {
 }
 int32_t combat_random::next() {
   auto const result{value}; auto const first{value * 0x41c64e6du + 0x3039u}; global_seed = first * 0x41c64e6du + 0x3039u;
+  if(shared_seed) *shared_seed = global_seed;
   value = (first & 0x7fff0000u) | ((global_seed >> 16) & 0x7fff);
   return std::bit_cast<int32_t>(result);
 }

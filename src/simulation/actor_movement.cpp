@@ -65,7 +65,7 @@ math::vector3 actor_movement::fly_to(size_t const index, actor_group const &grou
   }
   auto result{target->position};
   if(!(unit.conditions & 8)) { result[2] = waypoint.position[2]; return result; }
-  auto const &weapon{weapons.at(static_cast<size_t>(unit.weapon))};
+  auto const &weapon{weapons.at(static_cast<size_t>(callbacks.weapon ? callbacks.weapon(index) : unit.weapon))};
   if(weapon.movement_class != 2) {
     int32_t speed{unit.speed}; double const threshold{static_cast<double>(magnitude(target->speed)) * 1.2};
     if(magnitude(speed) <= threshold) speed = weapon.maximum_speed;
@@ -92,6 +92,7 @@ void actor_movement::move_air_or_ship(size_t const index, actor_group const &gro
   if(!unit.speed && *unit.waypoint + 1 == route.size() && (ship || route[*unit.waypoint].position[2] == unit.object.world.position[2])) return;
   if(!ship && (unit.conditions & 0x400)) take_off(index, group);
   if(!ship && callbacks.check_air_target) callbacks.check_air_target(index);
+  int32_t const weapon_id{!ship && (unit.conditions & 8) && callbacks.weapon ? callbacks.weapon(index) : unit.weapon};
   auto const target{callbacks.target ? callbacks.target(index) : std::nullopt};
   if(!ship && !target && unit.retreat_until < time.now) unit.conditions &= ~2u;
   auto performance{ship ? tables.ships.at(types.at(unit.object.id).aircraft) : tables.aircraft.at(types.at(unit.object.id).aircraft)};
@@ -103,7 +104,7 @@ void actor_movement::move_air_or_ship(size_t const index, actor_group const &gro
   }
   if(unit.conditions & 2) retreat(unit, order.target);
   order.waypoint_height = route[*unit.waypoint].position[2]; order.waypoint_speed = route[*unit.waypoint].speed;
-  order.arrival_radius = unit.conditions & 8 ? weapons.at(static_cast<size_t>(unit.weapon)).maximum_range / 3 : unit.speed;
+  order.arrival_radius = unit.conditions & 8 ? weapons.at(static_cast<size_t>(weapon_id)).maximum_range / 3 : unit.speed;
   if(*unit.waypoint) order.previous_height = route[*unit.waypoint - 1].position[2];
   if(unit.carrier && !ship) order.carrier_speed = actors.units[actors.carriers[*unit.carrier].actor].speed;
   order.has_target = target.has_value(); order.target_classification = target ? target->classification : 0; order.player_task = task.user; order.arcade = time.arcade;

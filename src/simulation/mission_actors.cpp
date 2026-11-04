@@ -74,7 +74,7 @@ mission_actors::mission_actors(resources::mission_definition const &mission, std
       for(size_t member{0}; member != count; ++member) {
         uint32_t const model{definition.formation ? formation[member].model : definition.model};
         auto const &type{types.at(model)};
-        actor_state unit; unit.location = {task_index, group_index, member}; unit.classification = type.classification;
+        actor_state unit; unit.location = {task_index, group_index, member}; unit.serial = static_cast<int32_t>(member ? (group_index + 1) * 100 + member : group_index); unit.classification = type.classification;
         std::array<uint32_t, 20> attachments{};
         if(model == 607) { attachments[0] = 614; attachments[2] = 620; }
         else if(model == 990) attachments[0] = 859;

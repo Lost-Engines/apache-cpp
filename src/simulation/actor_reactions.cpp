@@ -4,7 +4,7 @@
 namespace apache::simulation {
 namespace {
 int32_t next_war(uint32_t &state, combat_random &weapon) {
-  combat_random random{state, weapon.global_seed}; auto const value{random.next()}; state = random.value; weapon.global_seed = random.global_seed; return value;
+  combat_random random{state, weapon.global_seed, weapon.shared_seed}; auto const value{random.next()}; state = random.value; weapon.global_seed = random.global_seed; return value;
 }
 int32_t distance2(math::vector3 const &a, math::vector3 const &b) {
   int32_t x{math::subtract(a[0], b[0])}, y{math::subtract(a[1], b[1])};

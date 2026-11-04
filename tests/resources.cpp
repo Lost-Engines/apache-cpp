@@ -4,10 +4,12 @@
 #include "configuration/preferences.h"
 #include "math/fixed.h"
 #include "render/framebuffer.h"
+#include "render/projection.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
 #include "resources/models.h"
 #include "resources/terrain.h"
+#include "resources/texture.h"
 
 namespace {
 void require(bool const condition, char const *const message) {
@@ -81,6 +83,17 @@ int main() try {
   rejects([&]{ apache::resources::execute_model(object, 1, 1, {}); }, "unauthored model animation state rejected");
   object.program.at(200).branches[0] = 200;
   rejects([&]{ apache::resources::execute_model(object, 0, 1, {}); }, "cyclic model program bounded");
+  apache::render::projection const camera{0, 0, 320, 240};
+  std::array<apache::render::vertex3, 3> const crossing_triangle{camera.prepare({-100, 100, 0}), camera.prepare({100, 100, 0}), camera.prepare({0, -100, 100})};
+  auto const clipped{camera.clip(crossing_triangle)};
+  require(!clipped.empty(), "near-plane crossing retains the visible polygon");
+  for(auto const &v : clipped) require(v.outcode == 0 && v.eye[1] >= 1 && v.screen.x >= 0 && v.screen.x < 320 && v.screen.y >= 0 && v.screen.y < 240, "clipped vertices stay inside the viewport");
+  std::array<apache::render::vertex3, 3> const behind{camera.prepare({0, -10, 0}), camera.prepare({1, -10, 0}), camera.prepare({0, -10, 1})};
+  require(camera.clip(behind).empty(), "wholly hidden polygon rejected");
+  require(apache::render::winding(behind, true) == 0, "coincident screen points cannot loop in robust winding");
+  rejects([]{ apache::render::projection{0, 0, 640, 0}; }, "zero-height viewport rejected");
+  apache::resources::bytes bad_texture{1, 0, 0, 0, 8, 0, 0, 0, 2, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0};
+  rejects([&]{ apache::resources::read_object_textures(bad_texture); }, "truncated texture pixels rejected");
   std::cout << "Resource boundary and configuration tests passed" << std::endl;
   return EXIT_SUCCESS;
 } catch(std::exception const &error) {

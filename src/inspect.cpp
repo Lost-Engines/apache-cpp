@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <string_view>
 #include "math/trigonometry.h"
+#include "render/projection.h"
+#include "render/rasterizer.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
 #include "resources/models.h"
@@ -70,7 +72,53 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "models" || command == "model-traces") inspect_models(data, command == "model-traces");
+  if(command == "projection") {
+    int x{0}, y{0}, w{0}, h{0}, count{0};
+    while(std::cin >> x >> y >> w >> h >> count) {
+      apache::render::projection const view{x, y, w, h};
+      std::vector<apache::render::vertex3> input;
+      for(int i{0}; i != count; ++i) {
+        apache::math::vector3 eye;
+        int32_t u{0}, v{0}, light{0};
+        std::cin >> eye[0] >> eye[1] >> eye[2] >> u >> v >> light;
+        input.push_back(view.prepare(eye, u, v, light));
+      }
+      auto const output{view.clip(input)};
+      std::cout << output.size();
+      for(auto const &v : output) std::cout << ' ' << v.eye[0] << ' ' << v.eye[1] << ' ' << v.eye[2] << ' ' << v.screen.x << ' ' << v.screen.y << ' ' << v.screen.u << ' ' << v.screen.v << ' ' << v.screen.intensity;
+      std::cout << '\n';
+    }
+  } else if(command == "raster") {
+    apache::render::framebuffer frame{64, 48};
+    apache::render::rasterizer raster{frame};
+    std::array<uint8_t, 256> remapping;
+    for(size_t i{0}; i != remapping.size(); ++i) remapping[i] = static_cast<uint8_t>((i * 13 + 7) & 255);
+    apache::resources::texture texture{64, apache::resources::bytes(64 * 64)};
+    for(size_t i{0}; i != texture.pixels.size(); ++i) texture.pixels[i] = static_cast<uint8_t>((i * 17 + i / 64 * 3) & 255);
+    apache::resources::bytes intensity_map(65536);
+    for(size_t i{0}; i != intensity_map.size(); ++i) intensity_map[i] = static_cast<uint8_t>((i * 11 + (i >> 8) * 7) & 255);
+    int mode{0}, count{0};
+    while(std::cin >> mode >> count) {
+      std::vector<apache::render::screen_vertex> vertices(static_cast<size_t>(count));
+      for(auto &v : vertices) {
+        std::cin >> v.x >> v.y;
+        if(mode >= 6) std::cin >> v.u >> v.v >> v.intensity;
+      }
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>((i * 7 + 19) & 255);
+      if(mode == 5) raster.line(vertices.at(0), vertices.at(1), 139);
+      else if(mode >= 6) {
+        apache::render::material paint;
+        paint.colours = 0x81468146;
+        paint.image = mode == 6 ? nullptr : &texture;
+        paint.light = mode == 6 || mode >= 11 ? apache::render::shading::gouraud : mode == 9 || mode == 10 ? apache::render::shading::constant : apache::render::shading::none;
+        paint.intensity = 0x58312345;
+        paint.intensity_map = intensity_map;
+        paint.masked = mode == 8 || mode == 10 || mode == 12;
+        raster.fill(vertices, paint);
+      } else raster.polygon(vertices, mode == 0 ? 0x81468146 : 0x8b8b8b8b, static_cast<apache::render::fill_pattern>(mode), remapping);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+    }
+  } else if(command == "models" || command == "model-traces") inspect_models(data, command == "model-traces");
   else if(command == "matrices") {
     apache::math::trigonometry const trig{data};
     uint32_t heading{0}, pitch{0}, roll{0};

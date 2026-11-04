@@ -1,0 +1,126 @@
+#include "rasterizer.h"
+#include <algorithm>
+#include <cstdlib>
+#include <stdexcept>
+#include "math/fixed.h"
+
+namespace apache::render {
+namespace {
+scan_edge edge(screen_vertex const &v) { return {v.x, v.u, v.v, v.intensity}; }
+void require_inside(screen_vertex const &v, framebuffer const &target) {
+  if(v.x < 0 || v.y < 0 || v.x >= static_cast<int>(target.image.width) || v.y >= static_cast<int>(target.image.height)) throw std::runtime_error{"Raster input must be clipped to the screen"};
+}
+} // namespace
+rasterizer::rasterizer(framebuffer &destination) : target{destination}, left(destination.image.height), right(destination.image.height) {}
+void rasterizer::line(screen_vertex a, screen_vertex const b, uint8_t const colour) {
+  require_inside(a, target);
+  require_inside(b, target);
+  int const dx{std::abs(b.x - a.x)}, dy{std::abs(b.y - a.y)};
+  int const sx{b.x < a.x ? -1 : 1}, sy{b.y < a.y ? -1 : 1};
+  bool const horizontal{dx > dy};
+  int const major{horizontal ? dx : dy}, minor{horizontal ? dy : dx};
+  int error{(major + 1) / 2};
+  for(int i{0}; i <= major; ++i) {
+    target.point(a.x, a.y, colour);
+    if(horizontal) a.x += sx;
+    else a.y += sy;
+    error -= minor;
+    if(error <= 0) {
+      error += major;
+      if(horizontal) a.y += sy;
+      else a.x += sx;
+    }
+  }
+}
+void rasterizer::scan(std::span<screen_vertex const> const polygon) {
+  first_row = static_cast<int>(target.image.height);
+  last_row = -1;
+  for(auto const &v : polygon) require_inside(v, target);
+  if(polygon.empty()) return;
+  first_row = last_row = polygon[0].y;
+  left[first_row] = right[first_row] = edge(polygon[0]);
+  if(polygon.size() == 1) return;
+  for(size_t i{0}; i != polygon.size(); ++i) {
+    auto const &a{polygon[i]};
+    auto const &b{polygon[(i + 1) % polygon.size()]};
+    if(b.y < first_row) { first_row = b.y; left[b.y] = right[b.y] = edge(b); }
+    if(b.y > last_row) { last_row = b.y; left[b.y] = right[b.y] = edge(b); }
+    if(a.y == b.y) {
+      if(b.x > a.x && b.x > right[b.y].x) right[b.y] = edge(b);
+      if(b.x < a.x && b.x < left[b.y].x) left[b.y] = edge(b);
+      continue;
+    }
+    int const dx{std::abs(b.x - a.x)}, dy{std::abs(b.y - a.y)};
+    int const sx{b.x < a.x ? -1 : 1}, sy{b.y < a.y ? -1 : 1};
+    auto &side{sy > 0 ? right : left};
+    auto value{edge(a)};
+    int y{a.y};
+    int const major{std::max(dx, dy)};
+    scan_edge const increment{sx, (b.u - a.u) / major, (b.v - a.v) / major, (b.intensity - a.intensity) / major};
+    auto const advance{[&]{ value.u = math::add(value.u, increment.u); value.v = math::add(value.v, increment.v); value.intensity = math::add(value.intensity, increment.intensity); }};
+    if(dx <= dy) {
+      int error{dy / 2};
+      for(int step{0}; step <= dy; ++step) {
+        side[y] = value;
+        y += sy;
+        advance();
+        error -= dx;
+        if(dx && error <= 0) { error += dy; value.x += sx; }
+      }
+    } else {
+      // The shallow edges keep the outside pixel of each scan line. The
+      // original uses different entry/exit handling for the two slopes.
+      int error{dx / 2};
+      bool const outward{sx == sy};
+      if(!outward) { side[y] = value; y += sy; }
+      for(int row{0}; row < dy; ++row) {
+        if(row || !outward) { value.x += sx; advance(); }
+        error -= dy;
+        while(error > 0) { value.x += sx; advance(); error -= dy; }
+        error += dx;
+        side[y] = value;
+        y += sy;
+      }
+      if(outward) side[y] = edge(b);
+    }
+  }
+}
+void rasterizer::polygon(std::span<screen_vertex const> const vertices, uint32_t const colours, fill_pattern const pattern, std::span<uint8_t const> const remapping) {
+  fill(vertices, {.colours{colours}, .pattern{pattern}, .remapping{remapping}, .intensity_map{}});
+}
+void rasterizer::fill(std::span<screen_vertex const> const vertices, material const &paint) {
+  if(paint.pattern == fill_pattern::remap && paint.remapping.size() != 256) throw std::runtime_error{"A translucent fill needs a 256-entry colour map"};
+  if(paint.light != shading::none && paint.intensity_map.size() != 65536) throw std::runtime_error{"Shading needs the palette intensity table"};
+  if(paint.image && paint.image->pixels.size() != static_cast<size_t>(paint.image->width) * paint.image->width) throw std::runtime_error{"Texture dimensions disagree with its pixels"};
+  scan(vertices);
+  for(int y{std::max(first_row, target.clip.top)}; y <= std::min(last_row, target.clip.bottom); ++y) {
+    int const lhs{std::min(left[y].x, right[y].x)}, rhs{std::max(left[y].x, right[y].x)};
+    int const start{std::max(lhs, target.clip.left)}, end{std::min(rhs, target.clip.right)};
+    int const width{rhs - lhs};
+    auto value{left[y]};
+    scan_edge const increment{0, width ? (right[y].u - value.u) / width : 0, width ? (right[y].v - value.v) / width : 0, width ? (right[y].intensity - value.intensity) / width : 0};
+    value.u += (start - lhs) * increment.u;
+    value.v += (start - lhs) * increment.v;
+    value.intensity += (start - lhs) * increment.intensity;
+    for(int x{start}; x <= end; ++x) {
+      int32_t const u{value.u}, v{value.v}, intensity{paint.light == shading::constant ? paint.intensity : value.intensity};
+      value.u = math::add(value.u, increment.u);
+      value.v = math::add(value.v, increment.v);
+      value.intensity = math::add(value.intensity, increment.intensity);
+      if(paint.pattern == fill_pattern::fine && ((x ^ y) & 1)) continue;
+      if(paint.pattern == fill_pattern::medium && ((x | y) & 1)) continue;
+      if(paint.pattern == fill_pattern::coarse && ((x - ((y & 1) * 2)) & 3)) continue;
+      uint8_t colour{static_cast<uint8_t>(paint.colours >> (8 * ((x + y) & 1)))};
+      if(paint.image) {
+        auto const tx{static_cast<uint32_t>(u) >> 16}, ty{static_cast<uint32_t>(v) >> 16};
+        if(tx >= paint.image->width || ty >= paint.image->width) continue;
+        colour = paint.image->pixels[static_cast<size_t>(ty) * paint.image->width + tx];
+        if(paint.masked && !colour) continue;
+      }
+      if(paint.light != shading::none) colour = paint.intensity_map[(static_cast<size_t>(colour) << 8) | (static_cast<uint32_t>(std::max(intensity, 0)) >> 23)];
+      auto &pixel{target.image.pixels[static_cast<size_t>(y) * target.image.width + x]};
+      pixel = paint.pattern == fill_pattern::remap ? paint.remapping[pixel] : colour;
+    }
+  }
+}
+} // namespace apache::render

@@ -16,6 +16,10 @@ add_library(apache_core
   src/frontend/menu.h
   src/frontend/widget.cpp
   src/frontend/widget.h
+  src/render/projection.cpp
+  src/render/projection.h
+  src/render/rasterizer.cpp
+  src/render/rasterizer.h
   src/render/framebuffer.cpp
   src/render/framebuffer.h
   src/render/menu_font.cpp
@@ -26,6 +30,8 @@ add_library(apache_core
   src/resources/data_store.h
   src/resources/image.cpp
   src/resources/image.h
+  src/resources/texture.cpp
+  src/resources/texture.h
   src/resources/terrain.cpp
   src/resources/terrain.h
   src/configuration/preferences.cpp

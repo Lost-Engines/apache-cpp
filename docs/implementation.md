@@ -129,11 +129,13 @@ Validation completed:
 - 2,000 angular-rate and aerodynamic cases agree with the original; all integer and event fields are exact, with maximum double differences of 1.14e-13.
 - 32 continuous realistic-flight traces span all four warzones, including carrier starts, takeoff, turns, gusts, engine failures, fuel exhaustion, hover, terrain following, variable frame timing and hard landings. All 2,997,072 integer/event fields agree across 76,832 states. Of 8,451,520 double fields, 8,264,472 match bit-for-bit; the maximum difference is 1.14e-13. Positions, attitude matrices, instruments and warning order remain exact over the complete traces.
 - These flight comparisons also pass under AddressSanitizer and UndefinedBehaviorSanitizer. AI, collision-volume checks and the surrounding mission loop are separate work.
+- 6,000 Arcade component cases match 337,859 fields exactly, covering input shaping, attitude limits, motion, fuel, heat/failures and hover.
+- 28 continuous Arcade traces across all four warzones match 2,285,830 integer/event fields across 67,228 states. Of 4,235,364 double fields, 4,207,780 match bit-for-bit; the largest difference is 3.64e-12. The traces include carrier starts, takeoff, terrain-relative altitude holding, engine failures, fuel exhaustion, hover, variable timing and landings. The component and continuous sweeps also pass with both sanitizers enabled.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: Arcade flight integration, collision and live sensor/target behavior, complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
+Next: mission/actor integration, collision and live sensor/target behavior, complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

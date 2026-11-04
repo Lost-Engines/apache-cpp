@@ -64,6 +64,8 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/arcade_flight.cpp
+  src/simulation/arcade_flight.h
   src/simulation/realistic_flight.cpp
   src/simulation/realistic_flight.h
   src/simulation/rotor_dynamics.cpp
@@ -132,7 +134,7 @@ add_executable(apache
 target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
-add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h)
+add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)

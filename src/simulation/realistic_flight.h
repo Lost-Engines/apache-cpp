@@ -16,6 +16,7 @@ struct flight_readings {
 struct flight_start {
   math::vector3 position{0, 0, 0};
   uint32_t heading{0}, pitch{0}, roll{0};
+  uint32_t object_heading{0};
   int32_t ground_height{0};
   int32_t dry_weight{0};
   double fuel{0};

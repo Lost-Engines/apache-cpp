@@ -1,4 +1,5 @@
 #include "inspect_flight.h"
+#include "inspect_arcade.h"
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -124,7 +125,11 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "flight-trace") {
+  if(command == "arcade-trace") {
+    inspect_arcade_trace(std::cin, std::cout, data);
+  } else if(command == "arcade-systems") {
+    inspect_arcade(std::cin, std::cout);
+  } else if(command == "flight-trace") {
     inspect_flight_trace(std::cin, std::cout, data);
   } else if(command == "flight-dynamics") {
     inspect_flight_dynamics(std::cin, std::cout);

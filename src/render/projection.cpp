@@ -85,6 +85,11 @@ vertex3 projection::prepare(math::vector3 eye, int32_t const u, int32_t const v,
   if(!result.outcode) project(result);
   return result;
 }
+vertex3 projection::prepare_scaled(math::vector3 const &eye, int32_t const intensity) const {
+  vertex3 result{eye, {.intensity{intensity}}, outcode(eye)};
+  if(!result.outcode) project(result);
+  return result;
+}
 std::optional<std::array<vertex3, 2>> projection::clip_line(vertex3 a, vertex3 b) const {
   if(a.outcode & b.outcode) return {};
   auto const end{[](vertex3 &point, vertex3 const &other){

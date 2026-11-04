@@ -15,6 +15,7 @@ Current implementation:
 - Complete model drawing with authored attachments, fixed-point grid coordinates, lighting, animation branches and level-of-detail chains.
 - Original palette, intensity ramps and glass remaps for all four warzones.
 - Terrain grid projection, 7,200-entry scene queue, texture selection and fog shading tables.
+- Seven terrain drawing paths, including 64-triangle subdivision and perspective correction in 16-pixel spans.
 - Perspective projection and five-plane clipping with interpolated texture coordinates and lighting.
 - Preference parsing, conversion and serialization.
 - GLFW window presentation with integer scaling, square pixels and correctly transformed mouse coordinates.
@@ -37,6 +38,7 @@ Validation completed:
 - 160 terrain samples match 201,160 vertices and 1,408,120 projected fields.
 - 400 scene queues match 47,128 accepted submissions, including equal-depth terrain ordering and the original capacity limit.
 - Four fog intensity tables match all 262,144 bytes; 2,048 terrain texture selections and 32,040 shading decisions also match.
+- 7,000 complete terrain polygon frames match the original, including clipping, both diagonals, fog transitions and all seven rendering paths. Another 1,400 comparisons pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

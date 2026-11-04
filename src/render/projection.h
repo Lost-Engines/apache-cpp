@@ -22,6 +22,7 @@ class projection {
 public:
   projection(int x, int y, int w, int h);
   vertex3 prepare(math::vector3 eye, int32_t u = 0, int32_t v = 0, int32_t intensity = 0) const;
+  vertex3 prepare_scaled(math::vector3 const &eye, int32_t intensity = 0) const;
   std::optional<std::array<vertex3, 2>> clip_line(vertex3 a, vertex3 b) const;
   std::vector<vertex3> clip(std::span<vertex3 const> vertices) const;
 };

@@ -11,6 +11,7 @@
 #include "render/projection.h"
 #include "render/rasterizer.h"
 #include "render/terrain_projection.h"
+#include "render/terrain_renderer.h"
 #include "render/terrain_shading.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
@@ -78,7 +79,34 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "terrain-shades") {
+  if(command == "terrain-polygons") {
+    apache::render::scene_palette const palette{data, "FORT"};
+    apache::resources::terrain_textures const textures{data, "FORT"};
+    apache::render::projection const view{0, 0, 320, 240};
+    apache::render::framebuffer frame{320, 240};
+    apache::render::terrain_renderer renderer{frame, view, palette, textures};
+    unsigned int method{0}, detail{0}, flags{0}, colour{0}, selector{0}, half{0}, two_sided{0};
+    while(std::cin >> method >> detail >> flags >> colour >> selector >> half >> two_sided) {
+      std::array<apache::render::vertex3, 4> points;
+      for(auto &point : points) {
+        apache::math::vector3 eye;
+        int32_t light{0};
+        std::cin >> eye[0] >> eye[1] >> eye[2] >> light;
+        point = view.prepare_scaled(eye, light);
+      }
+      apache::resources::terrain_post post;
+      post.flags = static_cast<uint8_t>(flags);
+      post.colours.fill(static_cast<uint8_t>(colour));
+      post.textures.fill(static_cast<uint8_t>(selector));
+      frame.clear(155);
+      renderer.draw(post, points, half, static_cast<apache::render::terrain_method>(method), apache::render::terrain_fog{detail}, two_sided != 0);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << renderer.invalid_texture_samples() << '\n';
+      if(argc >= 4) {
+        std::ofstream raw{argv[3], std::ios::binary};
+        raw.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size()));
+      }
+    }
+  } else if(command == "terrain-shades") {
     unsigned int detail{0}, colour{0}, kind{0}, salt{0};
     uint32_t range{0};
     while(std::cin >> detail >> range >> colour >> kind >> salt) {

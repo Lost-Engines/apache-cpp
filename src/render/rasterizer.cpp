@@ -11,7 +11,7 @@ void require_inside(screen_vertex const &v, framebuffer const &target) {
   if(v.x < 0 || v.y < 0 || v.x >= static_cast<int>(target.image.width) || v.y >= static_cast<int>(target.image.height)) throw std::runtime_error{"Raster input must be clipped to the screen"};
 }
 } // namespace
-rasterizer::rasterizer(framebuffer &destination) : target{destination}, left(destination.image.height), right(destination.image.height) {}
+rasterizer::rasterizer(framebuffer &destination) : target{destination}, left(destination.image.height), right(destination.image.height), perspective_left(destination.image.height), perspective_right(destination.image.height) {}
 void rasterizer::line(screen_vertex a, screen_vertex const b, uint8_t const colour) {
   require_inside(a, target);
   require_inside(b, target);

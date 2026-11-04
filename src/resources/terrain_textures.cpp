@@ -17,6 +17,13 @@ terrain_textures::terrain_textures(data_store const &data, std::string_view cons
   load("TEXT64.RAW", detailed, 64);
   load("TEXT64SP.RAW", spots, 64);
   load("TERRTEXT.BMP", coarse, 32);
+  triangle_colours = data.read("3DDATA/TERRTEXT.CMP");
+  if(triangle_colours.size() != 97 * 256) throw std::runtime_error{"Invalid terrain triangle colour map"};
+}
+std::span<uint8_t const, 64> terrain_textures::subdivisions(bool const forward, unsigned int const half, unsigned int selector) const {
+  if(half > 1 || selector > 127) throw std::runtime_error{"Invalid terrain subdivision selector"};
+  if(selector >= 97) selector = 0;
+  return std::span<uint8_t const, 64>{triangle_colours.data() + ((forward ? 0 : 194) + half * 97 + selector) * 64, 64};
 }
 texture const &terrain_textures::get(bool const forward, unsigned int selector, bool const high_detail) const {
   if(selector > 127) throw std::runtime_error{"Invalid terrain texture selector"};

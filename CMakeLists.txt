@@ -18,6 +18,8 @@ add_library(apache_core
   src/frontend/menu.h
   src/frontend/widget.cpp
   src/frontend/widget.h
+  src/render/terrain_renderer.cpp
+  src/render/terrain_renderer.h
   src/render/terrain_shading.cpp
   src/render/terrain_shading.h
   src/resources/terrain_textures.cpp
@@ -32,6 +34,7 @@ add_library(apache_core
   src/render/scene_palette.h
   src/render/projection.cpp
   src/render/projection.h
+  src/render/perspective_rasterizer.cpp
   src/render/rasterizer.cpp
   src/render/rasterizer.h
   src/render/framebuffer.cpp

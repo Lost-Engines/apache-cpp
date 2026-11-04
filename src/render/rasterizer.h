@@ -13,6 +13,17 @@ struct screen_vertex {
   int32_t v{0};
   int32_t intensity{0};
 };
+struct perspective_vertex {
+  screen_vertex screen;
+  int32_t depth{1};
+};
+struct perspective_edge {
+  int x{0};
+  double reciprocal{0};
+  double u{0};
+  double v{0};
+  double intensity{0};
+};
 enum class fill_pattern { solid, fine, medium, coarse, remap, heat_haze };
 enum class shading { none, constant, gouraud };
 struct material {
@@ -36,6 +47,9 @@ class rasterizer {
   framebuffer &target;
   std::vector<scan_edge> left;
   std::vector<scan_edge> right;
+  std::vector<perspective_edge> perspective_left;
+  std::vector<perspective_edge> perspective_right;
+  void scan_perspective(std::span<perspective_vertex const> vertices);
   int first_row{0};
   int last_row{-1};
   void scan(std::span<screen_vertex const> polygon);
@@ -44,6 +58,7 @@ public:
   explicit rasterizer(framebuffer &destination);
   void line(screen_vertex a, screen_vertex b, uint8_t colour);
   void fill(std::span<screen_vertex const> vertices, material const &paint);
+  void perspective(std::span<perspective_vertex const> vertices, resources::texture const &image, std::span<uint8_t const> intensity_map);
   void polygon(std::span<screen_vertex const> vertices, uint32_t colours, fill_pattern pattern = fill_pattern::solid, std::span<uint8_t const> remapping = {});
 };
 } // namespace apache::render

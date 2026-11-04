@@ -15,16 +15,20 @@ struct mobile_visibility {
 };
 class mobile_scene {
   struct entry {
-    model_instance object;
+    std::unique_ptr<model_instance> owned;
+    model_instance *object{nullptr};
     std::optional<size_t> sector;
   };
   resources::model_archive const &models;
   std::vector<std::optional<entry>> objects;
   std::array<std::vector<uint32_t>, 4096> sectors;
-  void unplace(uint32_t id);
 public:
   explicit mobile_scene(resources::model_archive const &definitions) : models{definitions} {}
   uint32_t add(uint32_t model, math::pose const &pose);
+  // The caller keeps a registered object alive until it is removed or the scene is cleared.
+  uint32_t register_object(model_instance &object);
+  void place(uint32_t id);
+  void unplace(uint32_t id);
   void move(uint32_t id, math::pose const &pose);
   void remove(uint32_t id);
   void clear();

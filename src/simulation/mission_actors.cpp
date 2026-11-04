@@ -21,13 +21,7 @@ uint32_t random_pair(uint32_t &seed) {
   seed = seed * 0x41c64e6du + 0x3039u;
   return high | ((seed >> 16) & 0x7fff);
 }
-render::model_instance clone(render::model_instance const &source) {
-  render::model_instance result;
-  result.id = source.id; result.flags = source.flags; result.alternate_colours = source.alternate_colours;
-  result.relative = source.relative; result.world = source.world; result.scale = source.scale; result.distance = source.distance;
-  for(auto const &child : source.children) result.children.push_back(child ? std::make_unique<render::model_instance>(clone(*child)) : nullptr);
-  return result;
-}
+
 }
 void mission_actors::synchronize_models() {
   for(auto &unit : units) if(!(unit.conditions & 0x400)) {
@@ -38,10 +32,10 @@ void mission_actors::synchronize_models() {
     for(auto const &slot : carrier.slots) if(slot.occupant) {
       auto &unit{units[*slot.occupant]};
       auto &attached{ship.children[slot.attachment]};
-      if(!attached || attached->id != unit.object.id) attached = std::make_unique<render::model_instance>(clone(unit.object));
-      attached->flags = unit.object.flags; attached->relative = slot.relative; attached->scale = unit.object.scale;
-      render::maintain_model(*attached, &ship.world);
-      unit.object.relative = slot.relative; unit.object.world = attached->world;
+      unit.object.relative = slot.relative;
+      render::maintain_model(unit.object, &ship.world);
+      if(!attached) attached = std::make_unique<render::model_instance>();
+      render::synchronize_model(*attached, unit.object);
     }
   }
 }
@@ -168,7 +162,7 @@ mission_actors::mission_actors(resources::mission_definition const &mission, std
   }
   if(!groups.empty() && !groups.back().definition.waypoints.empty()) selected_waypoint = std::array{groups.size() - 1, groups.back().definition.waypoints.size() - 1};
   for(auto const &ship : carriers) for(auto const &slot : ship.slots) if(slot.occupant) {
-    auto &parent{units[ship.actor].object}; parent.children[slot.attachment] = std::make_unique<render::model_instance>(clone(units[*slot.occupant].object));
+    auto &parent{units[ship.actor].object}; parent.children[slot.attachment] = std::make_unique<render::model_instance>(); render::synchronize_model(*parent.children[slot.attachment], units[*slot.occupant].object);
   }
 }
 } // namespace apache::simulation

@@ -16,34 +16,47 @@ math::vector3 relative_to(math::vector3 const &position, math::vector3 const &or
 uint32_t mobile_scene::add(uint32_t const model, math::pose const &pose) {
   if(objects.size() >= UINT32_MAX) throw std::runtime_error{"Too many mobile scene objects"};
   auto const id{static_cast<uint32_t>(objects.size())};
-  objects.emplace_back(entry{construct_model(models, model, pose), {}});
-  move(id, pose);
+  auto owned{std::make_unique<model_instance>(construct_model(models, model, pose))};
+  auto *object{owned.get()};
+  objects.emplace_back(entry{std::move(owned), object, {}});
+  place(id);
+  return id;
+}
+uint32_t mobile_scene::register_object(model_instance &object) {
+  if(objects.size() >= UINT32_MAX) throw std::runtime_error{"Too many mobile scene objects"};
+  auto const id{static_cast<uint32_t>(objects.size())};
+  objects.emplace_back(entry{{}, &object, {}});
+  place(id);
   return id;
 }
 model_instance &mobile_scene::at(uint32_t const id) {
   if(id >= objects.size() || !objects[id]) throw std::runtime_error{"Unavailable mobile scene object"};
-  return objects[id]->object;
+  return *objects[id]->object;
 }
 model_instance const &mobile_scene::at(uint32_t const id) const {
   if(id >= objects.size() || !objects[id]) throw std::runtime_error{"Unavailable mobile scene object"};
-  return objects[id]->object;
+  return *objects[id]->object;
 }
 void mobile_scene::unplace(uint32_t const id) {
+  at(id);
   auto &object{*objects.at(id)};
   if(object.sector) std::erase(sectors[*object.sector], id);
   object.sector.reset();
 }
-void mobile_scene::move(uint32_t const id, math::pose const &pose) {
-  auto &model{at(id)};
-  auto const sector{sector_at(pose.position)};
+void mobile_scene::place(uint32_t const id) {
+  auto const sector{sector_at(at(id).world.position)};
   auto &object{*objects[id]};
   if(object.sector != sector) {
     unplace(id);
     if(sector) sectors[*sector].insert(sectors[*sector].begin(), id);
     object.sector = sector;
   }
+}
+void mobile_scene::move(uint32_t const id, math::pose const &pose) {
+  auto &model{at(id)};
   model.relative = pose;
   model.world = pose;
+  place(id);
 }
 void mobile_scene::remove(uint32_t const id) {
   at(id); unplace(id); objects[id].reset();
@@ -56,7 +69,7 @@ std::optional<int32_t> mobile_scene::shadow_receiver(math::vector3 const &positi
   auto const sector{sector_at(position)};
   if(!sector) return {};
   for(auto const id : sectors[*sector]) {
-    auto const &object{objects[id]->object};
+    auto const &object{*objects[id]->object};
     auto const &model{*models.at(object.id)};
     if(!(model.properties & 2)) continue;
     auto const local{math::transform(object.relative.rotation, relative_to(position, object.relative.position))};
@@ -75,7 +88,7 @@ void mobile_scene::submit(draw_queue &queue, math::pose const &camera, mobile_vi
   for(int x{-1}; x <= 1; ++x) for(int y{-1}; y <= 1; ++y) {
     if(sx + x < 0 || sx + x >= 64 || sy + y < 0 || sy + y >= 64) continue;
     for(auto const id : sectors[static_cast<size_t>((sx + x) * 64 + sy + y)]) {
-      auto const &object{objects[id]->object};
+      auto const &object{*objects[id]->object};
       auto const &position{object.relative.position};
       if(below ? (clouds && position[2] >= visibility.cloud_bottom) : position[2] <= visibility.cloud_top) continue;
       auto const delta{relative_to(position, camera.position)};

@@ -26,6 +26,19 @@ model_instance construct(resources::model_archive const &models, uint32_t const 
 model_instance construct_model(resources::model_archive const &models, uint32_t const id, math::pose const &position, std::span<uint32_t const> variable_children) {
   return construct(models, id, position, 0, variable_children);
 }
+void synchronize_model(model_instance &destination, model_instance const &source) {
+  if(&destination == &source) return;
+  destination.id = source.id; destination.flags = source.flags; destination.alternate_colours = source.alternate_colours;
+  destination.relative = source.relative; destination.world = source.world; destination.scale = source.scale; destination.distance = source.distance;
+  destination.children.resize(source.children.size());
+  for(size_t i{0}; i != source.children.size(); ++i) {
+    if(!source.children[i]) destination.children[i].reset();
+    else {
+      if(!destination.children[i]) destination.children[i] = std::make_unique<model_instance>();
+      synchronize_model(*destination.children[i], *source.children[i]);
+    }
+  }
+}
 void maintain_model(model_instance &object, math::pose const *const parent) {
   if(parent) {
     auto relative{object.relative};

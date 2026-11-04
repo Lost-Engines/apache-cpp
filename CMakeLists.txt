@@ -18,6 +18,7 @@ add_library(apache_core
   src/render/sector_scan.h
   src/render/feature_renderer.cpp
   src/render/feature_renderer.h
+  src/resources/model_metadata.cpp
   src/resources/models.cpp
   src/resources/models.h
   src/frontend/menu.cpp
@@ -40,6 +41,8 @@ add_library(apache_core
   src/render/shadows.h
   src/render/model_renderer.cpp
   src/render/model_renderer.h
+  src/render/avionics.cpp
+  src/render/avionics.h
   src/render/helmet_display.cpp
   src/render/helmet_display.h
   src/render/mfd_flight_plan.cpp
@@ -61,6 +64,8 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/flight_systems.cpp
+  src/simulation/flight_systems.h
   src/simulation/instrument_state.cpp
   src/simulation/instrument_state.h
   src/simulation/mfd_state.cpp
@@ -123,7 +128,7 @@ add_executable(apache
 target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
-add_executable(apache_inspect src/inspect.cpp)
+add_executable(apache_inspect src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)

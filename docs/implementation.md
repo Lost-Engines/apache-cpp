@@ -26,6 +26,9 @@ Current implementation:
 - MFD off/damaged, engine, system-status, weapons, radar, tactical, isolated-target FLIR, flight-plan and moving-map pages, with the original display bezels.
 - Target-camera positioning, inherited thermal colour maps, selected-contact highlighting, automatic route scaling and waypoint arrival estimates.
 - Independent pilot/gunner MFD selections, direction-aware cycling, power switches, radar requests and damage transitions.
+- Complete single-player avionics composition in the original drawing order, with runtime model names and properties.
+- Fuel consumption, engine/rotor response, autorotation terms, engine temperature and failure warnings.
+- Flight-input normalization, automatic-hover corrections and touchdown grading.
 - Fixed-point 2D line clipping, inverse projection and unclipped text positioning.
 - Rotated terrain maps with contours, super-features, faction markers and model footprints.
 - Terrain grid projection, 7,200-entry scene queue, texture selection and fog shading tables.
@@ -119,11 +122,15 @@ Validation completed:
 - 2,200 weapon-cue and complete helmet-layout frames match 422,400,000 pixels, including lock states, off-screen targets, damage and all six player weapons.
 - 5,420 world-to-helmet projection cases match 8,326 output fields; 4,112 flight-to-instrument conversions match 57,568 fields.
 - The complete helmet component, weapon/layout, target-projection and instrument-state comparisons also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
+- 174 complete avionics passes use states and scene/panel inputs captured from original missions. All 147 frames without invalid original model reads match 25,113,600 pixels, together with display selections and random seeds. The remaining 27 frames use bounded missing-normal handling. This compares the full avionics pass; the original simulation and scene remain reference inputs.
+- All 1,314 runtime model property records match 13,140 fields after the original weapon-data initializer.
+- 9,602 flight-subsystem cases match 446,620 fields exactly, including binary64 values, fault flags and ordered warning/audio events. These cover fuel, engines, temperature, failures, controls, hover and landing.
+- The complete avionics, runtime-property and flight-subsystem comparisons also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: live avionics and cockpit integration, simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
+Next: aerodynamic integration, live sensor/target behavior, complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

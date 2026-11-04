@@ -1,3 +1,4 @@
+#include "inspect_flight.h"
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -7,6 +8,7 @@
 #include <string_view>
 #include "math/trigonometry.h"
 #include "render/clouds.h"
+#include "render/avionics.h"
 #include "render/crater_renderer.h"
 #include "render/draw_queue.h"
 #include "render/effect_renderer.h"
@@ -36,6 +38,33 @@
 #include "resources/terrain_textures.h"
 
 namespace {
+bool read_helmet(unsigned int &mode, unsigned int &component, apache::render::helmet_instruments &state, apache::math::trigonometry const &trig, bool const extended) {
+  unsigned int colour{223}, letter{65};
+  if(!(std::cin >> mode >> component >> state.view >> colour >> state.heading >> state.command_heading >> state.pitch >> state.roll >> state.climb_rate >> state.radar_altitude >> state.barometric_altitude >> state.airspeed >> state.torque >> letter >> state.waypoint_distance >> state.waypoint_time >> state.sight_heading >> state.sight_pitch >> std::quoted(state.viewing_device) >> std::quoted(state.magnification) >> state.layout_grid)) return false;
+  if(mode > 1 || component > (extended ? 21u : 10u)) throw std::runtime_error{"Invalid helmet display case"};
+  state.colour = static_cast<uint8_t>(colour); state.waypoint_letter = static_cast<uint8_t>(letter);
+  if(extended) {
+    auto &w{state.weapons};
+    std::cin >> w.selected >> w.rounds >> w.impact_time >> w.lock_status >> w.armed >> w.landed >> w.target_exists >> w.target_locked >> w.target_designated >> w.target_aircraft >> w.target_valid >> w.target.x >> w.target.y >> w.impact.x >> w.impact.y >> w.intercept.x >> w.intercept.y >> w.target_range >> w.target_speed >> w.box_half_size >> w.rocket_elevation >> w.tads_active >> w.tads_valid >> w.tads.x >> w.tads.y >> state.faults >> state.mode >> std::quoted(w.name) >> std::quoted(w.target_name);
+    for(auto *vector : {&state.aircraft.position, &state.camera.position, &w.target_position, &w.impact_position, &w.target_heading}) for(auto &coordinate : *vector) std::cin >> coordinate;
+    for(auto *rotation : {&state.aircraft.rotation, &state.camera.rotation}) { uint32_t h{0}, p{0}, r{0}; std::cin >> h >> p >> r; *rotation = trig.transformation(h, p, r); }
+  }
+  if(!std::cin) throw std::runtime_error{"Incomplete helmet input"};
+  return true;
+}
+std::unique_ptr<apache::render::model_instance> read_model_instance(apache::resources::model_archive const &models, unsigned int const depth = 0) {
+  if(depth > 64) throw std::runtime_error{"Excessive captured model depth"};
+  uint32_t id{0}; std::cin >> id; if(!id) return {};
+  uint32_t flags{0}; bool alternate{false}; apache::math::pose pose; apache::math::vector3 scale; int count{0};
+  std::cin >> flags >> alternate; for(auto &v : pose.position) std::cin >> v; for(auto &v : pose.rotation) std::cin >> v; for(auto &v : scale) std::cin >> v; std::cin >> count;
+  auto object{std::make_unique<apache::render::model_instance>(apache::render::construct_model(models, id, pose))};
+  object->flags = flags; object->alternate_colours = alternate; object->scale = scale;
+  if(count >= 0) {
+    if(count > 1000) throw std::runtime_error{"Excessive captured model children"};
+    object->children.clear(); for(int i{0}; i != count; ++i) object->children.push_back(read_model_instance(models, depth + 1));
+  }
+  return object;
+}
 void word(apache::resources::bytes &output, uint32_t const value) {
   for(unsigned int shift{0}; shift != 32; shift += 8) output.push_back(static_cast<uint8_t>(value >> shift));
 }
@@ -95,24 +124,66 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "helmet-components" || command == "helmet-weapons") {
+  if(command == "flight-systems") {
+    inspect_flight_systems(std::cin, std::cout);
+  } else if(command == "helmet-components" || command == "helmet-weapons") {
     apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};
     std::array<apache::render::helmet_display, 2> const helmets{apache::render::helmet_display{executable, trig, 0}, apache::render::helmet_display{executable, trig, 1}};
-    unsigned int mode{0}, component{0}, colour{223}, letter{65}; apache::render::helmet_instruments state;
-    while(std::cin >> mode >> component >> state.view >> colour >> state.heading >> state.command_heading >> state.pitch >> state.roll >> state.climb_rate >> state.radar_altitude >> state.barometric_altitude >> state.airspeed >> state.torque >> letter >> state.waypoint_distance >> state.waypoint_time >> state.sight_heading >> state.sight_pitch >> state.viewing_device >> state.magnification >> state.layout_grid) {
-      if(mode > 1 || component > (command == "helmet-components" ? 10u : 21u)) throw std::runtime_error{"Invalid helmet display case"};
-      state.colour = static_cast<uint8_t>(colour); state.waypoint_letter = static_cast<uint8_t>(letter);
-      if(command == "helmet-weapons") {
-        auto &w{state.weapons};
-        std::cin >> w.selected >> w.rounds >> w.impact_time >> w.lock_status >> w.armed >> w.landed >> w.target_exists >> w.target_locked >> w.target_designated >> w.target_aircraft >> w.target_valid >> w.target.x >> w.target.y >> w.impact.x >> w.impact.y >> w.intercept.x >> w.intercept.y >> w.target_range >> w.target_speed >> w.box_half_size >> w.rocket_elevation >> w.tads_active >> w.tads_valid >> w.tads.x >> w.tads.y >> state.faults >> state.mode >> std::quoted(w.name) >> std::quoted(w.target_name);
-        for(auto *vector : {&state.aircraft.position, &state.camera.position, &w.target_position, &w.impact_position, &w.target_heading}) for(auto &coordinate : *vector) std::cin >> coordinate;
-        for(auto *rotation : {&state.aircraft.rotation, &state.camera.rotation}) { uint32_t h{0}, p{0}, r{0}; std::cin >> h >> p >> r; *rotation = trig.transformation(h, p, r); }
-      }
+    unsigned int mode{0}, component{0}; apache::render::helmet_instruments state;
+    while(read_helmet(mode, component, state, trig, command == "helmet-weapons")) {
       apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
       for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
       if(component == 21) helmets[mode].draw(frame, state);
       else helmets[mode].draw_component(frame, state, static_cast<apache::render::helmet_component>(component));
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc > 3) { std::ofstream output{argv[3], std::ios::binary}; output.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "model-metadata") {
+    apache::resources::executable_data const executable{data};
+    auto models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    apache::resources::initialise_model_metadata(models, executable);
+    for(size_t i{0}; i != models.size(); ++i) if(models[i]) {
+      auto const &object{*models[i]};
+      std::cout << i << ' ' << std::quoted(object.name) << ' ' << std::quoted(object.description);
+      for(auto const value : object.metadata) std::cout << ' ' << value;
+      std::cout << '\n';
+    }
+  } else if(command == "avionics") {
+    apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    std::array<apache::render::cockpit, 2> const panels{apache::render::cockpit{data, 0}, apache::render::cockpit{data, 1}};
+    std::array<apache::render::avionics_renderer, 2> const displays{apache::render::avionics_renderer{panels[0], trig, executable}, apache::render::avionics_renderer{panels[1], trig, executable}};
+    unsigned int mode{0}, component{0}; apache::render::avionics_instruments state; std::optional<apache::render::landscape> world;
+    std::string zone, loaded, background;
+    while(read_helmet(mode, component, state.helmet, trig, true)) {
+      unsigned int remap{0}; apache::render::sky_lighting lighting;
+      std::cin >> std::quoted(zone) >> std::quoted(background) >> state.clock_time >> state.accelerated_time >> state.damaged_display_seed >> state.map_range >> remap >> lighting.heading >> lighting.pitch >> lighting.night;
+      for(auto &seat : state.displays.pages) for(auto &page : seat) { unsigned int value{0}; std::cin >> value; if(value > 9) throw std::runtime_error{"Invalid MFD mode"}; page = static_cast<apache::simulation::mfd_page>(value); }
+      for(auto &text : state.communications) std::cin >> std::quoted(text);
+      auto &e{state.engines}; std::cin >> e.torque_left >> e.torque_right >> e.temperature_left >> e.temperature_right >> e.rpm_left >> e.rpm_right >> e.rotor_rpm >> e.collective;
+      auto &w{state.stores}; for(auto &pair : w.pairs) std::cin >> pair.type >> pair.rounds[0] >> pair.rounds[1];
+      std::cin >> w.wingtip[0] >> w.wingtip[1] >> w.gun >> w.chaff >> w.flares >> w.armed >> w.auto_chaff >> w.auto_ecm;
+      for(size_t i{0}; i != 2; ++i) {
+        auto &r{i ? state.tactical : state.radar}; auto &contacts{i ? state.tactical_contacts : state.radar_contacts}; unsigned int kind{0}; size_t count{0};
+        std::cin >> kind >> r.range >> r.corner_range >> r.mark_length >> r.heading >> r.failed >> r.frozen >> r.tads >> r.locked >> r.scan_all >> r.threat >> r.range_index >> r.has_target >> std::quoted(r.target_name) >> r.target_distance >> count;
+        if(kind > 3 || count > 1024) throw std::runtime_error{"Invalid avionics radar state"}; r.mode = static_cast<apache::render::radar_mode>(kind); contacts.resize(count);
+        for(auto &c : contacts) std::cin >> c.x >> c.y >> c.symbol >> c.selected;
+      }
+      size_t count{0}; std::cin >> count >> state.waypoint; if(count > 10000) throw std::runtime_error{"Invalid avionics route"}; state.route.resize(count);
+      for(auto &point : state.route) { unsigned int letter{0}; std::cin >> point.x >> point.y >> letter; point.label = static_cast<uint8_t>(letter); }
+      for(auto *matrix : {&state.helmet.aircraft.rotation, &state.helmet.camera.rotation}) for(auto &coefficient : *matrix) std::cin >> coefficient;
+      for(auto &coordinate : state.target_camera_aim) std::cin >> coordinate;
+      auto object{read_model_instance(models)}; state.target_model = object.get();
+      if(!std::cin) throw std::runtime_error{"Incomplete avionics input"};
+      if(zone != loaded) { world.emplace(data, zone); world->initialise_model_metadata(executable); loaded = zone; }
+      world->palette.prepare(remap); world->missing_normals = world->invalid_texture_samples = 0;
+      apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
+      std::ifstream image{background, std::ios::binary}; image.read(reinterpret_cast<char*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size()));
+      if(!image) throw std::runtime_error{"Incomplete avionics background"};
+      displays[mode].draw(frame, state, *world, lighting);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << state.damaged_display_seed;
+      for(auto const &seat : state.displays.pages) for(auto const page : seat) std::cout << ' ' << static_cast<unsigned int>(page);
+      std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples << '\n';
       if(argc > 3) { std::ofstream output{argv[3], std::ios::binary}; output.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
   } else if(command == "helmet-projection") {
@@ -276,7 +347,7 @@ int main(int const argc, char const *const argv[]) try {
       for(auto &axis : position.position) std::cin >> axis;
       std::cin >> heading >> pitch >> roll; for(auto &axis : aim) std::cin >> axis; for(auto &axis : observer) std::cin >> axis;
       std::cin >> lighting.heading >> lighting.pitch >> lighting.night;
-      if(zone != loaded) { world.emplace(data, zone); loaded = zone; }
+      if(zone != loaded) { world.emplace(data, zone); world->initialise_model_metadata(executable); loaded = zone; }
       world->palette.prepare(remap); world->missing_normals = world->invalid_texture_samples = 0;
       position.rotation = kind == 1 ? apache::math::matrix3{trig.cosine(heading), apache::math::negate(trig.sine(heading)), 0, trig.sine(heading), trig.cosine(heading), 0, 0, 0, INT32_MAX} : trig.transformation(heading, pitch, roll);
       auto object{apache::render::construct_model(models, id, position)}; object.flags = flags; object.alternate_colours = alternate;

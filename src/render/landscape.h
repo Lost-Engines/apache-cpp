@@ -57,6 +57,7 @@ public:
   size_t missing_normals{0};
   size_t invalid_texture_samples{0};
   landscape(resources::data_store const &data, std::string_view zone);
+  void initialise_model_metadata(resources::executable_data const &executable) { resources::initialise_model_metadata(models, executable); }
   resources::terrain const &heights() const { return terrain; }
   uint8_t surface_type(int32_t x, int32_t y) const;
   void advance(int32_t delta_time, uint32_t &random_seed);

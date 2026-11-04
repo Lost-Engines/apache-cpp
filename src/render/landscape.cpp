@@ -44,7 +44,7 @@ std::string_view landscape::draw_flir(framebuffer &target, model_instance &objec
   model_renderer drawer{target, models, object_textures, palette};
   drawer.style = {.textures{false}, .gouraud{false}, .glass{false}, .light{light_vector(trig, lighting)}};
   // The isolated-target path keeps the colour remap left by the preceding
-  // scene render. Unlike the central thermal display, it does not replace it.
+  // scene render. The central gunner display uses this same path.
   drawer.draw(object, camera);
   missing_normals = drawer.missing_normals; invalid_texture_samples = drawer.invalid_texture_samples;
   return definition.name;

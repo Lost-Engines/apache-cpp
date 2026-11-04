@@ -58,6 +58,8 @@ struct model {
   bytes grid_lighting;
 };
 using model_archive = std::vector<std::optional<model>>;
+class executable_data;
+void initialise_model_metadata(model_archive &models, executable_data const &executable);
 model read_model(std::span<uint8_t const> data);
 model_archive read_models(std::span<uint8_t const> data);
 

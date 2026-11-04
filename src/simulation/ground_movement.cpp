@@ -17,13 +17,14 @@ int32_t approximate_distance(int32_t x, int32_t y) {
   if(y < 0) y = math::negate(y);
   return math::add(std::bit_cast<int32_t>(static_cast<uint32_t>(std::max(x, y)) * 4), std::min(x, y)) >> 2;
 }
-void translate(actor_state &unit, math::vector3 const &amount) {
-  for(size_t i{0}; i != 3; ++i) unit.object.world.position[i] = math::add(unit.object.world.position[i], amount[i]);
+void translate(actor_state &unit, math::vector3 const &amount, actor_environment const &environment) {
+  auto position{unit.object.world.position}; for(size_t i{0}; i != 3; ++i) position[i] = math::add(position[i], amount[i]);
+  environment.set_position(unit, position);
 }
-void advance(actor_state &unit, int32_t const delta) {
+void advance(actor_state &unit, int32_t const delta, actor_environment const &environment) {
   math::vector3 amount;
   for(size_t i{0}; i != 3; ++i) amount[i] = math::multiply_q31(unit.velocity[i], delta);
-  translate(unit, amount);
+  translate(unit, amount, environment);
 }
 }
 ground_movement::ground_movement(std::vector<actor_state> &actors, actor_group const &actor_group, resources::mission_task const &orders, std::span<resources::formation_member const> const members, math::trigonometry const &angles, actor_environment const &world) : units{actors}, group{actor_group}, task{orders}, formation{members}, trig{angles}, environment{world} {}
@@ -69,7 +70,7 @@ void ground_movement::check_type(actor_state &unit) {
     // This transition pairs ascending offsets with the original reverse list.
     for(size_t i{following.size()}; i-- > 0; ++member_number) {
       auto &member{units[following[i]]}; if(member.destroyed) continue;
-      member.object.world.position = formation_point(unit.object.world.position, member_number, unit.angles[0]);
+      environment.set_position(member, formation_point(unit.object.world.position, member_number, unit.angles[0]));
       auto const target{drive_to(unit, member_number)}; auto const range{distance(target, member.object.world.position)};
       member.angles[0] = trig.arctangent(math::subtract(target[0], member.object.world.position[0]), math::subtract(target[1], member.object.world.position[1]));
       auto const speed{ratio(unit.speed, range, unit.route_distance)};
@@ -82,7 +83,7 @@ void ground_movement::check_type(actor_state &unit) {
 void ground_movement::past_waypoint(actor_state &unit, int32_t const movement) {
   if(unit.destroyed || !unit.waypoint) return;
   auto const &route{group.definition.waypoints}; size_t const previous{*unit.waypoint}; int32_t const old_speed{unit.speed};
-  unit.object.world.position = route[previous].position;
+  environment.set_position(unit, route[previous].position);
   if(task.battle_cell && route[previous].type == 4) { unit.conditions &= ~6u; zero_speed(unit, true); return; }
   if(unit.conditions & 2) unit.waypoint = previous ? std::optional{previous - 1} : std::nullopt;
   else unit.waypoint = previous + 1 < route.size() ? std::optional{previous + 1} : task.type == 21 ? std::optional<size_t>{0} : std::nullopt;
@@ -92,7 +93,7 @@ void ground_movement::past_waypoint(actor_state &unit, int32_t const movement) {
     unit.speed = next.speed; auto const dx{math::subtract(next.position[0], position[0])}, dy{math::subtract(next.position[1], position[1])}, dz{math::subtract(next.position[2], position[2])};
     unit.angles[0] = trig.arctangent(dx, dy); unit.angles[1] = dz ? trig.arctangent(dz, approximate_distance(dx, dy)) : 0;
     int32_t const remainder{math::subtract(movement, unit.route_distance)};
-    translate(unit, {math::multiply_q31(trig.sine(unit.angles[0]), remainder), math::multiply_q31(trig.cosine(unit.angles[0]), remainder), math::multiply_q31(trig.sine(unit.angles[1]), remainder)});
+    translate(unit, {math::multiply_q31(trig.sine(unit.angles[0]), remainder), math::multiply_q31(trig.cosine(unit.angles[0]), remainder), math::multiply_q31(trig.sine(unit.angles[1]), remainder)}, environment);
     unit.route_distance = distance(next.position, unit.object.world.position);
   }
   unit.velocity = {math::multiply_q31(trig.sine(unit.angles[0]), unit.speed), math::multiply_q31(trig.cosine(unit.angles[0]), unit.speed), math::multiply_q31(trig.sine(unit.angles[1]), unit.speed)};
@@ -108,7 +109,7 @@ void ground_movement::members_past_waypoint(actor_state &leader, int32_t const m
   auto const following{members(leader)}; if(formation.empty()) return;
   for(size_t i{following.size()}; i-- > 0;) {
     auto &member{units[following[i]]}; if(member.destroyed) continue;
-    member.object.world.position = formation_point(leader.object.world.position, i + 1, leader.angles[0]);
+    environment.set_position(member, formation_point(leader.object.world.position, i + 1, leader.angles[0]));
     int32_t range{0};
     if(leader.speed) {
       auto const target{drive_to(leader, i + 1)};
@@ -116,7 +117,7 @@ void ground_movement::members_past_waypoint(actor_state &leader, int32_t const m
       range = distance(target, member.object.world.position); auto const speed{ratio(leader.speed, range, leader.route_distance)};
       member.velocity[0] = math::multiply_q31(trig.sine(member.angles[0]), speed); member.velocity[1] = math::multiply_q31(trig.cosine(member.angles[0]), speed);
       auto const remaining{math::subtract(movement, previous_distance)};
-      translate(member, {ratio(math::multiply_q31(member.velocity[0], delta), remaining, movement), ratio(math::multiply_q31(member.velocity[1], delta), remaining, movement), 0});
+      translate(member, {ratio(math::multiply_q31(member.velocity[0], delta), remaining, movement), ratio(math::multiply_q31(member.velocity[1], delta), remaining, movement), 0}, environment);
       member.object.world.rotation = trig.transformation(member.angles[0], member.angles[1], member.angles[2]);
     }
     // The original leaves this distance uninitialized when its leader stops.
@@ -128,8 +129,8 @@ void ground_movement::move(actor_state &unit, actor_state const &leader, bool co
   if(!leader.speed) { unit.speed = 0; return; }
   int32_t const movement{math::multiply_q31(leader.speed, delta)}, previous_distance{unit.route_distance};
   if(movement < previous_distance) {
-    unit.route_distance = math::subtract(unit.route_distance, math::multiply_q31(unit.speed, delta)); advance(unit, delta);
-    if(with_members) for(auto id : members(unit)) if(!units[id].destroyed) advance(units[id], delta);
+    unit.route_distance = math::subtract(unit.route_distance, math::multiply_q31(unit.speed, delta)); advance(unit, delta, environment);
+    if(with_members) { auto const following{members(unit)}; for(size_t i{following.size()}; i-- > 0;) if(!units[following[i]].destroyed) advance(units[following[i]], delta, environment); }
   } else {
     past_waypoint(unit, movement);
     if(with_members) members_past_waypoint(unit, movement, previous_distance);

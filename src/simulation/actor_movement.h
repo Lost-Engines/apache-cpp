@@ -13,6 +13,7 @@ struct movement_callbacks {
   std::function<std::optional<movement_target>(size_t)> target;
   std::function<void(size_t)> kill;
   std::function<void(size_t)> fire_at_waypoint;
+  std::function<void(size_t)> place, unplace;
 };
 struct movement_time {
   int32_t now{0}, delta{0}, game_flow{0};

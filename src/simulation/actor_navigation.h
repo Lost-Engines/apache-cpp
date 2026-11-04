@@ -23,6 +23,7 @@ struct navigation_environment {
   std::function<int32_t(int32_t, int32_t)> height;
   int32_t tallest_object{0};
   std::function<std::optional<navigation_obstacle>(math::vector3 const &, math::vector3 const &)> obstacle;
+  std::function<void(actor_state &, math::vector3 const &)> relocate;
 };
 struct navigation_result { bool arrived{false}, outside_world{false}; };
 navigation_result navigate_actor(actor_state &unit, navigation_order const &order, navigation_characteristics const &performance, math::trigonometry const &trig, navigation_environment const &world, int32_t delta_time);

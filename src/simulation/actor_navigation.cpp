@@ -140,7 +140,7 @@ navigation_result navigate_actor(actor_state &unit, navigation_order const &orde
   position[2] = std::clamp(position[2], 0, 12800000);
   auto next{position}; for(size_t i{0}; i != 3; ++i) next[i] = math::add(next[i], unit.velocity[i]);
   if(outside(next)) return {false, true};
-  position = next;
+  if(world.relocate) world.relocate(unit, next); else position = next;
   if(!unit.carrier_slot) unit.object.relative = unit.object.world;
   return {arrived, false};
 }

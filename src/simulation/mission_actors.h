@@ -39,6 +39,8 @@ struct carrier_state {
 struct actor_environment {
   std::function<int32_t(int32_t, int32_t)> height;
   std::function<unsigned int(int32_t, int32_t)> surface;
+  std::function<void(actor_state &, math::vector3 const &)> relocate;
+  void set_position(actor_state &actor, math::vector3 const &position) const { if(relocate) relocate(actor, position); else actor.object.world.position = position; }
 };
 class mission_actors {
   std::array<actor_type, 1315> types;

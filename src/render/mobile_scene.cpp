@@ -22,11 +22,11 @@ uint32_t mobile_scene::add(uint32_t const model, math::pose const &pose) {
   place(id);
   return id;
 }
-uint32_t mobile_scene::register_object(model_instance &object) {
+uint32_t mobile_scene::register_object(model_instance &object, bool const initially_place) {
   if(objects.size() >= UINT32_MAX) throw std::runtime_error{"Too many mobile scene objects"};
   auto const id{static_cast<uint32_t>(objects.size())};
   objects.emplace_back(entry{{}, &object, {}});
-  place(id);
+  if(initially_place) place(id);
   return id;
 }
 model_instance &mobile_scene::at(uint32_t const id) {
@@ -40,8 +40,10 @@ model_instance const &mobile_scene::at(uint32_t const id) const {
 void mobile_scene::unplace(uint32_t const id) {
   at(id);
   auto &object{*objects.at(id)};
-  if(object.sector) std::erase(sectors[*object.sector], id);
+  auto const old{object.sector};
+  if(old) std::erase(sectors[*old], id);
   object.sector.reset();
+  if(old && on_remove) on_remove(id, *old);
 }
 void mobile_scene::place(uint32_t const id) {
   auto const sector{sector_at(at(id).world.position)};
@@ -50,10 +52,12 @@ void mobile_scene::place(uint32_t const id) {
     unplace(id);
     if(sector) sectors[*sector].insert(sectors[*sector].begin(), id);
     object.sector = sector;
+    if(sector && on_place) on_place(id, *sector);
   }
 }
 void mobile_scene::move(uint32_t const id, math::pose const &pose) {
   auto &model{at(id)};
+  if(objects[id]->sector != sector_at(pose.position)) unplace(id);
   model.relative = pose;
   model.world = pose;
   place(id);

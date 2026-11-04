@@ -44,6 +44,20 @@ int main() try {
   render::synchronize_model(attached, actor);
   require(!attached.children.front() && attached.children.back()->id == 7, "attachment removals and replacements propagate");
   scene.clear();
+  std::vector<std::array<int64_t, 4>> events;
+  scene.on_place = [&](uint32_t i, size_t sector){ events.push_back({1, i, static_cast<int64_t>(sector), scene.at(i).world.position[0]}); };
+  scene.on_remove = [&](uint32_t i, size_t sector){ require(scene.sector(sector).empty(), "removal is visible before rebuilding combat contacts"); events.push_back({0, i, static_cast<int64_t>(sector), scene.at(i).world.position[0]}); };
+  actor.world.position = actor.relative.position = {1 << 22, 2 << 22, 100};
+  auto const registered{scene.register_object(actor, false)};
+  require(events.empty() && scene.sector(66).empty(), "carrier registration need not place an aircraft into combat cells");
+  scene.place(registered);
+  auto moved{actor.world}; moved.position[0] = 3 << 22; scene.move(registered, moved);
+  require(events.size() == 3 && events[1] == std::array<int64_t, 4>{0, registered, 66, 1 << 22} && events[2] == std::array<int64_t, 4>{1, registered, 194, 3 << 22}, "sector callbacks remove at the old position before placing at the new position");
+  moved.position[0] += 100; scene.move(registered, moved);
+  require(events.size() == 3, "movement within a sector retains contact ordering");
+  scene.unplace(registered); scene.unplace(registered);
+  require(events.size() == 4, "an absent contact is not removed twice");
+  scene.on_place = {}; scene.on_remove = {}; scene.clear();
   std::cout << "Shared scene ownership and attachment checks passed\n";
   return EXIT_SUCCESS;
 } catch(std::exception const &error) { std::cerr << error.what() << '\n'; return EXIT_FAILURE; }

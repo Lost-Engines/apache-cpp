@@ -39,6 +39,7 @@ void actor_movement::take_off(size_t const index, actor_group const &group) {
     unit.route_distance = distance2(unit.object.world.position, target);
   }
   unit.object.world.rotation = trig.transformation(unit.angles[0], unit.angles[1], unit.angles[2]);
+  if((unit.object.world.position[0] || unit.object.world.position[1]) && callbacks.place) callbacks.place(index);
   slot.occupant.reset(); ship.object.children[slot.attachment].reset();
 }
 void actor_movement::land(size_t const index) {
@@ -46,6 +47,7 @@ void actor_movement::land(size_t const index) {
   auto &carrier{actors.carriers[*unit.carrier]}; auto &ship{actors.units[carrier.actor]}; auto &slot{carrier.slots[*unit.carrier_slot]};
   unit.conditions |= 0x400;
   if(ship.destroyed) return;
+  if(callbacks.unplace) callbacks.unplace(index);
   math::vector3 delta; for(size_t i{0}; i != 3; ++i) delta[i] = math::subtract(unit.object.world.position[i], ship.object.world.position[i]);
   slot.relative.position = math::transform(ship.object.world.rotation, delta);
   slot.relative.rotation = trig.transformation(trig.angles(unit.object.world.rotation)[0] - trig.angles(ship.object.world.rotation)[0], 0, 0);

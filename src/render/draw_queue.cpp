@@ -7,6 +7,11 @@ void draw_queue::clear() {
   items.clear();
   flat_head = behind_head = -1;
 }
+bool draw_queue::consume_unused_slot() {
+  if(full()) return false;
+  items.emplace_back();
+  return true;
+}
 bool draw_queue::push(queued_draw const &draw) {
   if(items.size() == 7200) return false;
   int const index{static_cast<int>(items.size())};

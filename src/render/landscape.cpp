@@ -30,11 +30,14 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
   auto const elevation{terrain.elevation(camera.position[0], camera.position[1])};
   if(camera.position[2] <= elevation) camera.position[2] = elevation + 256;
   auto const angles{trig.angles(camera.rotation)};
-  background.ground(angles[1], angles[2], options.sky);
+  auto sky{options.sky};
+  sky.cloud_mode = camera.position[2] < options.cloud_bottom ? 0 : camera.position[2] < options.cloud_top ? 1 : 2;
+  background.ground(angles[1], angles[2], sky);
   feature_renderer feature_drawer{target, view, palette};
   terrain_renderer terrain_drawer{target, view, palette, textures};
   model_renderer object_drawer{target, models, object_textures, palette};
   object_drawer.style = options.models;
+  object_drawer.style.light = light_vector(trig, options.lighting);
   draw_queue queue;
   struct tile_draw {
     unsigned int x{0};
@@ -60,7 +63,7 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
     auto const points{project_feature(object, camera.rotation, origin, view)};
     feature_drawer.draw(distant && object.has_distant ? object.distant : object.faces, points, fog);
   }};
-  if(options.sky.cloud_mode == 0 || (!(options.sky.cloud_flags & 2) && options.sky.weather == 0)) {
+  if(sky.cloud_mode == 0 || (!(sky.cloud_flags & 2) && sky.weather == 0)) {
     // The reference engine projects the super-feature vertices but never
     // submits their face lists. They remain available in the resource tools.
     auto const sectors{scan_sectors(camera, view, angles[0], options.distance, false)};
@@ -117,13 +120,19 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
       }
     }
   }
-  background.sky(options.sky);
-  auto sky{options.sky};
+  background.sky(sky);
   if(sky.cloud_mode == 0 && (sky.weather == 2 || sky.weather == 3)) sky.cloud_flags &= ~2u;
   bool const sky_visible{std::bit_cast<int32_t>(angles[1]) >= -0x38e38e38 && !(sky.cloud_mode == 1 && ((sky.cloud_flags & 2) || sky.weather == 1))};
+  std::optional<cloud_mesh> clouds;
+  rasterizer cloud_raster{target};
+  if((sky.cloud_flags & 2) && sky.cloud_mode != 1) {
+    clouds.emplace(terrain, camera, scan_cloud_sectors(camera, trig, angles[0], angles[1], sky.cloud_mode), options.cloud_height, sky.cloud_mode, sky.weather);
+    clouds->submit(queue, camera);
+  }
   sun_glare = options.celestial_bodies && sky_visible && (sky.cloud_mode == 2 || sky.weather == 0) ? sky_objects.draw(target, camera.rotation, trig, palette, sky, options.lighting) : 0;
   for(auto const &entry : queue.ordered()) {
     if(entry.kind == draw_kind::terrain) draw_tile(tiles[entry.payload], false);
+    else if(entry.kind == draw_kind::cloud) clouds->draw(cloud_raster, view, palette, entry.payload);
     else {
       object_drawer.draw(scenery[entry.payload], camera);
       missing_normals += object_drawer.missing_normals;

@@ -1,5 +1,6 @@
 #pragma once
 #include "celestial.h"
+#include "clouds.h"
 #include "draw_queue.h"
 #include "feature_renderer.h"
 #include "horizon.h"
@@ -16,6 +17,9 @@ struct landscape_options {
   bool scenery{true};
   bool celestial_bodies{true};
   sky_lighting lighting;
+  int cloud_height{26000};
+  int32_t cloud_bottom{6400000};
+  int32_t cloud_top{6912000};
   int32_t near_object_depth{-262144};
   int32_t far_object_depth{4194304};
   model_style models;

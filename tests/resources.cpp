@@ -4,6 +4,7 @@
 #include "configuration/preferences.h"
 #include "math/fixed.h"
 #include "render/celestial.h"
+#include "render/draw_queue.h"
 #include "render/framebuffer.h"
 #include "render/projection.h"
 #include "render/projection2.h"
@@ -95,6 +96,11 @@ int main() try {
   rejects([&]{ apache::resources::execute_model(object, 1, 1, {}); }, "unauthored model animation state rejected");
   object.program.at(200).branches[0] = 200;
   rejects([&]{ apache::resources::execute_model(object, 0, 1, {}); }, "cyclic model program bounded");
+  apache::render::draw_queue queue;
+  for(unsigned int i{0}; i != 7200; ++i) require(queue.consume_unused_slot(), "discarded cloud entries still consume the original buffer capacity");
+  require(queue.full() && queue.ordered().empty() && !queue.push({}), "consumed queue slots cannot be rendered or reused before reset");
+  queue.clear();
+  require(queue.push({}) && queue.ordered().size() == 1, "frame reset releases discarded slots");
   apache::render::projection const camera{0, 0, 320, 240};
   std::array<apache::render::vertex3, 3> const crossing_triangle{camera.prepare({-100, 100, 0}), camera.prepare({100, 100, 0}), camera.prepare({0, -100, 100})};
   auto const clipped{camera.clip(crossing_triangle)};

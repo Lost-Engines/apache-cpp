@@ -25,6 +25,8 @@ public:
   draw_queue();
   void clear();
   bool push(queued_draw const &draw);
+  bool consume_unused_slot();
+  bool full() const { return items.size() == 7200; }
   std::vector<queued_draw> ordered() const;
 };
 } // namespace apache::render

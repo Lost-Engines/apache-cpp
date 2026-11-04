@@ -18,6 +18,7 @@ Current implementation:
 - Seven terrain drawing paths, including 64-triangle subdivision and perspective correction in 16-pixel spans.
 - Complete terrain, feature and placed-scenery assembly, visible-sector selection, and the original ground/sky horizon.
 - Star-map decoding, night visibility thresholds, sun/moon projection and sun glare.
+- Cloud-sector selection, quantized cloud mesh, detail transitions, horizon fading and interleaved scene sorting.
 - Bounded feature-record decoding, distant feature variants and 2D world-window clipping.
 - Perspective projection and five-plane clipping with interpolated texture coordinates and lighting.
 - Preference parsing, conversion and serialization.
@@ -53,11 +54,15 @@ Validation completed:
 - 8,808 circle frames match 408,858,624 pixels, including edge clipping, mesh patterns and translucent remapping.
 - 1,324 celestial frames match 171,545,600 pixels and every sun-glare value, including twilight thresholds, weather cover and camera roll.
 - The full 192-case scenery run and another 424 celestial frames pass under AddressSanitizer and UndefinedBehaviorSanitizer.
+- 168 cloud-grid cases match 1,241,584 vertices and all 1,296 mesh-transition cells.
+- 296 complete cloud images match 22,732,800 pixels and all 193,639 queued cloud objects.
+- 192 assembled terrain/cloud/sky images match 14,745,600 pixels across all four warzones and weather states, including views inside and above clouds.
+- Another 120 cloud frames and 160 assembled weather scenes pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: moving objects, clouds, scene effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
+Next: moving objects, scene effects and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

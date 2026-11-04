@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string_view>
 #include "math/trigonometry.h"
+#include "render/clouds.h"
 #include "render/draw_queue.h"
 #include "render/feature_renderer.h"
 #include "render/horizon.h"
@@ -84,7 +85,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape" || command == "scene") {
+  if(command == "landscape" || command == "scene" || command == "atmosphere") {
     apache::math::trigonometry const trig{data};
     std::string zone, loaded;
     std::unique_ptr<apache::render::landscape> world;
@@ -92,8 +93,9 @@ int main(int const argc, char const *const argv[]) try {
     uint32_t heading{0}, pitch{0}, roll{0};
     apache::render::landscape_options options;
     options.scenery = command == "scene";
-    options.celestial_bodies = false;
+    options.celestial_bodies = command == "atmosphere";
     while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
+      if(command == "atmosphere") std::cin >> options.sky.cloud_flags >> options.sky.weather >> options.cloud_height >> options.cloud_bottom >> options.cloud_top >> options.lighting.heading >> options.lighting.pitch >> options.lighting.night;
       if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
       apache::render::framebuffer frame{320, 240};
       for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world->palette.colours[i * 3], world->palette.colours[i * 3 + 1], world->palette.colours[i * 3 + 2]};
@@ -101,10 +103,49 @@ int main(int const argc, char const *const argv[]) try {
       camera.rotation = trig.transformation(heading, pitch, roll);
       world->draw(frame, camera, options);
       std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec;
+      if(command == "atmosphere") std::cout << ' ' << world->sun_glare;
       if(command == "scene") std::cout << ' ' << world->missing_normals << ' ' << world->invalid_texture_samples;
       std::cout << '\n';
       if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
+  } else if(command == "cloud-vertices" || command == "clouds") {
+    apache::math::trigonometry const trig{data};
+    std::string zone;
+    apache::math::pose camera;
+    uint32_t heading{0}, pitch{0}, roll{0};
+    unsigned int mode{0}, weather{0};
+    int height{0};
+    while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> mode >> weather >> height) {
+      apache::resources::terrain const terrain{data.read(zone + ".WZ/GRIDPOST.BIN")};
+      auto const elevation{terrain.elevation(camera.position[0], camera.position[1])};
+      if(camera.position[2] <= elevation) camera.position[2] = elevation + 256;
+      camera.rotation = trig.transformation(heading, pitch, roll);
+      auto const angles{trig.angles(camera.rotation)};
+      auto const bounds{apache::render::scan_cloud_sectors(camera, trig, angles[0], angles[1], mode)};
+      apache::render::cloud_mesh mesh{terrain, camera, bounds, height, mode, weather};
+      if(command == "clouds") {
+        apache::render::scene_palette const palette{data, zone};
+        apache::render::framebuffer frame{320, 240}; frame.clear(155);
+        apache::render::projection view{0, 0, 320, 240};
+        apache::render::rasterizer raster{frame};
+        apache::render::draw_queue queue;
+        mesh.submit(queue, camera);
+        auto const entries{queue.ordered()};
+        for(auto const &entry : entries) mesh.draw(raster, view, palette, entry.payload);
+        std::cout << entries.size() << ' ' << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+        if(argc > 3) { std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+        continue;
+      }
+      apache::resources::bytes bytes;
+      for(auto const &point : mesh.vertices) {
+        for(auto const value : point.eye) word(bytes, static_cast<uint32_t>(value));
+        word(bytes, static_cast<uint32_t>(point.intensity));
+        if(argc > 3) std::cerr << point.eye[0] << ' ' << point.eye[1] << ' ' << point.eye[2] << ' ' << point.intensity << '\n';
+      }
+      std::cout << bounds.left << ' ' << bounds.bottom << ' ' << bounds.right << ' ' << bounds.top << ' ' << mesh.vertices.size() << ' ' << std::hex << apache::resources::fingerprint(bytes) << std::dec << '\n';
+    }
+  } else if(command == "cloud-pattern") {
+    for(int x{0}; x != 36; ++x) for(int y{0}; y != 36; ++y) std::cout << apache::render::cloud_patch_type(x, y) << '\n';
   } else if(command == "celestial") {
     apache::math::trigonometry const trig{data};
     apache::render::scene_palette const palette{data, "FORT"};

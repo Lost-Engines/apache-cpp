@@ -19,6 +19,8 @@ add_library(apache_core
   src/render/feature_renderer.cpp
   src/render/feature_renderer.h
   src/resources/model_metadata.cpp
+  src/resources/missions.cpp
+  src/resources/missions.h
   src/resources/models.cpp
   src/resources/models.h
   src/frontend/menu.cpp

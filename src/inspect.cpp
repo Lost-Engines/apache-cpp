@@ -35,6 +35,7 @@
 #include "resources/data_store.h"
 #include "resources/image.h"
 #include "resources/models.h"
+#include "resources/missions.h"
 #include "resources/terrain.h"
 #include "resources/terrain_textures.h"
 
@@ -125,7 +126,26 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "arcade-trace") {
+  if(command == "briefings") {
+    if(argc != 4) throw std::runtime_error{"briefings requires a bundle resource"};
+    for(auto const &mission : apache::resources::read_mission_briefings(data.read(argv[3]))) std::cout << mission.id << ' ' << mission.flow << ' ' << mission.zone << ' ' << mission.level << ' ' << std::quoted(mission.title) << '\n';
+  } else if(command == "formations") {
+    auto const all{apache::resources::read_formations(apache::resources::executable_data{data})};
+    for(size_t id{0}; id != all.size(); ++id) { std::cout << id << ' ' << all[id].size(); for(auto const &member : all[id]) { for(auto const v : member.offset) std::cout << ' ' << v; std::cout << ' ' << member.model; } std::cout << '\n'; }
+  } else if(command == "mission-data") {
+    if(argc != 4) throw std::runtime_error{"mission-data requires a mission resource"};
+    auto const bytes{data.read(argv[3])}; auto const mission{apache::resources::read_mission_definition(std::string_view{reinterpret_cast<char const*>(bytes.data()), bytes.size()})};
+    for(auto const &task : mission.tasks) {
+      std::cout << "task " << task.side << ' ' << task.type << ' ' << task.battle_cell << ' ' << task.user << ' ' << task.actors.size() << '\n';
+      for(auto const &actor : task.actors) {
+        std::cout << "actor " << actor.model << ' ' << actor.formation << ' ' << actor.start_time << ' ' << actor.start_waypoint << ' ' << actor.conditions << ' ' << actor.waypoints.size() << '\n';
+        for(auto const &w : actor.waypoints) std::cout << "waypoint " << w.type << ' ' << w.position[0] << ' ' << w.position[1] << ' ' << w.position[2] << ' ' << w.time << ' ' << w.speed << ' ' << w.interval << ' ' << w.distance << '\n';
+      }
+    }
+    std::cout << "environment " << mission.wind_strength << ' ' << mission.wind_direction << ' ' << mission.weather << ' ' << mission.time_of_day << ' ' << mission.laser_timeout << ' ' << mission.gun << ' ' << mission.failure_count << ' ' << mission.success_count << ' ' << mission.outstanding_count << ' ' << mission.infinite_weapons;
+    for(auto const weapon : mission.weapons) std::cout << ' ' << weapon; std::cout << '\n';
+    for(auto const &[tag, rows] : mission.settings) for(auto const &row : rows) { std::cout << "setting " << std::quoted(tag); for(auto const v : row) std::cout << ' ' << v; std::cout << '\n'; }
+  } else if(command == "arcade-trace") {
     inspect_arcade_trace(std::cin, std::cout, data);
   } else if(command == "arcade-systems") {
     inspect_arcade(std::cin, std::cout);

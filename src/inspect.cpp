@@ -7,9 +7,14 @@
 #include <string_view>
 #include "math/trigonometry.h"
 #include "render/draw_queue.h"
+#include "render/feature_renderer.h"
+#include "render/horizon.h"
+#include "render/landscape.h"
 #include "render/model_renderer.h"
 #include "render/projection.h"
+#include "render/projection2.h"
 #include "render/rasterizer.h"
+#include "render/sector_scan.h"
 #include "render/terrain_projection.h"
 #include "render/terrain_renderer.h"
 #include "render/terrain_shading.h"
@@ -79,7 +84,142 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "terrain-polygons") {
+  if(command == "landscape") {
+    apache::math::trigonometry const trig{data};
+    std::string zone, loaded;
+    std::unique_ptr<apache::render::landscape> world;
+    apache::math::pose camera;
+    uint32_t heading{0}, pitch{0}, roll{0};
+    apache::render::landscape_options options;
+    while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> options.distance >> options.terrain_detail >> options.features) {
+      if(!world || loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
+      apache::render::framebuffer frame{320, 240};
+      for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world->palette.colours[i * 3], world->palette.colours[i * 3 + 1], world->palette.colours[i * 3 + 2]};
+      frame.clear(255);
+      camera.rotation = trig.transformation(heading, pitch, roll);
+      world->draw(frame, camera, options);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc > 3) { apache::resources::write_ppm(argv[3], frame.image); std::ofstream file{std::string{argv[3]} + ".pixels", std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "horizon") {
+    apache::math::trigonometry const trig{data};
+    apache::render::scene_palette const palette{data, "FORT"};
+    int w{0}, h{0};
+    uint32_t pitch{0}, roll{0};
+    unsigned int ground{0};
+    apache::render::sky_conditions conditions;
+    while(std::cin >> w >> h >> pitch >> roll >> conditions.cloud_mode >> conditions.cloud_flags >> conditions.weather >> ground) {
+      apache::render::framebuffer frame{static_cast<unsigned int>(w), static_cast<unsigned int>(h)};
+      frame.clear(255); conditions.ground_colour = static_cast<uint8_t>(ground);
+      apache::render::horizon horizon{frame, frame.clip, palette, trig};
+      horizon.ground(pitch, roll, conditions); horizon.sky(conditions);
+      std::cout << apache::resources::fingerprint(frame.image.pixels) << '\n';
+      if(argc > 3) { std::ofstream file{argv[3], std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "projection2") {
+    apache::math::trigonometry const trig{data};
+    apache::render::window2 window;
+    apache::render::rectangle viewport;
+    int32_t origin_x{0}, origin_y{0};
+    uint32_t angle{0};
+    size_t count{0};
+    while(std::cin >> viewport.left >> viewport.top >> viewport.right >> viewport.bottom >> window.left >> window.bottom >> window.right >> window.top >> origin_x >> origin_y >> angle >> count) {
+      apache::render::projection2 view{viewport, window};
+      view.origin = {origin_x, origin_y}; view.cosine = trig.cosine(angle); view.sine = trig.sine(angle);
+      std::vector<apache::render::vertex2> polygon(count);
+      for(auto &point : polygon) std::cin >> point.x >> point.y >> point.intensity;
+      auto const result{view.clip(polygon)};
+      std::cout << result.size();
+      for(auto const &point : result) std::cout << ' ' << point.x << ' ' << point.y << ' ' << point.intensity;
+      std::cout << '\n';
+    }
+  } else if(command == "sectors") {
+    apache::math::trigonometry const trig{data};
+    apache::render::projection const view{0, 0, 320, 240};
+    std::string zone;
+    apache::math::pose camera;
+    uint32_t heading{0}, pitch{0}, roll{0}, distance{0};
+    int sector_x{0}, sector_y{0};
+    bool super{false};
+    while(std::cin >> zone >> camera.position[0] >> camera.position[1] >> camera.position[2] >> heading >> pitch >> roll >> distance >> sector_x >> sector_y >> super) {
+      apache::resources::terrain const terrain{data.read(zone + ".WZ/GRIDPOST.BIN")};
+      auto const ground{terrain.elevation(camera.position[0], camera.position[1])};
+      if(camera.position[2] <= ground) camera.position[2] = ground + 256;
+      camera.rotation = trig.transformation(heading, pitch, roll);
+      for(bool const layer : {false, true}) {
+        auto const bounds{apache::render::scan_sectors(camera, view, trig.angles(camera.rotation)[0], distance, layer)};
+        std::cout << bounds.left << ' ' << bounds.bottom << ' ' << bounds.right << ' ' << bounds.top << ' ';
+      }
+      auto const origin{apache::render::feature_origin(camera, sector_x, sector_y, super)};
+      std::cout << apache::render::sector_visibility(camera.rotation, origin, view, super);
+      for(auto const value : origin) std::cout << ' ' << value;
+      std::cout << '\n';
+    }
+  } else if(command == "inverse-trig") {
+    apache::math::trigonometry const trig{data};
+    uint32_t heading{0}, pitch{0}, roll{0};
+    int32_t x{0}, y{0};
+    while(std::cin >> heading >> pitch >> roll >> x >> y) {
+      auto const angles{trig.angles(trig.transformation(heading, pitch, roll))};
+      for(auto const angle : angles) std::cout << angle << ' ';
+      std::cout << trig.arctangent(x, y) << '\n';
+    }
+  } else if(command == "features") {
+    for(std::string_view const zone : {"FORT", "CYPRUS", "KOREA", "YEMEN"}) for(bool const super : {false, true}) {
+      apache::resources::feature_layer const layer{data, zone, super};
+      for(size_t id{1}; id != layer.records.size(); ++id) if(layer.records[id]) {
+        auto const &object{*layer.records[id]};
+        apache::resources::bytes record;
+        word(record, object.vertices.size());
+        for(auto const &v : object.vertices) {
+          word(record, v.flags);
+          std::array<int32_t, 2> position{0, 0};
+          std::array<int32_t, 4> constexpr units{1 << 26, 1 << 18, 1 << 12, 1 << 6};
+          for(size_t level{0}; level != 4; ++level) for(size_t axis{0}; axis != 2; ++axis) position[axis] += v.components[level][axis] * units[level];
+          for(auto const value : position) word(record, static_cast<uint32_t>(value));
+        }
+        for(auto const *list : {&object.faces, &object.distant}) {
+          word(record, list->size());
+          for(auto const &face : *list) {
+            word(record, face.type); word(record, face.surface); word(record, face.colours[0]); word(record, face.colours[1]);
+            for(auto const *values : {&face.indices, &face.intensities, &face.render_indices}) {
+              word(record, values->size());
+              for(auto const value : *values) word(record, value);
+            }
+          }
+        }
+        std::cout << zone << ' ' << super << ' ' << id << ' ' << std::hex << apache::resources::fingerprint(record) << std::dec << '\n';
+      }
+    }
+  } else if(command == "feature-frames") {
+    std::string zone;
+    bool super{false}, distant{false};
+    uint32_t id{0}, heading{0}, pitch{0}, roll{0}, detail{0};
+    apache::math::vector3 origin;
+    apache::math::trigonometry const trig{data};
+    apache::render::projection const view{0, 0, 320, 240};
+    std::string loaded;
+    std::optional<apache::resources::feature_layer> layer;
+    std::optional<apache::render::scene_palette> palette;
+    apache::render::framebuffer frame{320, 240};
+    while(std::cin >> zone >> super >> id >> distant >> detail >> heading >> pitch >> roll >> origin[0] >> origin[1] >> origin[2]) {
+      std::string const key{zone + (super ? ":super" : ":normal")};
+      if(key != loaded) { layer.emplace(data, zone, super); palette.emplace(data, zone); loaded = key; }
+      if(id >= layer->records.size() || !layer->records[id]) throw std::runtime_error{"Invalid feature record"};
+      auto const &object{*layer->records[id]};
+      auto const points{apache::render::project_feature(object, trig.transformation(heading, pitch, roll), origin, view)};
+      apache::render::feature_renderer renderer{frame, view, *palette};
+      frame.clear(155);
+      renderer.draw(distant && object.has_distant ? object.distant : object.faces, points, apache::render::terrain_fog{detail});
+      apache::resources::bytes coordinates;
+      for(auto const &point : points) for(int32_t const value : {point.eye[0], point.eye[1], point.eye[2], point.screen.x, point.screen.y, int32_t{point.outcode}}) word(coordinates, static_cast<uint32_t>(value));
+      std::cout << std::hex << apache::resources::fingerprint(coordinates) << ' ' << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc >= 4) {
+        std::ofstream raw{argv[3], std::ios::binary}; raw.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size()));
+        for(auto const &point : points) std::cerr << point.eye[0] << ' ' << point.eye[1] << ' ' << point.eye[2] << ' ' << point.screen.x << ' ' << point.screen.y << ' ' << +point.outcode << '\n';
+      }
+    }
+  } else if(command == "terrain-polygons") {
     apache::render::scene_palette const palette{data, "FORT"};
     apache::resources::terrain_textures const textures{data, "FORT"};
     apache::render::projection const view{0, 0, 320, 240};
@@ -184,7 +324,7 @@ int main(int const argc, char const *const argv[]) try {
       for(auto const shift : {19u, 25u}) for(auto const value : apache::math::subdivide_grid(a[0], shift)) std::cout << value << ' ';
       std::cout << '\n';
     }
-  } else if(command == "model-renders") {
+  } else if((command == "model-renders" || command == "model-renders-alternate")) {
     auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
     auto const textures{apache::resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))};
     apache::render::scene_palette const palette{data, "FORT"};
@@ -202,6 +342,7 @@ int main(int const argc, char const *const argv[]) try {
       renderer.style.gouraud = (quality & 2) != 0;
       auto object{apache::render::construct_model(models, id, {position, trig.transformation(heading, pitch, roll)})};
       object.flags = flags;
+      object.alternate_colours = command == "model-renders-alternate";
       apache::math::pose const camera{{0, 0, 1000000}, trig.transformation(camera_heading, camera_pitch, camera_roll)};
       frame.clear(155);
       try {

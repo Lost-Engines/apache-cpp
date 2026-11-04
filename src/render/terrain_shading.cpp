@@ -12,7 +12,7 @@ uint32_t approximate_range(math::vector3 const &point) {
   return magnitude[2] + (magnitude[1] >> 2) + (magnitude[0] >> 2);
 }
 terrain_fog::terrain_fog(unsigned int const detail) {
-  if(detail < 1 || detail > 10) throw std::runtime_error{"Terrain detail must be between 1 and 10"};
+  if(detail < 1 || detail > 14) throw std::runtime_error{"Terrain detail must be between 1 and 14"};
   if(detail < 3) { boundary = 0; width = detail; }
   else if(detail < 5) { boundary = 2; width = detail - 2; }
   else if(detail < 7) { boundary = detail - 2; width = 2; }

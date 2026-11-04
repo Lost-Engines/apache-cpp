@@ -72,6 +72,9 @@ projection::projection(int const x, int const y, int const w, int const h) : vie
   double const scale{static_cast<double>(w) * 2147483647.0 / (static_cast<double>(h) * 16.0)};
   if(scale > INT32_MAX) throw std::runtime_error{"Projection aspect ratio exceeds the original fixed-point range"};
   vertical_scale = static_cast<int32_t>(scale);
+  double const inverse{static_cast<double>(h) * 2147483647.0 / (static_cast<double>(w) * 16.0)};
+  if(inverse > INT32_MAX) throw std::runtime_error{"Projection aspect ratio exceeds the original inverse scale range"};
+  inverse_vertical_scale = static_cast<int32_t>(inverse);
 }
 void projection::project(vertex3 &point) const {
   auto const &p{point.eye};
@@ -84,6 +87,10 @@ vertex3 projection::prepare(math::vector3 eye, int32_t const u, int32_t const v,
   vertex3 result{eye, {.u{u}, .v{v}, .intensity{intensity}}, outcode(eye)};
   if(!result.outcode) project(result);
   return result;
+}
+math::vector3 projection::unscale(math::vector3 eye) const {
+  eye[2] = std::bit_cast<int32_t>(static_cast<uint32_t>((math::product_bits(eye[2], inverse_vertical_scale) + (1ull << 26)) >> 27));
+  return eye;
 }
 vertex3 projection::prepare_scaled(math::vector3 const &eye, int32_t const intensity) const {
   vertex3 result{eye, {.intensity{intensity}}, outcode(eye)};

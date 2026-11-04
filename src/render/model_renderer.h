@@ -10,6 +10,7 @@ namespace apache::render {
 struct model_instance {
   uint32_t id{0};
   uint32_t flags{0};
+  bool alternate_colours{false};
   int32_t distance{0};
   math::pose relative;
   math::pose world;
@@ -32,8 +33,8 @@ class model_renderer {
   resources::model_archive const &models;
   std::vector<std::optional<resources::texture>> const &textures;
   scene_palette const &palette;
-  void draw_instance(model_instance &object, math::pose const &camera, unsigned int depth);
-  int draw_face(resources::primitive const &face, std::span<vertex3 const> vertices, std::span<int32_t const> intensities, bool secondary);
+  void draw_instance(model_instance &object, math::pose const &camera, unsigned int depth, bool alternate);
+  int draw_face(resources::primitive const &face, std::span<vertex3 const> vertices, std::span<int32_t const> intensities, bool secondary, bool alternate);
 public:
   model_style style;
   size_t missing_normals{0};

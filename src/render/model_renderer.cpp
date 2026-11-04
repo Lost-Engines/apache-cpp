@@ -37,11 +37,12 @@ void model_renderer::draw(model_instance &object, math::pose const &camera) {
   missing_normals = 0;
   raster.invalid_texture_samples = 0;
   maintain_model(object);
-  draw_instance(object, camera, 0);
+  draw_instance(object, camera, 0, false);
   invalid_texture_samples = raster.invalid_texture_samples;
 }
-void model_renderer::draw_instance(model_instance &object, math::pose const &camera, unsigned int const depth) {
+void model_renderer::draw_instance(model_instance &object, math::pose const &camera, unsigned int const depth, bool alternate) {
   if(depth > 64) throw std::runtime_error{"Excessive model drawing depth"};
+  alternate ^= object.alternate_colours;
   auto const *definition{&model_at(models, object.id)};
   size_t lods{0};
   while(definition->lod_distance != -1 && definition->lod_distance < object.distance) {
@@ -91,7 +92,7 @@ void model_renderer::draw_instance(model_instance &object, math::pose const &cam
   }
   resources::drawing_callbacks callbacks{
     .face{[&](resources::primitive const &face, uint32_t const pc, bool const secondary){
-      int const result{draw_face(face, vertices, intensities, secondary)};
+      int const result{draw_face(face, vertices, intensities, secondary, alternate)};
       if(face_observer) face_observer(object.id, pc);
       return result;
     }},
@@ -106,13 +107,17 @@ void model_renderer::draw_instance(model_instance &object, math::pose const &cam
       if(slot >= object.children.size()) throw std::runtime_error{"Model detail references an absent attachment slot"};
       if(object.children[slot]) {
         object.children[slot]->distance = object.distance;
-        draw_instance(*object.children[slot], camera, depth + 1);
+        draw_instance(*object.children[slot], camera, depth + 1, alternate);
       }
     }},
   };
   resources::execute_model(model, object.flags, 0, callbacks);
 }
-int model_renderer::draw_face(resources::primitive const &face, std::span<vertex3 const> const vertices, std::span<int32_t const> const intensities, bool const secondary) {
+int model_renderer::draw_face(resources::primitive const &face, std::span<vertex3 const> const vertices, std::span<int32_t const> const intensities, bool const secondary, bool const alternate) {
+  auto const remap{[&](unsigned int colour){
+    if(alternate && colour >= 17 && colour < 41) colour = colour < 29 ? colour + 12 : colour - 12;
+    return palette.visual_remap[colour];
+  }};
   auto const type{face.type};
   if(face.indices.empty()) return -1;
   auto const normal{[&](size_t const index){
@@ -134,7 +139,7 @@ int model_renderer::draw_face(resources::primitive const &face, std::span<vertex
   if(type == 6) { paint.pattern = fill_pattern::remap; paint.remapping = palette.glass; }
   else if(type == 21) paint.pattern = fill_pattern::heat_haze;
   else {
-    unsigned int const a{palette.visual_remap[face.attributes[0]]}, b{two_colours ? palette.visual_remap[face.attributes[1]] : a};
+    unsigned int const a{remap(face.attributes[0])}, b{two_colours ? remap(face.attributes[1]) : a};
     paint.colours = (a | (b << 8)) * 0x10001;
     if(shaded) {
       paint.light = gouraud && style.gouraud ? shading::gouraud : shading::constant;
@@ -143,7 +148,13 @@ int model_renderer::draw_face(resources::primitive const &face, std::span<vertex
     if(type == 4 || type == 13) paint.pattern = fill_pattern::fine;
     if(type == 5 || type == 14) paint.pattern = fill_pattern::coarse;
     if(textured && style.textures) {
-      auto const index{face.attributes.back()};
+      unsigned int index{face.attributes.back()};
+      if(alternate) {
+        for(auto const &[a, b] : std::array<std::array<unsigned int, 2>, 3>{{{14, 56}, {92, 206}, {98, 200}}}) {
+          if(index == a) { index = b; break; }
+          if(index == b) { index = a; break; }
+        }
+      }
       if(index >= textures.size() || !textures[index]) throw std::runtime_error{"Surface references an unavailable texture"};
       paint.image = &*textures[index];
       paint.masked = type == 8 || type == 16 || type == 20;

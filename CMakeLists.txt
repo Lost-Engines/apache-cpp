@@ -12,6 +12,12 @@ add_library(apache_core
   src/math/fixed.h
   src/math/trigonometry.cpp
   src/math/trigonometry.h
+  src/resources/features.cpp
+  src/resources/features.h
+  src/render/sector_scan.cpp
+  src/render/sector_scan.h
+  src/render/feature_renderer.cpp
+  src/render/feature_renderer.h
   src/resources/models.cpp
   src/resources/models.h
   src/frontend/menu.cpp
@@ -32,6 +38,12 @@ add_library(apache_core
   src/render/model_renderer.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/render/landscape.cpp
+  src/render/landscape.h
+  src/render/horizon.cpp
+  src/render/horizon.h
+  src/render/projection2.cpp
+  src/render/projection2.h
   src/render/projection.cpp
   src/render/projection.h
   src/render/perspective_rasterizer.cpp

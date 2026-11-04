@@ -5,6 +5,7 @@
 #include "math/fixed.h"
 #include "render/framebuffer.h"
 #include "render/projection.h"
+#include "render/projection2.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
 #include "resources/models.h"
@@ -92,6 +93,13 @@ int main() try {
   require(camera.clip(behind).empty(), "wholly hidden polygon rejected");
   require(apache::render::winding(behind, true) == 0, "coincident screen points cannot loop in robust winding");
   rejects([]{ apache::render::projection{0, 0, 640, 0}; }, "zero-height viewport rejected");
+  rejects([]{ apache::render::projection2{{0, 0, 319, 239}, {0, 0, 0, 1000}}; }, "zero-width 2D window rejected");
+  rejects([]{ apache::render::projection2{{INT32_MIN, 0, INT32_MAX, 239}, {-1000, -1000, 1000, 1000}}; }, "oversized 2D viewport rejected without overflow");
+  apache::render::projection2 const window{{0, 0, 319, 239}, {-1000, -1000, 1000, 1000}};
+  std::array<apache::render::vertex2, 4> const surrounding{{{-2000, -2000, 0}, {-2000, 2000, INT32_MAX}, {2000, 2000, INT32_MAX}, {2000, -2000, 0}}};
+  auto const window_clip{window.clip(surrounding)};
+  require(window_clip.size() == 4, "2D clipping keeps a polygon surrounding the entire window");
+  for(auto const &point : window_clip) require(point.x >= 0 && point.x < 320 && point.y >= 0 && point.y < 240 && point.intensity > 0 && point.intensity < INT32_MAX, "2D clipped coordinates and intensities stay inside their bounds");
   apache::resources::bytes bad_texture{1, 0, 0, 0, 8, 0, 0, 0, 2, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0};
   rejects([&]{ apache::resources::read_object_textures(bad_texture); }, "truncated texture pixels rejected");
   std::cout << "Resource boundary and configuration tests passed" << std::endl;

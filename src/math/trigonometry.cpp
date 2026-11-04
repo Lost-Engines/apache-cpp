@@ -1,18 +1,44 @@
 #include "trigonometry.h"
+#include <cstdlib>
 
 namespace apache::math {
 trigonometry::trigonometry(resources::data_store const &data) {
-  auto const file{data.read("SINCOS.TBL")};
-  resources::reader input{file, "SINCOS.TBL"};
-  if(input.size() != 10241 * 4) input.fail("Unexpected sine table size");
-  sin_cos.reserve(10241);
-  while(input.remaining()) sin_cos.push_back(input.i32());
+  auto const load{[&](std::string_view const name, size_t const count, std::vector<int32_t> &table){
+    auto const file{data.read(name)};
+    resources::reader input{file, name};
+    if(input.size() != count * 4) input.fail("Unexpected trigonometry table size");
+    table.reserve(count);
+    while(input.remaining()) table.push_back(input.i32());
+  }};
+  load("SINCOS.TBL", 10241, sin_cos);
+  load("ARCSIN.TBL", 8193, arc_sin);
+  load("ARCTAN.TBL", 4097, arc_tan);
 }
 int32_t trigonometry::sine(uint32_t const angle) const {
   return sin_cos[(angle >> 19) + ((angle >> 18) & 1)];
 }
 int32_t trigonometry::cosine(uint32_t const angle) const {
   return sin_cos[2048 + (angle >> 19) + ((angle >> 18) & 1)];
+}
+uint32_t trigonometry::arctangent(int32_t const x, int32_t const y) const {
+  if(!x) return y < 0 ? 0x80000000u : 0;
+  if(!y) return x < 0 ? 0xc0000000u : 0x40000000u;
+  auto const ax{static_cast<uint64_t>(std::abs(int64_t{x}))}, ay{static_cast<uint64_t>(std::abs(int64_t{y}))};
+  uint32_t angle{0x20000000};
+  if(ax != ay) {
+    uint64_t const ratio{ax < ay ? (ax << 31) / ay : (ay << 31) / ax};
+    angle = static_cast<uint32_t>(arc_tan[(ratio >> 19) + ((ratio >> 18) & 1)]);
+    if(ax > ay) angle = 0x40000000u - angle;
+  }
+  if(y < 0) angle = 0x80000000u - angle;
+  return x < 0 ? 0u - angle : angle;
+}
+std::array<uint32_t, 3> trigonometry::angles(matrix3 const &matrix) const {
+  auto const magnitude{static_cast<uint32_t>(std::abs(int64_t{matrix[5]}))};
+  uint32_t pitch{static_cast<uint32_t>(arc_sin[(magnitude >> 18) + ((magnitude >> 17) & 1)])};
+  if(matrix[5] < 0) pitch = 0u - pitch;
+  if(pitch == 0x40000000 || pitch == 0xc0000000) return {0, pitch, 0};
+  return {arctangent(matrix[3], matrix[4]), pitch, arctangent(negate(matrix[2]), matrix[8])};
 }
 matrix3 trigonometry::transformation(uint32_t const heading, uint32_t const pitch, uint32_t const roll) const {
   int32_t const sh{sine(heading)}, ch{cosine(heading)}, sp{sine(pitch)}, cp{cosine(pitch)}, sr{sine(roll)}, cr{cosine(roll)};

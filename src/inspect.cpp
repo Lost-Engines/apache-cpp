@@ -49,6 +49,7 @@
 #include "inspect_damage.h"
 #include "inspect_blasts.h"
 #include "inspect_combat_effects.h"
+#include "inspect_firing.h"
 #include "simulation/mission_actors.h"
 #include "simulation/ground_movement.h"
 #include "simulation/actor_movement.h"
@@ -142,6 +143,7 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
+  if(command == "firing") { inspect_firing(std::cin, std::cout, data); return 0; }
   if(command == "combat-effects") { inspect_combat_effects(std::cin, std::cout, data); return 0; }
   if(command == "blasts") { inspect_blasts(std::cin, std::cout, data); return 0; }
     if(command == "damage") { inspect_damage(std::cin, std::cout, data); return 0; }

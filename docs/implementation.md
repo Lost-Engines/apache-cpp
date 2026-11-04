@@ -162,11 +162,12 @@ Validation completed:
 - 640 complete direct-hit/area-blast sequences across all four warzones match state hashes, random seeds and ordered effects, including 1,215 scenery destructions and 619 mobile destructions. These combine live area searches, direct damage, accumulated blast limits and destroyed-model replacement. Kill callbacks apply state changes; scoring, network and visual-effect handlers remain observed boundaries. Normal and sanitizer builds pass.
 - Combat-driven effects match 3,600 creation operations, 1,060 updates, 6,188 random placement checks and 2,400 positional-audio calculations across all four maps. The state comparisons include 926,452 active explosion/crater records, partial and complete object destruction, weapon impacts, land/water crater choice, ring replacement and exact random ordering. Normal and sanitizer builds pass; audio playback is the sole hook.
 - Actors can register their owned model trees directly with the mobile scene, keeping collision, targeting and animation on the same state. Carrier synchronization now copies every animated child and its maintained world transform. All 110 mission initializations and 3,056 scene operations still match; ownership/attachment checks and both 2,400-step carrier traces pass under sanitizers.
+- All 55 angular firing envelopes and another 10,000 direct aiming, moving-target shell lead and laser-guided bomb release cases match 53,831 original fields. Normal and sanitizer builds agree, including 826 accepted direct shots and 40 accepted bomb releases. Target positions and visibility are supplied inputs; allocation and UI/audio are separate boundaries.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: connect damage and countermeasure responses to the projectile simulation, connect collision volumes to player flight, then complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
+Next: connect actor firing and target acquisition to the projectile, damage and countermeasure simulation, connect collision volumes to player flight, then complete simulation, frontend/campaign interaction and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

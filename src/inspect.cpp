@@ -1,10 +1,12 @@
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <set>
 #include <stdexcept>
 #include <string_view>
 #include "math/trigonometry.h"
+#include "render/model_renderer.h"
 #include "render/projection.h"
 #include "render/rasterizer.h"
 #include "resources/data_store.h"
@@ -72,7 +74,66 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "projection") {
+  if(command == "palette") {
+    for(std::string_view const zone : {"FORT", "CYPRUS", "KOREA", "YEMEN"}) {
+      apache::render::scene_palette const palette{data, zone};
+      std::cout << zone << ' ' << std::hex << apache::resources::fingerprint(palette.colours) << ' ' << apache::resources::fingerprint(palette.intensity) << ' ' << apache::resources::fingerprint(palette.glass) << std::dec << '\n';
+    }
+  } else if(command == "geometry") {
+    apache::math::matrix3 a, b;
+    apache::math::vector3 v;
+    while(std::cin >> a[0]) {
+      for(size_t i{1}; i != 9; ++i) std::cin >> a[i];
+      for(auto &value : b) std::cin >> value;
+      for(auto &value : v) std::cin >> value;
+      for(auto const value : apache::math::multiply(a, b)) std::cout << value << ' ';
+      for(auto const value : apache::math::transform(a, v)) std::cout << value << ' ';
+      for(auto const shift : {19u, 25u}) for(auto const value : apache::math::subdivide_grid(a[0], shift)) std::cout << value << ' ';
+      std::cout << '\n';
+    }
+  } else if(command == "model-renders") {
+    auto const models{apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN"))};
+    auto const textures{apache::resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))};
+    apache::render::scene_palette const palette{data, "FORT"};
+    apache::math::trigonometry const trig{data};
+    apache::render::framebuffer frame{320, 240};
+    for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {palette.colours[i * 3], palette.colours[i * 3 + 1], palette.colours[i * 3 + 2]};
+    apache::render::model_renderer renderer{frame, models, textures, palette};
+    if(argc >= 5 && std::string_view{argv[4]} == "trace") renderer.face_observer = [&](uint32_t const model, uint32_t const pc){
+      std::cerr << model << ' ' << pc << ' ' << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+    };
+    uint32_t id{0}, flags{0}, heading{0}, pitch{0}, roll{0}, camera_heading{0}, camera_pitch{0}, camera_roll{0}, quality{0};
+    apache::math::vector3 position;
+    while(std::cin >> id >> flags >> position[0] >> position[1] >> position[2] >> heading >> pitch >> roll >> camera_heading >> camera_pitch >> camera_roll >> quality) {
+      renderer.style.textures = (quality & 1) != 0;
+      renderer.style.gouraud = (quality & 2) != 0;
+      auto object{apache::render::construct_model(models, id, {position, trig.transformation(heading, pitch, roll)})};
+      object.flags = flags;
+      apache::math::pose const camera{{0, 0, 1000000}, trig.transformation(camera_heading, camera_pitch, camera_roll)};
+      frame.clear(155);
+      try {
+        renderer.draw(object, camera);
+        std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << ' ' << renderer.missing_normals << ' ' << renderer.invalid_texture_samples << '\n';
+      } catch(std::runtime_error const &error) { std::cout << "error " << error.what() << '\n'; }
+      if(argc >= 4) {
+        apache::resources::write_ppm(argv[3], frame.image);
+        std::ofstream raw{std::string{argv[3]} + ".pixels", std::ios::binary};
+        raw.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size()));
+      }
+    }
+  } else if(command == "lines") {
+    int x{0}, y{0}, w{0}, h{0};
+    while(std::cin >> x >> y >> w >> h) {
+      apache::math::vector3 a, b;
+      for(auto &value : a) std::cin >> value;
+      for(auto &value : b) std::cin >> value;
+      apache::render::projection const view{x, y, w, h};
+      auto const result{view.clip_line(view.prepare(a), view.prepare(b))};
+      std::cout << bool(result);
+      if(result) for(auto const &v : *result) std::cout << ' ' << v.eye[0] << ' ' << v.eye[1] << ' ' << v.eye[2] << ' ' << v.screen.x << ' ' << v.screen.y;
+      std::cout << '\n';
+    }
+  } else if(command == "projection") {
     int x{0}, y{0}, w{0}, h{0}, count{0};
     while(std::cin >> x >> y >> w >> h >> count) {
       apache::render::projection const view{x, y, w, h};
@@ -102,11 +163,16 @@ int main(int const argc, char const *const argv[]) try {
       std::vector<apache::render::screen_vertex> vertices(static_cast<size_t>(count));
       for(auto &v : vertices) {
         std::cin >> v.x >> v.y;
-        if(mode >= 6) std::cin >> v.u >> v.v >> v.intensity;
+        if(mode >= 6 && mode <= 12) std::cin >> v.u >> v.v >> v.intensity;
       }
       for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>((i * 7 + 19) & 255);
       if(mode == 5) raster.line(vertices.at(0), vertices.at(1), 139);
-      else if(mode >= 6) {
+      else if(mode >= 13) {
+        apache::render::material paint;
+        paint.pattern = apache::render::fill_pattern::heat_haze;
+        paint.heat_phase = static_cast<uint8_t>(mode - 13);
+        raster.fill(vertices, paint);
+      } else if(mode >= 6) {
         apache::render::material paint;
         paint.colours = 0x81468146;
         paint.image = mode == 6 ? nullptr : &texture;

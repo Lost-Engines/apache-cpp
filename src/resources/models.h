@@ -46,6 +46,7 @@ struct model {
   int32_t height{0};
   std::array<uint32_t, 7> offsets;
   std::vector<attachment> children;
+  std::vector<std::array<uint8_t, 6>> bounding_vertices;
   std::vector<math::vector3> vertices;
   std::vector<std::array<uint8_t, 6>> packed_vertices;
   std::vector<math::vector3> normals;

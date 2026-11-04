@@ -93,9 +93,25 @@ void rasterizer::fill(std::span<screen_vertex const> const vertices, material co
   if(paint.light != shading::none && paint.intensity_map.size() != 65536) throw std::runtime_error{"Shading needs the palette intensity table"};
   if(paint.image && paint.image->pixels.size() != static_cast<size_t>(paint.image->width) * paint.image->width) throw std::runtime_error{"Texture dimensions disagree with its pixels"};
   scan(vertices);
+  uint8_t heat{std::array<uint8_t, 4>{204, 102, 51, 153}[paint.heat_phase & 3]};
   for(int y{std::max(first_row, target.clip.top)}; y <= std::min(last_row, target.clip.bottom); ++y) {
     int const lhs{std::min(left[y].x, right[y].x)}, rhs{std::max(left[y].x, right[y].x)};
     int const start{std::max(lhs, target.clip.left)}, end{std::min(rhs, target.clip.right)};
+    if(paint.pattern == fill_pattern::heat_haze) {
+      bool const shift_right{bool(heat & 1)};
+      heat = static_cast<uint8_t>((heat >> 1) | (heat << 7));
+      if(start <= end) {
+        size_t const row{static_cast<size_t>(y) * target.image.width};
+        uint8_t previous{target.image.pixels[row + start]};
+        for(int x{start}; x <= end; ++x) {
+          auto &pixel{target.image.pixels[row + x]};
+          if(shift_right) { auto const old{pixel}; pixel = previous; previous = old; }
+          else pixel = target.image.pixels[std::min(row + static_cast<size_t>(x) + 1, target.image.pixels.size() - 1)];
+        }
+      }
+      if(shift_right) ++y;
+      continue;
+    }
     int const width{rhs - lhs};
     auto value{left[y]};
     scan_edge const increment{0, width ? (right[y].u - value.u) / width : 0, width ? (right[y].v - value.v) / width : 0, width ? (right[y].intensity - value.intensity) / width : 0};
@@ -113,8 +129,12 @@ void rasterizer::fill(std::span<screen_vertex const> const vertices, material co
       uint8_t colour{static_cast<uint8_t>(paint.colours >> (8 * ((x + y) & 1)))};
       if(paint.image) {
         auto const tx{static_cast<uint32_t>(u) >> 16}, ty{static_cast<uint32_t>(v) >> 16};
-        if(tx >= paint.image->width || ty >= paint.image->width) continue;
-        colour = paint.image->pixels[static_cast<size_t>(ty) * paint.image->width + tx];
+        // Authored UVs include the right edge (u == width). The original
+        // addresses the contiguous image, so that endpoint samples the next
+        // row. Bound the final address rather than rejecting the coordinate.
+        size_t const address{static_cast<size_t>(ty) * paint.image->width + tx};
+        if(address >= paint.image->pixels.size()) { ++invalid_texture_samples; continue; }
+        colour = paint.image->pixels[address];
         if(paint.masked && !colour) continue;
       }
       if(paint.light != shading::none) colour = paint.intensity_map[(static_cast<size_t>(colour) << 8) | (static_cast<uint32_t>(std::max(intensity, 0)) >> 23)];

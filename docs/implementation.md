@@ -11,7 +11,9 @@ Current implementation:
 - Terrain heights and scenery placements.
 - Model geometry, attachments, bounded drawing programs and authored animation branches.
 - Original rounded sine/cosine lookup and Q31 heading/pitch/roll matrices.
-- Software line, polygon, mesh, translucent, affine-textured and Gouraud-shaded rasterization.
+- Software line, polygon, mesh, translucent, heat-haze, affine-textured and Gouraud-shaded rasterization.
+- Complete model drawing with authored attachments, fixed-point grid coordinates, lighting, animation branches and level-of-detail chains.
+- Original palette, intensity ramps and glass remaps for all four warzones.
 - Perspective projection and five-plane clipping with interpolated texture coordinates and lighting.
 - Preference parsing, conversion and serialization.
 - GLFW window presentation with integer scaling, square pixels and correctly transformed mouse coordinates.
@@ -25,12 +27,16 @@ Validation completed:
 - Ten initialized menu frames match the original renderer exactly: 3,072,000 RGB pixels. These cover the main menu, highlighted buttons, Quickstart, exit, flight, warzones, preferences, top ten, pilot log and help.
 - All 1,314 model records and 15,768 drawing cases match, including 899,317 ordered primitive/attachment events.
 - 22,744 transformation cases match all 204,696 original matrix coefficients exactly.
-- 11,154 raster cases match 34,265,088 original indexed pixels, covering all edge octants and the supported solid, mesh, texture, masking and lighting combinations.
-- 6,605 clipping/projection cases match 256,528 output coordinate and attribute fields.
+- 14,386 raster cases match 44,193,792 original indexed pixels, covering all edge octants and the supported solid, mesh, texture, masking and lighting combinations.
+- 6,605 clipping/projection cases match 256,528 output coordinate and attribute fields. Another 10,000 line-clipping cases match.
+- 4,000 matrix/grid cases match 48,000 matrix coefficients and 520,000 rotated grid entries.
+- Palette setup matches 266,240 bytes across the four warzones.
+- 7,483 complete model frames match the original exactly across six camera/state/quality variations per model. Another 401 cases reach missing normals or out-of-texture samples in the original; those unsafe reads are excluded. The C++ renderer keeps the authored colour for a missing normal and skips a sample beyond its texture allocation.
+- The whole model catalogue and the boundary tests run under AddressSanitizer and UndefinedBehaviorSanitizer without errors.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.
 
-Next: model and terrain scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
+Next: terrain and complete scene rendering; then simulation, avionics, frontend/campaign integration and audio. Full journey tests and CI follow once the game is connected.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.

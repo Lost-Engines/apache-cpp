@@ -85,6 +85,22 @@ vertex3 projection::prepare(math::vector3 eye, int32_t const u, int32_t const v,
   if(!result.outcode) project(result);
   return result;
 }
+std::optional<std::array<vertex3, 2>> projection::clip_line(vertex3 a, vertex3 b) const {
+  if(a.outcode & b.outcode) return {};
+  auto const end{[](vertex3 &point, vertex3 const &other){
+    for(unsigned int const plane : {128u, 8u, 4u, 2u, 1u}) if(point.outcode & plane) {
+      auto const intersection{crossing(point, other, plane)};
+      if(!intersection) return false;
+      point = *intersection;
+      if((point.outcode & plane) || (point.outcode & other.outcode)) return false;
+    }
+    return point.outcode == 0;
+  }};
+  auto const original{a};
+  if(!end(a, b) || !end(b, original)) return {};
+  project(a); project(b);
+  return std::array<vertex3, 2>{a, b};
+}
 std::vector<vertex3> projection::clip(std::span<vertex3 const> const vertices) const {
   std::vector<vertex3> result{vertices.begin(), vertices.end()};
   if(result.empty()) return result;

@@ -1,0 +1,36 @@
+#include "geometry.h"
+#include <stdexcept>
+
+namespace apache::math {
+vector3 transform(matrix3 const &matrix, vector3 const &vector) {
+  vector3 result;
+  for(size_t i{0}; i != 3; ++i) result[i] = rounded_q31(product_bits(matrix[i * 3], vector[0]) + product_bits(matrix[i * 3 + 1], vector[1]) + product_bits(matrix[i * 3 + 2], vector[2]));
+  return result;
+}
+matrix3 transpose(matrix3 const &matrix) {
+  return {matrix[0], matrix[3], matrix[6], matrix[1], matrix[4], matrix[7], matrix[2], matrix[5], matrix[8]};
+}
+matrix3 multiply(matrix3 const &a, matrix3 const &b) {
+  matrix3 result;
+  for(size_t y{0}; y != 3; ++y) for(size_t x{0}; x != 3; ++x) result[y * 3 + x] = rounded_q31(product_bits(a[y * 3], b[x]) + product_bits(a[y * 3 + 1], b[x + 3]) + product_bits(a[y * 3 + 2], b[x + 6]));
+  return result;
+}
+pose attach(pose const &parent, pose const &relative) {
+  auto position{transform(transpose(parent.rotation), relative.position)};
+  for(size_t i{0}; i != 3; ++i) position[i] = add(position[i], parent.position[i]);
+  return {position, multiply(relative.rotation, parent.rotation)};
+}
+int32_t scale_q24(int32_t const value, int32_t const scale) {
+  return std::bit_cast<int32_t>(static_cast<uint32_t>((product_bits(value, scale) + 0x800000ull) >> 24));
+}
+std::array<int32_t, 65> subdivide_grid(int32_t const coefficient, unsigned int const shift) {
+  if(shift < 5 || shift > 31) throw std::runtime_error{"Invalid grid subdivision shift"};
+  std::array<int32_t, 65> result;
+  for(size_t i{0}; i <= 32; ++i) {
+    auto const value{static_cast<int32_t>((int64_t{coefficient} * static_cast<int64_t>(i)) >> shift)};
+    result[32 + i] = value;
+    result[32 - i] = negate(value);
+  }
+  return result;
+}
+} // namespace apache::math

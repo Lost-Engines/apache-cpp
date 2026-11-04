@@ -13,7 +13,7 @@ struct screen_vertex {
   int32_t v{0};
   int32_t intensity{0};
 };
-enum class fill_pattern { solid, fine, medium, coarse, remap };
+enum class fill_pattern { solid, fine, medium, coarse, remap, heat_haze };
 enum class shading { none, constant, gouraud };
 struct material {
   uint32_t colours{0};
@@ -21,6 +21,7 @@ struct material {
   std::span<uint8_t const> remapping;
   resources::texture const *image{nullptr};
   bool masked{false};
+  uint8_t heat_phase{0};
   shading light{shading::none};
   int32_t intensity{0};
   std::span<uint8_t const> intensity_map;
@@ -39,6 +40,7 @@ class rasterizer {
   int last_row{-1};
   void scan(std::span<screen_vertex const> polygon);
 public:
+  size_t invalid_texture_samples{0};
   explicit rasterizer(framebuffer &destination);
   void line(screen_vertex a, screen_vertex b, uint8_t colour);
   void fill(std::span<screen_vertex const> vertices, material const &paint);

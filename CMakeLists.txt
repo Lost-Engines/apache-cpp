@@ -7,6 +7,8 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 include(CTest)
 
 add_library(apache_core
+  src/math/geometry.cpp
+  src/math/geometry.h
   src/math/fixed.h
   src/math/trigonometry.cpp
   src/math/trigonometry.h
@@ -16,6 +18,10 @@ add_library(apache_core
   src/frontend/menu.h
   src/frontend/widget.cpp
   src/frontend/widget.h
+  src/render/model_renderer.cpp
+  src/render/model_renderer.h
+  src/render/scene_palette.cpp
+  src/render/scene_palette.h
   src/render/projection.cpp
   src/render/projection.h
   src/render/rasterizer.cpp

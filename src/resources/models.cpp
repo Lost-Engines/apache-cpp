@@ -62,6 +62,15 @@ model read_model(std::span<uint8_t const> const data) {
       result.children.push_back(child);
     }
   }
+  if(result.offsets[1]) {
+    input.seek(result.offsets[1]);
+    for(size_t i{0}; i != 8; ++i) {
+      auto const raw{input.take(6)};
+      std::array<uint8_t, 6> packed;
+      std::ranges::copy(raw, packed.begin());
+      result.bounding_vertices.push_back(packed);
+    }
+  }
   if(result.offsets[2]) {
     input.seek(result.offsets[2]);
     auto const count{input.u16()};

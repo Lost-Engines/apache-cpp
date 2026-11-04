@@ -28,7 +28,7 @@ math::vector3 target_world::position(target_reference const &target) const {
   if(target.identity.kind == target_kind::mobile) return mobiles.at(target.identity.index).world.position;
   auto p{target.position}; if(target.identity.kind == target_kind::scenery) p[2] = 0; return p;
 }
-target_description target_world::describe(target_reference &target, int32_t const now) const {
+target_description target_world::describe(target_reference const &target, int32_t const now) const {
   target_description result; result.valid = valid(target); if(!result.valid) return result;
   bool user_named{false};
   result.status = 0; result.movement.position = position(target);

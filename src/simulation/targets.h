@@ -35,6 +35,6 @@ public:
   target_world(resources::terrain const &ground, scenery_collisions const &structures, render::mobile_scene const &objects, resources::model_archive const &definitions, math::trigonometry const &angles, std::function<mobile_target_state(uint32_t)> state);
   bool valid(target_reference const &target) const;
   math::vector3 position(target_reference const &target) const;
-  target_description describe(target_reference &target, int32_t now) const;
+  target_description describe(target_reference const &target, int32_t now) const;
 };
 } // namespace apache::simulation

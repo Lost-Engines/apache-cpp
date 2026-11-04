@@ -104,6 +104,7 @@ int main(int const argc, char const *const argv[]) try {
   if(override_detail) frontend.options.detail = mission_options.detail;
   if(override_video) frontend.options.video_mode = mission_options.video_mode;
   if(mission_id) mission = std::make_unique<apache::frontend::mission_session>(data, mission_id, frontend.options);
+  if(!mission_id && selected_menu == "_main_screen" && !quick && pressed.empty()) frontend.startup();
   apache::platform::window window{scale};
   events input;
   glfwSetWindowUserPointer(window.get(), &input);

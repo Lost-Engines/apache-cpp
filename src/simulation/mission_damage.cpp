@@ -55,7 +55,7 @@ void mission_damage::auxiliary(target_identity const &id, projectile_record cons
   auto const sound{[&](unsigned int value, bool cockpit){ if(events.sound) events.sound(value, cockpit); }};
   bool const player_source{spatial.player && equivalent_targets(round.source, *spatial.targets[*spatial.player])};
   if(player_source) {
-    if(events.score) events.score(side);
+    if(events.score) events.score(static_cast<int32_t>(recipient.model));
     if(side == 1) { sound(friendly_fire < 3 ? 0x4a : 0x4b, true); if(events.message) events.message(friendly_fire < 3 ? "HIT ALLIED TARGET" : "CEASE FIRE"); ++friendly_fire; }
     else if(weapon_random.next() % 10 < 2) {
       auto const id{round.state.weapon};

@@ -27,7 +27,7 @@ std::string zone_name(int const zone) {
 }
 }
 mission_frontend::mission_frontend(resources::data_store const &data, mission_options const settings)
-  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions} {
+  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings} {
   interface.link_scroll("_map_briefing_subtitle_text", "_map_briefing_subtitle_scrollbar");
   interface.link_scroll("_situation_text", "_situation_scroll_bar");
   interface.activated = [this](widget &object, int line){ return activate(object, line); };
@@ -36,7 +36,21 @@ mission_frontend::mission_frontend(resources::data_store const &data, mission_op
     if(&object == &interface.named("_map_screen") && prepared) { frame.blit(map_image.image, 0, 0); frame.image.colours = map_image.image.colours; }
   };
 }
-void mission_frontend::load_profiles(std::filesystem::path const &path) { logs.load(path, hours_now()); settings.load(path); apply_preferences(); }
+void mission_frontend::load_profiles(std::filesystem::path const &path) { logs.load(path, hours_now()); settings.load(path); scores.load(); apply_preferences(); }
+void mission_frontend::count_run() {
+  auto const runs{settings.values.integer("Quick Start Game Runs").value_or(0)};
+  settings.set("Quick Start Game Runs", runs < INT32_MAX ? runs + 1 : runs); settings.save();
+}
+void mission_frontend::startup() {
+  preferences.zone = std::clamp(settings.values.integer("Set Map").value_or(3), 1, 3);
+  first_launch = settings.values.integer("Quick Start Game Runs").value_or(0) == 0;
+  if(first_launch) preferences.show(); else count_run();
+}
+void mission_frontend::launch_quick() {
+  auto choice{options}; choice.invulnerable = invincible_quick;
+  prepared = std::make_unique<mission_session>(data, mission_session::quick_start(data, zone), choice);
+  flow = 1; result.reset(); count_run(); interface.toggle_quick(false); departing = true;
+}
 void mission_frontend::apply_preferences() {
   options.arcade = settings.model == 2; options.video_mode = settings.video_mode; options.detail = settings.detail; options.difficulty = static_cast<int>(settings.forces);
   options.controls = settings.controls; options.deadband = settings.deadband; options.axes = settings.axes;
@@ -74,7 +88,10 @@ void mission_frontend::select(int const row) {
   if(selected >= 0) { interface.named("_mission_selection_info_text").text = text(definitions[listed[static_cast<size_t>(selected)]], "Description"); interface.named("_mission_selection_info_text").start_line = 0; }
 }
 void mission_frontend::prepare(int const id) {
-  result.reset(); prepared = std::make_unique<mission_session>(data, id, options);
+  auto choice{options};
+  choice.infinite_weapons = flow == 2 && interface.named("_training_infinite_weapons_button").on;
+  choice.no_crashes = flow == 2 && interface.named("_training_no_crashes_button").on;
+  result.reset(); prepared = std::make_unique<mission_session>(data, id, choice);
   auto const &definition{prepared->briefing}; flow = definition.flow; zone = definition.zone;
   auto const mid{static_cast<uint32_t>(id)};
   if(std::ranges::find(pilot().missions, mid, &simulation::mission_history::mission) == pilot().missions.end()) pilot().missions.push_back({mid});
@@ -139,6 +156,11 @@ std::unique_ptr<mission_session> mission_frontend::takeoff() {
   departing = false; return std::move(prepared);
 }
 void mission_frontend::complete(std::unique_ptr<mission_session> mission) {
+  if(mission->briefing.flow == 1) {
+    if(first_quick) { first_quick = false; interface.show("_main_screen"); }
+    else if(!invincible_quick) { interface.back(); scores.record(mission->runtime.quick_score, pilot().name); scores.show(); }
+    return;
+  }
   prepared = std::move(mission);
   result = simulation::evaluate_debrief(prepared->runtime, prepared->records, prepared->runtime.random.global_seed, pilot().name);
   interface.named("_map_briefing_subtitle_title").text = result->title();
@@ -179,7 +201,11 @@ void mission_frontend::log_result(bool const keep) {
 void mission_frontend::back() {
   if(interface.dismiss_popup()) return;
   auto const current{interface.current()};
-  if(current == "_preferences_screen") { settings.save(); apply_preferences(); }
+  if(current == "_preferences_screen") {
+    settings.save(); apply_preferences();
+    if(first_launch) { first_launch = false; first_quick = true; invincible_quick = true; zone = preferences.zone; launch_quick(); return; }
+  }
+  if(current == "_top_ten_screen") { scores.close(); interface.back(); return; }
   if(current == "_promotion_screen" || current.starts_with("_medal_")) {
     interface.back();
     auto const next{interface.current()};
@@ -206,11 +232,17 @@ bool mission_frontend::activate(widget &object, int const line) {
   }
   if(pilots.activate(object, line)) return true;
   if(preferences.activate(object)) { apply_preferences(); return true; }
-  if(action == "notify_training_button_") { flow = 2; zone = 4; preferences.zone = zone; list(); }
+  if(action == "notify_quick_start_topten_button_") scores.show();
+  else if(action == "notify_top_ten_exit_button_") back();
+  else if(action == "notify_quick_start_arcade_button_" || action == "notify_quick_start_invin_button_") {
+    flow = 1; invincible_quick = action == "notify_quick_start_invin_button_"; interface.show("_world_screen");
+  }
+  else if(action == "notify_training_no_crashes_" || action == "notify_training_infinite_weapons_") object.on = !object.on;
+  else if(action == "notify_training_button_") { flow = 2; zone = 4; preferences.zone = zone; list(); }
   else if(action == "notify_single_button_" || action == "notify_campaign_button_") { flow = action == "notify_single_button_" ? 3 : 4; interface.show("_world_screen"); }
   else if(action == "notify_map_yemen_button_" || action == "notify_map_korea_button_" || action == "notify_map_cyprus_button_") {
     zone = action == "notify_map_yemen_button_" ? 1 : action == "notify_map_korea_button_" ? 2 : 3; preferences.zone = zone;
-    if(flow == 4) campaign(pilot().campaign.warzone != static_cast<uint32_t>(zone)); else list();
+    if(flow == 1) launch_quick(); else if(flow == 4) campaign(pilot().campaign.warzone != static_cast<uint32_t>(zone)); else list();
   } else if(action == "notify_mission_selection_list_") select(line);
   else if(action == "notify_mission_selection_load_") { if(selected >= 0) prepare(definitions[listed[static_cast<size_t>(selected)]].id); }
   else if(action == "notify_situation_ok_button_") { if(campaign_mission == 0) campaign(); else if(campaign_mission > 0) prepare(campaign_mission); }

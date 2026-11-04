@@ -7,7 +7,8 @@
 #include <stdexcept>
 
 void inspect_session(apache::resources::data_store const &data, int const mission, unsigned int const video, bool const arcade, std::istream &input, std::ostream &output) {
-  auto owner{std::make_unique<apache::frontend::mission_session>(data, mission, apache::frontend::mission_options{.arcade{arcade}, .video_mode{video}, .detail{9}})};
+  apache::frontend::mission_options const options{.arcade{arcade}, .video_mode{video}, .detail{9}};
+  auto owner{mission < 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::frontend::mission_session::quick_start(data, -mission), options) : std::make_unique<apache::frontend::mission_session>(data, mission, options)};
   auto &session{*owner};
   std::string command;
   while(input >> command) {

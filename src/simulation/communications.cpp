@@ -61,7 +61,7 @@ std::array<std::string, 3> const &communications::compose(communication_status c
     char text[96];
     if(status.flow == 1) {
       lines[0] = "    QUICKSTART";
-      std::snprintf(text, sizeof(text), "SCORE:%d", status.score);
+      std::snprintf(text, sizeof(text), "SCORE %d", status.score);
       std::string const score{text}; lines[1] = std::string(score.size() < 17 ? (17 - score.size()) / 2 : 0, ' ') + score;
       return lines;
     }

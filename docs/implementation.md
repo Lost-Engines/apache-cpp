@@ -226,7 +226,9 @@ The four-warzone session comparison is complete: 1,896 frames, 142,200 state fie
 
 Preferences now expose the original resolution, detail, flight model, difficulty, animation, planner, audio and device selectors, with saved choices applied at takeoff. Thirteen populated preference/popup frames match 3,993,600 original pixels; joystick indicators match 12,000 fields in 300 axis/hat cases. Slider input, cancellation, restart and live mission settings pass normal and sanitizer checks. All sixteen terrain previews run in both builds: the Yemen low-detail frame matches exactly, while the other fifteen encounter the previously documented missing model normals. The traced Korea discrepancy is the `copsed` tree model referring to normal 0 in an empty table. The renderer retains bounded handling. Audio selections are saved; playback is still pending.
 
-Next: complete briefing/map interaction, Quickstart and audio playback. Complete game journeys and CI follow once integration is finished.
+Quickstart now loads all three dedicated missions, applies unlimited fuel/ammunition and Invincible mode, and records a persistent ten-entry score table. First launch follows Preferences into the introductory Invincible flight. Training assistance options also reach the flight state. The scoring comparison covers 280 original-code cases; six populated score-table screens match 1,843,200 pixels. Six live Quickstart traces match 21,600 state fields, 221,184 palette bytes and 8,110,080 cockpit pixels over 288 frames. Source-model invalid reads remain excluded as in ordinary mission comparisons. Menu, score editing, full-table insertion, ties, restart and training-assistance journeys pass in normal and sanitizer builds.
+
+Next: complete briefing/map interaction and audio playback. Complete game journeys and CI follow once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.
 

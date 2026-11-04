@@ -1,5 +1,6 @@
 #include "inspect_menu.h"
 #include "frontend/mission_frontend.h"
+#include "simulation/quick_start.h"
 #include <iomanip>
 #include <fstream>
 #include <istream>
@@ -56,6 +57,16 @@ void inspect_frontend(apache::resources::data_store const &data, std::istream &i
       auto const &s{app.settings}; output << "settings " << s.video_mode << ' ' << s.detail << ' ' << s.model << ' ' << s.forces << ' ' << s.volume << ' ' << s.planner << ' ' << s.animations << ' ' << s.speech << ' ' << s.music << ' ' << s.effects << ' ' << s.minimal_effects << ' ' << s.controls.cyclic << ' ' << s.controls.collective << ' ' << s.controls.tail_rotor << '\n';
       if(mission) output << "flight " << mission->frame.image.width << ' ' << mission->frame.image.height << ' ' << app.options.arcade << ' ' << mission->controls.configuration.cyclic << ' ' << mission->controls.configuration.collective << ' ' << mission->controls.configuration.tail_rotor << '\n';
     } else if(command == "profiles") { std::string path; input >> std::quoted(path); app.load_profiles(path); }
+    else if(command == "startup") app.startup();
+    else if(command == "topscore") { int32_t score; std::string name; input >> score >> std::quoted(name); app.scores.record(score, name); app.scores.show(); }
+    else if(command == "scoreselection") { input >> app.scores.last; app.scores.show(); }
+    else if(command == "scores") { output << "scores " << app.scores.last; for(auto const &entry : app.scores.entries) output << ' ' << entry.score << ' ' << std::quoted(entry.name); output << '\n'; }
+    else if(command == "scorepoints") { apache::resources::model object; int difficulty; input >> object.metadata[7] >> object.metadata[0] >> difficulty; output << apache::simulation::quick_start_points(object, difficulty) << '\n'; }
+    else if(command == "quickstate") {
+      if(!mission) output << "none\n";
+      else { auto const &r{mission->runtime}; auto const &w{r.player_armament->inventory}; output << mission->zone << ' ' << mission->briefing.flow << ' ' << w.armed << ' ' << w.infinite << ' ' << r.pilot->arcade.infinite_fuel << ' ' << r.pilot->invulnerable() << ' ' << r.pilot->arcade.no_crashes << ' ' << r.quick_score << ' ' << w.helmet_mode << '\n'; }
+    }
+    else if(command == "fixture_score") { if(!mission) throw std::runtime_error{"No mission running"}; input >> mission->runtime.quick_score; }
     else if(command == "text") { std::string text; input >> std::quoted(text); for(unsigned char ch : text) app.text_input(ch); }
     else if(command == "editkey") { unsigned int value; input >> value; app.text_input(value); }
     else if(command == "profile") { output << "profile " << app.logs.user << ' ' << app.logs.users[app.logs.user].selected << ' ' << app.logs.users[app.logs.user].pilots.size() << ' ' << std::quoted(app.logs.users[app.logs.user].name) << ' ' << std::quoted(app.pilot().name) << ' ' << app.pilot().rank << ' ' << app.pilot().status << '\n'; }

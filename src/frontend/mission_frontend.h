@@ -2,6 +2,7 @@
 #include <filesystem>
 #include "menu.h"
 #include "pilot_menu.h"
+#include "score_menu.h"
 #include "preferences_menu.h"
 #include "mission_session.h"
 
@@ -16,6 +17,9 @@ class mission_frontend {
   int flow{2}, zone{4}, selected{-1}, campaign_mission{0};
   unsigned int last_result{0};
   bool departing{false};
+  bool first_launch{false}, first_quick{false}, invincible_quick{false};
+  void launch_quick();
+  void count_run();
   std::optional<simulation::campaign_progress> transferred_campaign;
   void show_pilots(bool transfer_campaign);
   void show_awards(unsigned int mask);
@@ -36,9 +40,11 @@ public:
   preferences_menu preferences;
   configuration::profiles logs;
   pilot_menu pilots;
+  score_menu scores;
   simulation::pilot_log &pilot() { return logs.current(); }
   void load_profiles(std::filesystem::path const &path);
-  bool text_input(unsigned int value) { return pilots.key(value); }
+  void startup();
+  bool text_input(unsigned int value) { return scores.key(value) || pilots.key(value); }
   mission_frontend(resources::data_store const &data, mission_options options = {});
   std::unique_ptr<mission_session> takeoff();
   void complete(std::unique_ptr<mission_session> mission);

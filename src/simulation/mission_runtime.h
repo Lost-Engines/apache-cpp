@@ -41,6 +41,7 @@ class mission_runtime {
   void synchronize_player_target();
 public:
   mission_runtime_events events;
+  int32_t quick_score{0};
   resources::mission_definition mission;
   resources::executable_data executable;
   resources::terrain terrain;

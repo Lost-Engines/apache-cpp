@@ -19,6 +19,11 @@ resources::mission_briefing find_mission(resources::data_store const &data, int 
   if(found == missions.end()) throw std::runtime_error{"Unknown mission " + std::to_string(id)};
   return *found;
 }
+std::string mission_path(resources::mission_briefing const &briefing) {
+  if(briefing.flow != 1) return "MISSDATA/" + std::to_string(briefing.id) + ".DTA";
+  if(briefing.zone < 1 || briefing.zone > 3) throw std::runtime_error{"Invalid Quickstart warzone"};
+  return "MISSDATA/QS_" + std::string(1, "YKC"[briefing.zone - 1]) + ".DTA";
+}
 std::string warzone(int const id) {
   static std::array<std::string, 4> const names{"YEMEN", "KOREA", "CYPRUS", "FORT"};
   if(id < 1 || id > 4) throw std::runtime_error{"Invalid mission warzone"};
@@ -26,9 +31,19 @@ std::string warzone(int const id) {
 }
 }
 unsigned int mission_session::next_random() { library_random = library_random * 0x41c64e6du + 0x3039u; return (library_random >> 16) & 0x7fff; }
+resources::mission_briefing mission_session::quick_start(resources::data_store const &data, int const zone) {
+  if(zone < 1 || zone > 3) throw std::runtime_error{"Quickstart requires Yemen, Korea or Cyprus"};
+  auto const bytes{data.read("MISSDATA/QS_" + std::string(1, "YKC"[zone - 1]) + ".TXT")};
+  resources::mission_briefing result; result.flow = 1; result.zone = zone;
+  result.text = resources::tagged_text({reinterpret_cast<char const*>(bytes.data()), bytes.size()});
+  for(auto const &section : result.text) if(section.tag == "Title") for(auto const &line : section.lines) { if(!result.title.empty()) result.title += ' '; result.title += line; }
+  return result;
+}
 mission_session::mission_session(resources::data_store const &data, int const mission_id, mission_options const options)
-  : settings{options}, initial_seeds{weapon_seeds()}, briefing{find_mission(data, mission_id)}, zone{warzone(briefing.zone)},
-    runtime{data, zone, "MISSDATA/" + std::to_string(mission_id) + ".DTA", true, true, options.difficulty, initial_seeds},
+  : mission_session{data, find_mission(data, mission_id), options} {}
+mission_session::mission_session(resources::data_store const &data, resources::mission_briefing definition, mission_options const options)
+  : settings{options}, initial_seeds{weapon_seeds()}, briefing{std::move(definition)}, zone{warzone(briefing.zone)},
+    runtime{data, zone, mission_path(briefing), true, true, options.difficulty, initial_seeds},
     daylight{runtime.executable, runtime.mission.time_of_day}, world{data, zone}, panels{data, options.video_mode},
     avionics{panels, runtime.trig, runtime.executable}, frame{options.video_mode ? 640u : 320u, options.video_mode ? 480u : 240u} {
   auto const player{std::ranges::find_if(runtime.actors.units, [this](auto const &actor){ return runtime.mission.tasks[actor.location.task].user && actor.location.group == 0 && actor.location.member == 0; })};
@@ -36,6 +51,11 @@ mission_session::mission_session(resources::data_store const &data, int const mi
   runtime.timing.game_flow = briefing.flow;
   runtime.start_player(static_cast<size_t>(player - runtime.actors.units.begin()), {.arcade{options.arcade}, .flow{briefing.flow}});
   runtime.equip_player(runtime.mission.weapons); runtime.enable_player_sensors();
+  runtime.pilot->arcade.invulnerable = runtime.pilot->realistic.invulnerable = runtime.damage->invulnerable = options.invulnerable;
+  runtime.pilot->arcade.no_crashes = runtime.pilot->realistic.no_crashes = options.no_crashes;
+  runtime.pilot->arcade.infinite_fuel = runtime.pilot->realistic.infinite_fuel = briefing.flow == 1;
+  runtime.player_armament->inventory.infinite |= options.infinite_weapons || briefing.flow == 1;
+  if(briefing.flow == 1) { runtime.player_armament->inventory.armed = true; if(!runtime.player_armament->inventory.helmet_mode) runtime.player_armament->inventory.helmet_mode = 1; }
   runtime.player_damage->state.random = initial_seeds.damage;
   runtime.sensors->state.tads = false;
   controls.configuration = options.controls; controls.configuration.resolve();
@@ -270,7 +290,7 @@ void mission_session::draw() {
   for(size_t i{0}; i != arm.warnings.entries.size(); ++i) communications.update_changing(static_cast<uint32_t>(i + 1), arm.warnings.entries[i].text);
   if(views->modes.mode == 0 || views->modes.mode == 5) state.communications = communications.compose({
     .fuel{runtime.pilot->readings().fuel}, .endurance{endurance}, .flow{runtime.timing.game_flow},
-    .score{0}, .infinite_fuel{settings.arcade ? runtime.pilot->arcade.infinite_fuel : runtime.pilot->realistic.infinite_fuel}, .faults{runtime.pilot->faults()},
+    .score{runtime.quick_score}, .infinite_fuel{settings.arcade ? runtime.pilot->arcade.infinite_fuel : runtime.pilot->realistic.infinite_fuel}, .faults{runtime.pilot->faults()},
     .weapon{simulation::weapon_definitions()[arm.inventory.current].name}});
   frame.reset_clip(); panels.draw(frame, views->modes.mode, views->modes.changed); avionics.draw(frame, state, world, visual.lighting);
   for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world.palette.modified[i * 3], world.palette.modified[i * 3 + 1], world.palette.modified[i * 3 + 2]};

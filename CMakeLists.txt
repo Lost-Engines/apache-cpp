@@ -7,6 +7,9 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 include(CTest)
 
 add_library(apache_core
+  src/frontend/score_menu.cpp
+  src/frontend/score_menu.h
+  src/simulation/quick_start.h
   src/math/geometry.cpp
   src/math/geometry.h
   src/math/fixed.h

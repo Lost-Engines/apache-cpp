@@ -1,4 +1,5 @@
 #include "mission_runtime.h"
+#include "quick_start.h"
 #include <stdexcept>
 
 namespace apache::simulation {
@@ -59,6 +60,7 @@ mission_runtime::mission_runtime(resources::data_store const &data, std::string 
   if(hurt) {
     if(!weapons) throw std::runtime_error{"Mission damage requires projectiles"};
     mission_damage_callbacks callbacks;
+    callbacks.score = [this, difficulty](int32_t model){ quick_score = math::add(quick_score, quick_start_points(*models.at(static_cast<size_t>(model)), difficulty)); };
     callbacks.killed = [this](auto const &target, auto const &source){ if(events.killed) events.killed(target, source); };
     callbacks.player = [this](auto action, auto const &source){ if(player_damage) player_damage->apply(action, source, targets.now); };
     callbacks.sound = [this](unsigned int id, bool cockpit){ if(events.sound) events.sound(id, cockpit); };

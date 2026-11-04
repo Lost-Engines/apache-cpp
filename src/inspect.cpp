@@ -12,6 +12,7 @@
 #include "render/effect_renderer.h"
 #include "render/feature_renderer.h"
 #include "render/horizon.h"
+#include "render/helmet_display.h"
 #include "render/cockpit.h"
 #include "render/instrument_font.h"
 #include "render/landscape.h"
@@ -21,6 +22,7 @@
 #include "render/panel_instruments.h"
 #include "render/mfd.h"
 #include "simulation/mfd_state.h"
+#include "simulation/instrument_state.h"
 #include "render/rasterizer.h"
 #include "render/sector_scan.h"
 #include "render/shadows.h"
@@ -93,7 +95,48 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "scenery-state") {
+  if(command == "helmet-components" || command == "helmet-weapons") {
+    apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};
+    std::array<apache::render::helmet_display, 2> const helmets{apache::render::helmet_display{executable, trig, 0}, apache::render::helmet_display{executable, trig, 1}};
+    unsigned int mode{0}, component{0}, colour{223}, letter{65}; apache::render::helmet_instruments state;
+    while(std::cin >> mode >> component >> state.view >> colour >> state.heading >> state.command_heading >> state.pitch >> state.roll >> state.climb_rate >> state.radar_altitude >> state.barometric_altitude >> state.airspeed >> state.torque >> letter >> state.waypoint_distance >> state.waypoint_time >> state.sight_heading >> state.sight_pitch >> state.viewing_device >> state.magnification >> state.layout_grid) {
+      if(mode > 1 || component > (command == "helmet-components" ? 10u : 21u)) throw std::runtime_error{"Invalid helmet display case"};
+      state.colour = static_cast<uint8_t>(colour); state.waypoint_letter = static_cast<uint8_t>(letter);
+      if(command == "helmet-weapons") {
+        auto &w{state.weapons};
+        std::cin >> w.selected >> w.rounds >> w.impact_time >> w.lock_status >> w.armed >> w.landed >> w.target_exists >> w.target_locked >> w.target_designated >> w.target_aircraft >> w.target_valid >> w.target.x >> w.target.y >> w.impact.x >> w.impact.y >> w.intercept.x >> w.intercept.y >> w.target_range >> w.target_speed >> w.box_half_size >> w.rocket_elevation >> w.tads_active >> w.tads_valid >> w.tads.x >> w.tads.y >> state.faults >> state.mode >> std::quoted(w.name) >> std::quoted(w.target_name);
+        for(auto *vector : {&state.aircraft.position, &state.camera.position, &w.target_position, &w.impact_position, &w.target_heading}) for(auto &coordinate : *vector) std::cin >> coordinate;
+        for(auto *rotation : {&state.aircraft.rotation, &state.camera.rotation}) { uint32_t h{0}, p{0}, r{0}; std::cin >> h >> p >> r; *rotation = trig.transformation(h, p, r); }
+      }
+      apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
+      if(component == 21) helmets[mode].draw(frame, state);
+      else helmets[mode].draw_component(frame, state, static_cast<apache::render::helmet_component>(component));
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc > 3) { std::ofstream output{argv[3], std::ios::binary}; output.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "helmet-projection") {
+    apache::resources::executable_data const executable{data}; apache::math::trigonometry const trig{data};
+    std::array<apache::render::helmet_display, 2> const helmets{apache::render::helmet_display{executable, trig, 0}, apache::render::helmet_display{executable, trig, 1}};
+    unsigned int mode{0}, view{0}; int x{0}, y{0}, width{0}, height{0};
+    while(std::cin >> mode >> view >> x >> y >> width >> height) {
+      apache::math::pose camera; apache::math::vector3 position; uint32_t h{0}, p{0}, r{0};
+      for(auto &coordinate : camera.position) std::cin >> coordinate;
+      std::cin >> h >> p >> r; camera.rotation = trig.transformation(h, p, r);
+      for(auto &coordinate : position) std::cin >> coordinate;
+      auto const point{helmets.at(mode).project_point(view, camera, apache::render::projection{x, y, width, height}, position)};
+      std::cout << bool(point); if(point) std::cout << ' ' << point->x << ' ' << point->y; std::cout << '\n';
+    }
+  } else if(command == "instrument-state") {
+    apache::math::trigonometry const trig{data}; apache::simulation::instrument_inputs input;
+    unsigned int letter{0}; bool has_waypoint{false}; apache::simulation::instrument_waypoint waypoint;
+    while(std::cin >> input.position[0] >> input.position[1] >> input.position[2] >> input.heading >> input.pitch >> input.roll >> input.mission_time >> input.game_time >> input.terrain_height >> input.climb_rate >> input.airspeed >> input.sidespeed >> input.torque >> has_waypoint >> waypoint.x >> waypoint.y >> letter) {
+      waypoint.letter = static_cast<uint8_t>(letter); input.waypoint = has_waypoint ? std::optional{waypoint} : std::nullopt;
+      auto const state{apache::simulation::instrument_values(input, trig)};
+      for(int64_t const value : {int64_t{state.heading}, int64_t{state.pitch}, int64_t{state.roll}, int64_t{state.barometric_altitude}, int64_t{state.clock_time}, int64_t{state.radar_altitude}, int64_t{state.climb_rate}, int64_t{state.command_heading}, int64_t{state.waypoint_letter}, int64_t{state.waypoint_distance}, int64_t{state.waypoint_time}, int64_t{state.airspeed}, int64_t{state.sidespeed}, int64_t{state.torque}}) std::cout << static_cast<uint32_t>(value) << ' ';
+      std::cout << '\n';
+    }
+  } else if(command == "scenery-state") {
     std::string zone;
     while(std::cin >> zone) {
       auto placements{apache::resources::read_scenery(data.read(zone + ".WZ/GNDOBJS.BIN"))}; apache::resources::initialise_scenery(placements);

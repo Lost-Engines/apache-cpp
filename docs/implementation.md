@@ -21,6 +21,8 @@ Current implementation:
 - Both original instrument fonts, including every glyph and screen-edge clipping.
 - Mechanical compass, artificial horizon, airspeed indicator, altimeter and analogue clock at both original resolutions.
 - Pilot/gunner warning lamps, clipped radio text and time-acceleration indicator.
+- Complete helmet-display modes, flight scales, sight-field diagrams, gun/rocket/missile aiming cues and target information.
+- World-to-helmet target projection and flight/waypoint conversion to instrument values.
 - MFD off/damaged, engine, system-status, weapons, radar, tactical, isolated-target FLIR, flight-plan and moving-map pages, with the original display bezels.
 - Target-camera positioning, inherited thermal colour maps, selected-contact highlighting, automatic route scaling and waypoint arrival estimates.
 - Independent pilot/gunner MFD selections, direction-aware cycling, power switches, radar requests and damage transitions.
@@ -113,6 +115,10 @@ Validation completed:
 - 3,080 isolated contour frames match 236,544,000 pixels; 5,000 inverse-projection cases match 60,000 coordinate fields.
 - All 42,317 initialized scenery records match 296,219 fields, including 1,205 status changes made by the original initializer.
 - The complete map, contour, inverse-projection and scenery-initialization checks also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
+- 2,640 helmet flight-instrument frames match 506,880,000 pixels across all 20 views and both resolutions.
+- 2,200 weapon-cue and complete helmet-layout frames match 422,400,000 pixels, including lock states, off-screen targets, damage and all six player weapons.
+- 5,420 world-to-helmet projection cases match 8,326 output fields; 4,112 flight-to-instrument conversions match 57,568 fields.
+- The complete helmet component, weapon/layout, target-projection and instrument-state comparisons also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

@@ -88,6 +88,20 @@ vertex3 projection::prepare(math::vector3 eye, int32_t const u, int32_t const v,
   if(!result.outcode) project(result);
   return result;
 }
+std::optional<screen_vertex> projection::project_unclipped(math::vector3 eye) const {
+  if(eye[1] <= 0) return {};
+  eye[2] = std::bit_cast<int32_t>(static_cast<uint32_t>((math::product_bits(eye[2], vertical_scale) + (1ull << 26)) >> 27));
+  auto const coordinate{[&](int32_t const side, int const extent) -> std::optional<int32_t> {
+    int64_t const product{int64_t{math::add(side, eye[1])} * extent};
+    if((static_cast<uint64_t>(std::abs(product)) >> 32) >= static_cast<uint32_t>(eye[1])) return {};
+    int64_t const result{(product >> 1) / eye[1]};
+    if(result <= INT32_MIN || result > INT32_MAX) return {};
+    return static_cast<int32_t>(result);
+  }};
+  auto const x{coordinate(eye[0], width)}, y{coordinate(eye[2], height)};
+  if(!x || !y) return {};
+  return screen_vertex{math::add(viewport.left, *x), math::subtract(viewport.bottom, *y)};
+}
 math::vector3 projection::unscale(math::vector3 eye) const {
   eye[2] = std::bit_cast<int32_t>(static_cast<uint32_t>((math::product_bits(eye[2], inverse_vertical_scale) + (1ull << 26)) >> 27));
   return eye;

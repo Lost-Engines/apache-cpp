@@ -40,6 +40,8 @@ add_library(apache_core
   src/render/shadows.h
   src/render/model_renderer.cpp
   src/render/model_renderer.h
+  src/render/helmet_display.cpp
+  src/render/helmet_display.h
   src/render/mfd_flight_plan.cpp
   src/render/mfd_radar.cpp
   src/render/mfd_weapons.cpp
@@ -59,6 +61,8 @@ add_library(apache_core
   src/resources/executable.h
   src/render/scene_palette.cpp
   src/render/scene_palette.h
+  src/simulation/instrument_state.cpp
+  src/simulation/instrument_state.h
   src/simulation/mfd_state.cpp
   src/simulation/mfd_state.h
   src/simulation/fragments.cpp

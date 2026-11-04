@@ -66,6 +66,13 @@ void mfd_renderer::flir(framebuffer &target, rectangle const area, landscape &wo
   auto const point{plane.project({0, object ? -0xccccc : -800})};
   font.draw(target, name, point.x - (font.width(name) / 2 - 1), point.y, 222);
 }
+void mfd_renderer::moving_map(framebuffer &target, rectangle const area, landscape const &world, int32_t const x, int32_t const y, uint32_t const heading, int32_t const range) const {
+  if(range <= 0 || range > 0x3fffffff) throw std::runtime_error{"Invalid moving-map range"};
+  world.draw_map(target, area, {math::subtract(x, range), math::subtract(y, range), math::add(x, range), math::add(y, range)}, heading);
+  projection2 const labels{area, {-0x100000, -0x100000, 0x100000, 0x100000}};
+  auto const point{labels.project({-0xe6666, -0xccccc})};
+  font.draw(target, range == 0x1000000 ? "10" : range == 0x800000 ? "5" : range == 0x400000 ? "2.5" : range == 0x200000 ? "1.3" : range == 0x100000 ? "0.7" : "0.3", point.x, point.y, 208);
+}
 void mfd_renderer::status(framebuffer &target, rectangle const area, uint32_t const faults, bool const ground_radar, bool const air_radar) const {
   off(target, area);
   projection2 const plane{area, {-0x100000, -0x100000, 0x100000, 0x100000}};

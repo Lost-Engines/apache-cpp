@@ -93,7 +93,43 @@ int main(int const argc, char const *const argv[]) try {
   }
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
-  if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb")) {
+  if(command == "scenery-state") {
+    std::string zone;
+    while(std::cin >> zone) {
+      auto placements{apache::resources::read_scenery(data.read(zone + ".WZ/GNDOBJS.BIN"))}; apache::resources::initialise_scenery(placements);
+      apache::resources::bytes state;
+      for(auto const &p : placements) for(uint32_t const value : {uint32_t{p.sector}, uint32_t{p.model}, static_cast<uint32_t>(p.x), static_cast<uint32_t>(p.y), uint32_t{p.heading}, uint32_t{p.animation}, uint32_t{p.status}}) word(state, value);
+      std::cout << placements.size() << ' ' << std::hex << apache::resources::fingerprint(state) << std::dec << '\n';
+    }
+  } else if(command == "map" || command == "mfd-map") {
+    apache::resources::executable_data const executable{data};
+    std::array<apache::render::cockpit, 2> const panels{apache::render::cockpit{data, 0}, apache::render::cockpit{data, 1}};
+    std::array<apache::render::mfd_renderer, 2> const mfds{apache::render::mfd_renderer{panels[0], executable}, apache::render::mfd_renderer{panels[1], executable}};
+    std::string zone, loaded; std::unique_ptr<apache::render::landscape> world;
+    unsigned int mode{0}, panel{0}; int32_t x{0}, y{0}, range{0}; uint32_t heading{0}; apache::render::map_configuration config;
+    while(std::cin >> zone >> mode >> panel >> x >> y >> range >> heading >> config.flags >> config.contour_interval) {
+      if(mode > 1 || panel > 5 || range <= 0 || range > 0x3fffffff) throw std::runtime_error{"Invalid map case"};
+      if(loaded != zone) { world = std::make_unique<apache::render::landscape>(data, zone); loaded = zone; }
+      apache::render::framebuffer frame{mode ? 640u : 320u, mode ? 480u : 240u};
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
+      auto const area{panel == 5 ? frame.clip : mfds[mode].area(static_cast<apache::render::mfd_panel>(panel))};
+      if(command == "mfd-map") mfds[mode].moving_map(frame, area, *world, x, y, heading, range);
+      else world->draw_map(frame, area, {apache::math::subtract(x, range), apache::math::subtract(y, range), apache::math::add(x, range), apache::math::add(y, range)}, heading, config);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc > 3) { std::ofstream output{argv[3], std::ios::binary}; output.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "contours") {
+    int32_t interval{0}; apache::render::rectangle area; apache::render::window2 window;
+    while(std::cin >> interval >> area.left >> area.top >> area.right >> area.bottom >> window.left >> window.bottom >> window.right >> window.top) {
+      apache::render::framebuffer frame{320, 240}; frame.clip = area;
+      for(size_t i{0}; i != frame.image.pixels.size(); ++i) frame.image.pixels[i] = static_cast<uint8_t>(i * 7 + i / frame.image.width * 13);
+      std::array<apache::render::vertex2, 3> triangle;
+      for(auto &point : triangle) std::cin >> point.x >> point.y >> point.intensity;
+      apache::render::draw_map_contours(frame, apache::render::projection2{area, window}, triangle, interval);
+      std::cout << std::hex << apache::resources::fingerprint(frame.image.pixels) << std::dec << '\n';
+      if(argc > 3) { std::ofstream output{argv[3], std::ios::binary}; output.write(reinterpret_cast<char const*>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
+    }
+  } else if(command == "landscape" || command == "scene" || command == "atmosphere" || command == "scene-effects" || command == "scene-mobiles" || command == "scene-craters" || (command == "scene-fragments" || command == "scene-rgb")) {
     apache::math::trigonometry const trig{data};
     auto const fragment_models{(command == "scene-fragments" || command == "scene-rgb") ? apache::resources::read_models(data.read("3DDATA/3DOBJS.BIN")) : apache::resources::model_archive{}};
     std::string zone, loaded;
@@ -616,7 +652,7 @@ int main(int const argc, char const *const argv[]) try {
       std::cout << apache::resources::fingerprint(frame.image.pixels) << '\n';
       if(argc > 3) { std::ofstream file{argv[3], std::ios::binary}; file.write(reinterpret_cast<char const *>(frame.image.pixels.data()), static_cast<std::streamsize>(frame.image.pixels.size())); }
     }
-  } else if(command == "projection2" || command == "projection2-line") {
+  } else if(command == "projection2" || command == "projection2-line" || command == "projection2-inverse") {
     apache::math::trigonometry const trig{data};
     apache::render::window2 window;
     apache::render::rectangle viewport;
@@ -628,7 +664,10 @@ int main(int const argc, char const *const argv[]) try {
       view.origin = {origin_x, origin_y}; view.cosine = trig.cosine(angle); view.sine = trig.sine(angle);
       std::vector<apache::render::vertex2> polygon(count);
       for(auto &point : polygon) std::cin >> point.x >> point.y >> point.intensity;
-      if(command == "projection2-line") {
+      if(command == "projection2-inverse") {
+        for(auto const &point : polygon) { auto const world{view.unproject(point.x, point.y)}; std::cout << world.x << ' ' << world.y << ' '; }
+        std::cout << '\n';
+      } else if(command == "projection2-line") {
         if(count != 2) throw std::runtime_error{"A line needs two endpoints"};
         auto const line{view.clip_line(polygon[0], polygon[1])}; std::cout << static_cast<bool>(line);
         if(line) for(auto const &point : *line) std::cout << ' ' << point.x << ' ' << point.y;

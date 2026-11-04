@@ -22,6 +22,13 @@ screen_vertex projection2::screen(vertex2 const &point) const {
   return {math::add(math::multiply_q31(math::subtract(point.x, window.left), scale[0]), viewport.left), math::add(math::multiply_q31(math::subtract(point.y, window.bottom), scale[1]), viewport.bottom), 0, 0, point.intensity};
 }
 int32_t projection2::radius(int32_t const world_radius) const { return math::multiply_q31(world_radius, scale[0]); }
+vertex2 projection2::unproject(int32_t const x, int32_t const y) const {
+  if(!scale[0] || !scale[1]) throw std::runtime_error{"Cannot invert a zero 2D scale"};
+  auto const px{math::subtract(static_cast<int32_t>(int64_t{math::subtract(x, viewport.left)} * 0x80000000ll / scale[0]), math::subtract(centre[0], window.left))};
+  auto const py{math::subtract(static_cast<int32_t>(int64_t{math::subtract(y, viewport.bottom)} * 0x80000000ll / scale[1]), math::subtract(centre[1], window.bottom))};
+  return {math::subtract(math::subtract(math::multiply_q31(px, cosine), math::multiply_q31(py, math::negate(sine))), math::subtract(origin[0], centre[0])), math::subtract(math::add(math::multiply_q31(px, math::negate(sine)), math::multiply_q31(py, cosine)), math::subtract(origin[1], centre[1]))};
+}
+screen_vertex projection2::project_raw(vertex2 const &point) const { return screen(point); }
 screen_vertex projection2::project(vertex2 const &point) const { return screen(transform(point)); }
 bool projection2::clip_endpoint(vertex2 &point, vertex2 const &other) const {
   uint8_t code{outcode(point)};
@@ -41,19 +48,27 @@ bool projection2::clip_endpoint(vertex2 &point, vertex2 const &other) const {
   return !code;
 }
 std::optional<std::array<screen_vertex, 2>> projection2::clip_line(vertex2 const &a, vertex2 const &b) const {
-  auto const first{transform(a)}, last{transform(b)};
+  return clip_line_raw(transform(a), transform(b));
+}
+std::optional<std::array<screen_vertex, 2>> projection2::clip_line_raw(vertex2 const &first, vertex2 const &last) const {
   if(outcode(first) & outcode(last)) return std::nullopt;
   auto from{first}, to{last};
   if(!clip_endpoint(from, last) || !clip_endpoint(to, first)) return std::nullopt;
   return std::array{screen(from), screen(to)};
 }
 std::vector<screen_vertex> projection2::clip(std::span<vertex2 const> const vertices) const {
+  std::vector<vertex2> rotated;
+  rotated.reserve(vertices.size());
+  for(auto const &point : vertices) rotated.push_back(transform(point));
+  return clip_raw(rotated);
+}
+std::vector<screen_vertex> projection2::clip_raw(std::span<vertex2 const> const vertices) const {
   if(vertices.empty()) return {};
   std::vector<vertex2> polygon;
   polygon.reserve(vertices.size());
   unsigned int any{0}, all{255};
   for(auto const &vertex : vertices) {
-    auto const point{transform(vertex)};
+    auto const &point{vertex};
     polygon.push_back(point);
     auto const code{outcode(point)}; any |= code; all &= code;
   }

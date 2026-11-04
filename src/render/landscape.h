@@ -8,6 +8,7 @@
 #include "fragment_renderer.h"
 #include "horizon.h"
 #include "model_renderer.h"
+#include "map_renderer.h"
 #include "mobile_scene.h"
 #include "sector_scan.h"
 #include "terrain_renderer.h"
@@ -44,6 +45,7 @@ class landscape {
   resources::model_archive models;
   std::vector<std::optional<resources::texture>> object_textures;
   std::vector<model_instance> scenery;
+  std::vector<resources::scenery_placement> scenery_placements;
   std::array<std::vector<size_t>, 4096> scenery_sectors;
 public:
   scene_palette palette;
@@ -58,6 +60,7 @@ public:
   resources::terrain const &heights() const { return terrain; }
   uint8_t surface_type(int32_t x, int32_t y) const;
   void advance(int32_t delta_time, uint32_t &random_seed);
+  void draw_map(framebuffer &target, rectangle area, window2 window, uint32_t heading, map_configuration const &configuration = {}, std::span<resources::scenery_placement const> extra = {}) const;
   std::string_view draw_flir(framebuffer &target, model_instance &object, math::vector3 const &aim, math::vector3 const &observer, sky_lighting const &lighting);
   void draw(framebuffer &target, math::pose camera, landscape_options const &options);
 };

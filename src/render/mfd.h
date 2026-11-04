@@ -78,6 +78,7 @@ public:
   void weapons(framebuffer &target, rectangle area, weapon_instruments const &state) const;
   void radar(framebuffer &target, rectangle area, radar_instruments const &state, std::span<radar_contact const> contacts, math::trigonometry const &trig) const;
   void flight_plan(framebuffer &target, rectangle area, std::span<waypoint_mark const> route, size_t current, int32_t x, int32_t y, uint32_t heading, int32_t airspeed, math::trigonometry const &trig) const;
+  void moving_map(framebuffer &target, rectangle area, landscape const &world, int32_t x, int32_t y, uint32_t heading, int32_t range) const;
   void status(framebuffer &target, rectangle area, uint32_t faults, bool ground_radar, bool air_radar) const;
 };
 } // namespace apache::render

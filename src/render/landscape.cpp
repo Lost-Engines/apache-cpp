@@ -7,7 +7,8 @@
 
 namespace apache::render {
 landscape::landscape(resources::data_store const &data, std::string_view const zone) : terrain{data.read(std::string{zone} + ".WZ/GRIDPOST.BIN")}, sky_objects{data, zone}, effect_drawer{data}, textures{data, zone}, features{data, zone, false}, super_features{data, zone, true}, trig{data}, models{resources::read_models(data.read("3DDATA/3DOBJS.BIN"))}, object_textures{resources::read_object_textures(data.read("3DDATA/OBJTEXT.BIN"))}, palette{data, zone}, mobiles{models} {
-  auto const placements{resources::read_scenery(data.read(std::string{zone} + ".WZ/GNDOBJS.BIN"))};
+  auto placements{resources::read_scenery(data.read(std::string{zone} + ".WZ/GNDOBJS.BIN"))};
+  resources::initialise_scenery(placements);
   scenery.reserve(placements.size());
   for(auto const &placement : placements) {
     if(!placement.model) continue;
@@ -19,6 +20,7 @@ landscape::landscape(resources::data_store const &data, std::string_view const z
     object.alternate_colours = (placement.status & 0x2000) != 0;
     scenery_sectors[placement.sector].push_back(scenery.size());
     scenery.push_back(std::move(object));
+    scenery_placements.push_back(placement);
   }
 }
 uint8_t landscape::surface_type(int32_t const x, int32_t const y) const { return resources::surface_type(features, super_features, x, y); }

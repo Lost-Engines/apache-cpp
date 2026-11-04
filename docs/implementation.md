@@ -21,10 +21,11 @@ Current implementation:
 - Both original instrument fonts, including every glyph and screen-edge clipping.
 - Mechanical compass, artificial horizon, airspeed indicator, altimeter and analogue clock at both original resolutions.
 - Pilot/gunner warning lamps, clipped radio text and time-acceleration indicator.
-- MFD off/damaged, engine, system-status, weapons, radar, tactical, isolated-target FLIR and flight-plan pages, with the original display bezels.
+- MFD off/damaged, engine, system-status, weapons, radar, tactical, isolated-target FLIR, flight-plan and moving-map pages, with the original display bezels.
 - Target-camera positioning, inherited thermal colour maps, selected-contact highlighting, automatic route scaling and waypoint arrival estimates.
 - Independent pilot/gunner MFD selections, direction-aware cycling, power switches, radar requests and damage transitions.
-- Fixed-point 2D line clipping and unclipped text positioning.
+- Fixed-point 2D line clipping, inverse projection and unclipped text positioning.
+- Rotated terrain maps with contours, super-features, faction markers and model footprints.
 - Terrain grid projection, 7,200-entry scene queue, texture selection and fog shading tables.
 - Seven terrain drawing paths, including 64-triangle subdivision and perspective correction in 16-pixel spans.
 - Complete terrain, feature and placed-scenery assembly, visible-sector selection, and the original ground/sky horizon.
@@ -108,6 +109,10 @@ Validation completed:
 - 4,452 circle-outline cases match 394,979,328 pixels, including all screen-edge clipping cases.
 - 1,150 flight-plan frames match 220,800,000 pixels across route-scale boundaries, headings, active waypoints and airspeeds; 10,487 integer square roots match original 64-bit calculations.
 - The complete weapons, radar/tactical, flight-plan, circle-outline and integer-square-root comparisons also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
+- 744 complete maps match 141,465,600 pixels, including rotated views, whole warzones, contours, super-features and faction footprints. Another 640 moving-map MFD frames match 125,644,800 pixels.
+- 3,080 isolated contour frames match 236,544,000 pixels; 5,000 inverse-projection cases match 60,000 coordinate fields.
+- All 42,317 initialized scenery records match 296,219 fields, including 1,205 status changes made by the original initializer.
+- The complete map, contour, inverse-projection and scenery-initialization checks also pass under AddressSanitizer and UndefinedBehaviorSanitizer.
 - Eight isolated window checks cover mouse navigation, Escape, F1, Quickstart dismissal and resized integer-scaled presentation.
 
 These menu comparisons use a defined initial palette and initialized widgets. They do not yet cover the terrain preview, populated campaign/pilot state or every interactive menu action.

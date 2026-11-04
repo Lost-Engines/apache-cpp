@@ -32,6 +32,10 @@ public:
   int32_t sine{0};
   projection2(rectangle viewport, window2 window);
   int32_t radius(int32_t world_radius) const;
+  vertex2 unproject(int32_t x, int32_t y) const;
+  screen_vertex project_raw(vertex2 const &point) const;
+  std::optional<std::array<screen_vertex, 2>> clip_line_raw(vertex2 const &a, vertex2 const &b) const;
+  std::vector<screen_vertex> clip_raw(std::span<vertex2 const> vertices) const;
   screen_vertex project(vertex2 const &point) const;
   std::optional<std::array<screen_vertex, 2>> clip_line(vertex2 const &a, vertex2 const &b) const;
   std::vector<screen_vertex> clip(std::span<vertex2 const> vertices) const;

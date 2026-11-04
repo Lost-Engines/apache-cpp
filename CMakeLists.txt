@@ -43,6 +43,8 @@ add_library(apache_core
   src/render/mfd_flight_plan.cpp
   src/render/mfd_radar.cpp
   src/render/mfd_weapons.cpp
+  src/render/map_renderer.cpp
+  src/render/map_renderer.h
   src/render/mfd.cpp
   src/render/mfd.h
   src/render/panel_instruments.cpp

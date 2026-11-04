@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "configuration/preferences.h"
+#include "render/framebuffer.h"
 #include "resources/data_store.h"
 #include "resources/image.h"
 #include "resources/terrain.h"
@@ -45,6 +46,17 @@ int main() try {
   apache::resources::terrain const flat{grid};
   require(flat.elevation(12345678, 98765432) == 25600, "flat terrain interpolation");
   require(flat.elevation(-1, 0) == 0 && flat.elevation(256 * apache::resources::terrain_step, 0) == 0, "terrain bounds");
+  apache::render::framebuffer buffer{4, 3};
+  buffer.clear(9);
+  apache::resources::indexed_image source;
+  source.width = 3;
+  source.height = 2;
+  source.pixels = {1, 0, 2, 3, 4, 5};
+  buffer.clip = {1, 1, 9, 9};
+  buffer.blit(source, 0, 1, true);
+  require(buffer.image.pixels == apache::resources::bytes{9, 9, 9, 9, 9, 9, 2, 9, 9, 4, 5, 9}, "transparent blit clips without losing source alignment");
+  buffer.fill({-100, -100, 100, 100}, 7);
+  require(buffer.image.pixels == apache::resources::bytes{9, 9, 9, 9, 9, 7, 7, 7, 9, 7, 7, 7}, "fill intersects the framebuffer and caller clip");
   std::cout << "Resource boundary and configuration tests passed" << std::endl;
   return EXIT_SUCCESS;
 } catch(std::exception const &error) {

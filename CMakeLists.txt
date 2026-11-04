@@ -7,6 +7,14 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 include(CTest)
 
 add_library(apache_core
+  src/frontend/menu.cpp
+  src/frontend/menu.h
+  src/frontend/widget.cpp
+  src/frontend/widget.h
+  src/render/framebuffer.cpp
+  src/render/framebuffer.h
+  src/render/menu_font.cpp
+  src/render/menu_font.h
   src/resources/reader.cpp
   src/resources/reader.h
   src/resources/data_store.cpp
@@ -22,6 +30,15 @@ target_include_directories(apache_core PUBLIC src)
 target_compile_options(apache_core PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion;-ffp-contract=off>
 )
+
+include(cmake/dependencies.cmake)
+add_executable(apache
+  src/main.cpp
+  src/platform/window.cpp
+  src/platform/window.h
+)
+target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL)
+target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
 add_executable(apache_inspect src/inspect.cpp)
 target_link_libraries(apache_inspect PRIVATE apache_core)

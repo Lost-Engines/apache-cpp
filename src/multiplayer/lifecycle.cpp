@@ -13,7 +13,7 @@ void lifecycle::lost_partner() {
 void lifecycle::remove(std::optional<actor_link> const actor) const {
   if(actor && (!actor->local || actor->destroyed == 1) && events.remove) events.remove(actor->id);
 }
-bool lifecycle::receive(packet const &message) {
+bool lifecycle::receive(packet const &message, int32_t const now) {
   using enum message_type;
   auto const sender{message.sender()};
   if(sender >= state.players.size() || state.local >= state.players.size()) return false;
@@ -21,6 +21,24 @@ bool lifecycle::receive(packet const &message) {
   auto const find{[&](int32_t serial, int32_t task){ return events.find ? events.find(serial, task) : std::nullopt; }};
   bool const remote{sender != state.local};
   switch(message.type()) {
+    case server_left: case client_left: {
+      bool const server_departed{message.type() == server_left};
+      if(state.active) {
+        auto const departed{server_departed ? state.server : sender};
+        if(server_departed) {
+          if(events.unregister) events.unregister(departed);
+          state.answer_deadline = math::add(now, 2000);
+        }
+        if(auto target{player(departed)}; target && target->destroyed == 0 && ((state.players[departed].flags >> 8) & 255) != 255) {
+          if(events.unplace) events.unplace(target->id);
+          state.players[departed].flags = (state.players[departed].flags & ~0xff00u) | 0xfe00u;
+        }
+        if(server_departed) state.server = events.next_server ? events.next_server(departed) : state.local;
+        notice(message.name() + (server_departed ? " LEFT" : " left"), server_departed ? 3 : 2, 200);
+      }
+      if(server_departed) state.reset_server();
+      return true;
+    }
     case killed_player: {
       uint32_t const victim{message.word(396)}; if(victim >= state.players.size()) return false;
       if(state.client_server && state.server == state.local) {

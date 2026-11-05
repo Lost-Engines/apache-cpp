@@ -19,6 +19,7 @@ mission_network::mission_network(mission_runtime &mission) : runtime{mission}, l
     runtime.combat.kill(index);
     render::fracture_model(runtime.actors.units[index].object, runtime.debris, runtime.random.global_seed);
   };
+  lifecycle.events.unplace = [this](size_t index){ runtime.spatial.unplace(index); };
   lifecycle.events.leave = [this](size_t index){ runtime.spatial.unplace(index); runtime.actors.units[index].destroyed = 1; };
   lifecycle.events.restart = [this](size_t index, math::pose const &position, int32_t model){
     runtime.actors.units[index].object.world = position;
@@ -219,7 +220,7 @@ multiplayer::target_state mission_network::identify(target_reference const &targ
 }
 bool mission_network::receive(multiplayer::packet const &message, int32_t const now) {
   if(!enabled) return false;
-  if(lifecycle.receive(message)) return true;
+  if(lifecycle.receive(message, now)) return true;
   if(!state.receive(message, now)) return false;
   if(message.type() == multiplayer::message_type::position) {
     if(auto index{actor(message.sender())}) {

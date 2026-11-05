@@ -19,7 +19,7 @@ void avionics_renderer::multifunction(framebuffer &target, avionics_instruments 
     case radar: screens.radar(target, area, state.radar, state.radar_contacts, trig); break;
     case tactical: screens.radar(target, area, state.tactical, state.tactical_contacts, trig); break;
     case flir: draw_target(area); break;
-    case flight_plan: screens.flight_plan(target, area, state.route, state.waypoint, flight.aircraft.position[0], flight.aircraft.position[1], navigation.heading, navigation.airspeed, trig); break;
+    case flight_plan: if(state.scores) screens.scores(target, area, *state.scores, state.delta); else screens.flight_plan(target, area, state.route, state.waypoint, flight.aircraft.position[0], flight.aircraft.position[1], navigation.heading, navigation.airspeed, trig); break;
     case weapons: screens.weapons(target, area, state.stores); break;
     case engines: screens.engines(target, area, state.engines); break;
     case status: screens.status(target, area, flight.faults, state.radar.mode == radar_mode::ground, state.radar.mode == radar_mode::air); break;

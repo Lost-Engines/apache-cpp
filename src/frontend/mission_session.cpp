@@ -20,9 +20,33 @@ resources::mission_briefing find_mission(resources::data_store const &data, int 
   return *found;
 }
 std::string mission_path(resources::mission_briefing const &briefing) {
+  if(briefing.flow == 5) return "MISSDATA/MULTI.DTA";
+  if(briefing.flow == 6) return "MISSDATA/CAPTURE.DTA";
   if(briefing.flow != 1) return "MISSDATA/" + std::to_string(briefing.id) + ".DTA";
   if(briefing.zone < 1 || briefing.zone > 3) throw std::runtime_error{"Invalid Quickstart warzone"};
   return "MISSDATA/QS_" + std::string(1, "YKC"[briefing.zone - 1]) + ".DTA";
+}
+mission_options connection_options(mission_options options) {
+  if(!options.connection) return options;
+  auto const &connection{*options.connection};
+  if(connection.local >= 16 || connection.server >= 16) throw std::runtime_error{"Invalid network connection slot"};
+  auto const rules{multiplayer::apply_rules(connection.game)};
+  options.difficulty = rules.forces; options.invulnerable = false;
+  options.infinite_weapons = rules.infinite_weapons; options.no_crashes = rules.no_crashes;
+  options.shared_seat = connection.game.mode == multiplayer::game_mode::pilot_gunner ? std::optional{connection.game.second_seat ? multiplayer::crew_role::gunner : multiplayer::crew_role::pilot} : std::nullopt;
+  return options;
+}
+std::optional<resources::mission_definition> connection_definition(resources::data_store const &data, resources::mission_briefing const &briefing, mission_options const &options, resources::mission_definition const *edited) {
+  if(!options.connection) return {};
+  auto const bytes{edited ? resources::bytes{} : data.read(mission_path(briefing))};
+  auto definition{edited ? *edited : resources::read_mission_definition(std::string{bytes.begin(), bytes.end()})};
+  multiplayer::mission_rules input;
+  input.wind_strength = definition.wind_strength; input.wind_direction = definition.wind_direction;
+  input.weather = definition.weather; input.time_of_day = definition.time_of_day;
+  auto const rules{multiplayer::apply_rules(options.connection->game, input)};
+  definition.wind_strength = rules.wind_strength; definition.wind_direction = rules.wind_direction;
+  definition.weather = rules.weather; definition.time_of_day = rules.time_of_day;
+  return definition;
 }
 std::string warzone(int const id) {
   static std::array<std::string, 4> const names{"YEMEN", "KOREA", "CYPRUS", "FORT"};
@@ -42,36 +66,40 @@ resources::mission_briefing mission_session::quick_start(resources::data_store c
 mission_session::mission_session(resources::data_store const &data, int const mission_id, mission_options const options)
   : mission_session{data, find_mission(data, mission_id), options} {}
 mission_session::mission_session(resources::data_store const &data, resources::mission_briefing definition, mission_options const options, resources::mission_definition const *edited)
-  : settings{options}, initial_seeds{weapon_seeds()}, briefing{std::move(definition)}, zone{warzone(briefing.zone)},
-    runtime{data, zone, mission_path(briefing), true, true, options.shared_seat ? 2 : options.difficulty, initial_seeds, edited},
+  : settings{connection_options(options)}, initial_seeds{weapon_seeds()}, network_definition{connection_definition(data, definition, settings, edited)}, briefing{std::move(definition)}, zone{warzone(briefing.zone)},
+    runtime{data, zone, mission_path(briefing), true, true, settings.shared_seat ? 2 : settings.difficulty, initial_seeds, network_definition ? &*network_definition : edited},
     daylight{runtime.executable, runtime.mission.time_of_day}, world{data, zone}, panels{data, options.video_mode},
     avionics{panels, runtime.trig, runtime.executable}, frame{options.video_mode ? 640u : 320u, options.video_mode ? 480u : 240u} {
-  if(options.shared_seat) {
-    if(*options.shared_seat != multiplayer::crew_role::pilot && *options.shared_seat != multiplayer::crew_role::gunner) throw std::runtime_error{"Invalid shared cockpit seat"};
+  if(settings.shared_seat) {
+    if(*settings.shared_seat != multiplayer::crew_role::pilot && *settings.shared_seat != multiplayer::crew_role::gunner) throw std::runtime_error{"Invalid shared cockpit seat"};
     settings.difficulty = 2; settings.invulnerable = settings.infinite_weapons = settings.no_crashes = false;
   }
-  auto const player{std::ranges::find_if(runtime.actors.units, [this](auto const &actor){ return runtime.mission.tasks[actor.location.task].user && actor.location.group == 0 && actor.location.member == 0; })};
+  auto const game_mode{settings.connection ? settings.connection->game.mode : settings.shared_seat ? multiplayer::game_mode::pilot_gunner : multiplayer::game_mode::single_player};
+  auto const player{std::ranges::find_if(runtime.actors.units, [this, game_mode](auto const &actor){
+    bool const first{game_mode == multiplayer::game_mode::single_player || game_mode == multiplayer::game_mode::pilot_gunner || game_mode == multiplayer::game_mode::apache_vs_hind};
+    return runtime.mission.tasks[actor.location.task].user && actor.location.member == 0 && (first ? actor.location.group == 0 : actor.serial == static_cast<int32_t>(settings.connection->local));
+  })};
   if(player == runtime.actors.units.end()) throw std::runtime_error{"Mission has no player aircraft"};
   runtime.timing.game_flow = briefing.flow;
-  runtime.start_player(static_cast<size_t>(player - runtime.actors.units.begin()), {.arcade{options.arcade}, .flow{briefing.flow}});
-  runtime.equip_player(runtime.mission.weapons); runtime.enable_player_sensors(options.shared_seat ? 3 : 0);
+  runtime.start_player(static_cast<size_t>(player - runtime.actors.units.begin()), {.arcade{settings.arcade}, .flow{briefing.flow}, .game_mode{static_cast<unsigned int>(game_mode)}});
+  runtime.equip_player(runtime.mission.weapons); runtime.enable_player_sensors(static_cast<unsigned int>(game_mode));
   runtime.pilot->arcade.invulnerable = runtime.pilot->realistic.invulnerable = runtime.damage->invulnerable = settings.invulnerable;
   runtime.pilot->arcade.no_crashes = runtime.pilot->realistic.no_crashes = settings.no_crashes;
-  runtime.pilot->arcade.infinite_fuel = runtime.pilot->realistic.infinite_fuel = briefing.flow == 1 && !options.shared_seat;
-  runtime.player_armament->inventory.infinite |= !options.shared_seat && (options.infinite_weapons || briefing.flow == 1);
+  runtime.pilot->arcade.infinite_fuel = runtime.pilot->realistic.infinite_fuel = settings.connection ? multiplayer::apply_rules(settings.connection->game).infinite_fuel : briefing.flow == 1 && !settings.shared_seat;
+  runtime.player_armament->inventory.infinite |= !settings.shared_seat && (settings.infinite_weapons || briefing.flow == 1);
   if(briefing.flow == 1) { runtime.player_armament->inventory.armed = true; if(!runtime.player_armament->inventory.helmet_mode) runtime.player_armament->inventory.helmet_mode = 1; }
   runtime.player_damage->state.random = initial_seeds.damage;
   runtime.combat.warnings.ships_attacked = -60000;
   runtime.sensors->state.tads = false;
-  controls.configuration = options.controls; controls.configuration.resolve();
-  controls.curve = simulation::joystick_curve{options.deadband}; controls.joystick = options.axes;
-  views = std::make_unique<simulation::player_views>(runtime.executable, runtime.trig, runtime.environment.height, runtime.sensors->state, options.shared_seat ? static_cast<unsigned int>(*options.shared_seat) : 2);
+  controls.configuration = settings.controls; controls.configuration.resolve();
+  controls.curve = simulation::joystick_curve{settings.deadband}; controls.joystick = settings.axes;
+  views = std::make_unique<simulation::player_views>(runtime.executable, runtime.trig, runtime.environment.height, runtime.sensors->state, settings.shared_seat ? static_cast<unsigned int>(*settings.shared_seat) : 2);
   runtime.player_armament->helmet_direction = [this](){
     if(views->modes.mode == 12) return runtime.player_armament->helmet;
     auto const &rotation{runtime.pilot->readings().position.rotation};
     return math::vector3{rotation[3], rotation[4], rotation[5]};
   };
-  instruments = std::make_unique<simulation::mission_instruments>(runtime, options.video_mode);
+  instruments = std::make_unique<simulation::mission_instruments>(runtime, settings.video_mode, static_cast<unsigned int>(game_mode));
   runtime.events.instrument_update = [this](){ instruments->sample(); };
   instruments->state.damaged_display_seed = 0;
   world.initialise_model_metadata(runtime.executable);
@@ -83,7 +111,7 @@ mission_session::mission_session(resources::data_store const &data, resources::m
   if(runtime.mission.weather == 1) { visual.cloud_height = cloud_modifier + 14000; visual.cloud_bottom = (cloud_modifier + 13000) * 256; visual.cloud_top = (cloud_modifier + 15000) * 256; }
   runtime.weapons->environment.weather = runtime.mission.weather;
   runtime.weapons->environment.cloud_bottom = visual.cloud_bottom; runtime.weapons->environment.cloud_top = visual.cloud_top;
-  detail(options.detail);
+  detail(settings.detail);
   views->context.has_target = [this](size_t i){ auto *r{round(i)}; return r && simulation::projectile_has_target(*r, simulation::weapon_definitions()[r->state.weapon], runtime.targets.world, [this](uint32_t id, auto slot){ return runtime.weapons->target_slot(id, slot); }, runtime.timing.now); };
   views->context.has_lock = [this](size_t i){ auto *r{round(i)}; return r && simulation::weapon_definitions()[r->state.weapon].movement_class == 2 && (r->state.body.seeker.flags & 2); };
   views->crashed = [this](bool airborne){ crash(airborne); };
@@ -148,17 +176,26 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     auto const id{static_cast<uint32_t>(slot + 1)};
     if(added) communications.add_changing(id, text, 2); else communications.remove(id);
   };
-  if(options.shared_seat) {
+  if(settings.shared_seat || settings.connection) {
     network = std::make_unique<simulation::mission_network>(runtime);
     network->enabled = network->state.active = true;
-    network->state.seat = *options.shared_seat; network->state.local = static_cast<uint32_t>(*options.shared_seat);
-    network->state.players[network->state.local].name = *options.shared_seat == multiplayer::crew_role::pilot ? "PILOT" : "GUNNER";
-    network->lifecycle.mode = multiplayer::game_mode::pilot_gunner;
-    runtime.pilot->realistic.game_mode = 3; runtime.damage->environment.mode = 3;
+    if(settings.connection) {
+      auto const &connection{*settings.connection}; network->state.players = connection.players;
+      network->state.local = connection.local; network->state.server = connection.server;
+      network->state.client_server = multiplayer::apply_rules(connection.game).client_server;
+      for(uint32_t i{0}; i < 16; ++i) if(i != connection.local && ((connection.players[i].flags >> 8) & 255) != 255) ++network->lifecycle.other_players;
+    } else {
+      network->state.local = static_cast<uint32_t>(*settings.shared_seat);
+      network->state.players[network->state.local].name = *settings.shared_seat == multiplayer::crew_role::pilot ? "PILOT" : "GUNNER";
+    }
+    if(settings.shared_seat) network->state.seat = *settings.shared_seat;
+    network->lifecycle.mode = game_mode;
+    runtime.pilot->realistic.game_mode = static_cast<unsigned int>(game_mode); runtime.damage->environment.mode = static_cast<unsigned int>(game_mode);
+    runtime.move_actors = game_mode != multiplayer::game_mode::combat && game_mode != multiplayer::game_mode::multiplayer && game_mode != multiplayer::game_mode::capture_the_flag;
     runtime.events.player_killed = [this](auto const &source){ network->player_killed(source); };
     auto const player_index{*runtime.timing.player};
     runtime.actors.units[player_index].network = static_cast<int32_t>(network->state.local);
-    if(!network->bind(network->state.local, player_index)) throw std::runtime_error{"Cannot bind shared aircraft"};
+    if(!network->bind(network->state.local, player_index)) throw std::runtime_error{"Cannot bind player aircraft"};
     runtime.player_armament->inventory.events.remote_fire = [this](size_t index){
       if(!network->send) return;
       auto const *shot{round(index)}; if(!shot) return;
@@ -175,23 +212,26 @@ mission_session::mission_session(resources::data_store const &data, resources::m
       if(network->send) network->send(multiplayer::event(multiplayer::message_type::crashed, network->state.local,
         network->state.players[network->state.local].name, static_cast<int32_t>(runtime.actors.units[*runtime.timing.player].location.task)));
     };
-    runtime.player_armament->control_mode = static_cast<unsigned int>(*options.shared_seat);
-    runtime.player_armament->inventory.helmet_mode = *options.shared_seat == multiplayer::crew_role::pilot ? 2 : 3;
+    if(settings.shared_seat) {
+    runtime.player_armament->control_mode = static_cast<unsigned int>(*settings.shared_seat);
+    runtime.player_armament->inventory.helmet_mode = *settings.shared_seat == multiplayer::crew_role::pilot ? 2 : 3;
     crew = std::make_unique<simulation::mission_crew>(runtime, *network);
     crew->key = [this](uint16_t code){ command(code); };
     crew->death = [this](unsigned int cause){ request_end(cause); };
     crew->landing = [this](uint8_t grade){ records.add({{12, 0, 0, 0, 0, grade}}); };
     crew->radio = [this](std::string_view text, uint8_t sample){ communications.add(text, 3, 1000); if(play_sound) play_sound(sample, 63, 32768); };
     runtime.player_armament->inventory.events.key_event = runtime.weapons->player_key_event = [this](uint16_t code){ return crew->notify_key(code); };
+    }
     network->lifecycle.events.death = [this](unsigned int cause){ request_end(cause); };
-    views->context.network = true; views->context.game_mode = 3;
+    views->context.network = true; views->context.game_mode = static_cast<unsigned int>(game_mode);
     world.before_mobile_scan = [this](){
       network->state.dead = runtime.pilot->death() != 0;
       network->state.active = network->state.active && !finished;
       if(wait_network) wait_network();
       network->state.begin_frame();
-      if(crew->leaving) ending.countdown = 1;
+      if(crew && crew->leaving) ending.countdown = 1;
     };
+    if(settings.connection && !settings.connection->defer_initialisation) initialise_remote_players();
   }
   select_view(views->modes.home);
 }
@@ -348,14 +388,14 @@ void mission_session::step(unsigned int const ticks) {
   commands.clear();
   if(paused || (finished && !network) || was_prompt || help_requested) return;
   if(controls.held[0x39]) runtime.fire_player(runtime.timing.now, frame_time, 0x39);
-  if(network && crew) {
+  if(network) {
     network->state.dead = runtime.pilot->death() != 0;
-    auto const packet{crew->transmit(ticks)};
-    if(network->send) {
-      network->send(packet);
-      network->send_casualties();
-    }
-    runtime.random.global_seed = 1;
+    if(crew) {
+      auto const packet{crew->transmit(ticks)};
+      if(network->send) { network->send(packet); network->send_casualties(); }
+      runtime.random.global_seed = 1;
+    } else send_frame();
+    if(!crew) { network->state.extrapolate(network_clock ? network_clock() : runtime.timing.now); network->update(); }
   }
   for(unsigned int i{0}; i != accelerated_time; ++i) {
     auto const buttons{controls.button_commands()};
@@ -394,7 +434,14 @@ void mission_session::draw() {
   arm.helmet = {rotation[3], rotation[4], rotation[5]}; arm.in_cockpit = views->modes.in_cockpit;
   arm.evaluate_sight(runtime.timing.now);
   instruments->update(views->modes.mode, camera.camera, projection);
-  auto &state{instruments->state}; state.accelerated_time = accelerated_time;
+  auto &state{instruments->state}; state.accelerated_time = accelerated_time; state.delta = last_delta;
+  if(network && (network->lifecycle.mode == multiplayer::game_mode::combat || network->lifecycle.mode == multiplayer::game_mode::multiplayer || network->lifecycle.mode == multiplayer::game_mode::capture_the_flag)) {
+    if(!state.scores) state.scores.emplace();
+    auto &scores{state.scores->players}; scores.clear(); auto const local{network->state.local};
+    auto const add{[&](size_t i){ auto const &p{network->state.players[i]}; scores.emplace_back(p.name, p.score); }};
+    add(local);
+    for(size_t i{0}; i < 16; ++i) if(i != local && ((network->state.players[i].flags >> 8) & 255) != 255) add(i);
+  }
   state.helmet.viewing_device = views->optics.name(); state.helmet.magnification = views->optics.magnification().label;
   auto const look{views->modes.mode == 13 ? views->goggles : views->helmet}; state.helmet.sight_heading = look.heading; state.helmet.sight_pitch = look.pitch;
   auto const &power{settings.arcade ? runtime.pilot->arcade.power : runtime.pilot->realistic.dynamics.power};
@@ -408,7 +455,7 @@ void mission_session::draw() {
   for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world.palette.modified[i * 3], world.palette.modified[i * 3 + 1], world.palette.modified[i * 3 + 2]};
   views->modes.changed = false;
   if(network) {
-    ending.finish_frame(); crew->outgoing.leaving = ending.quitting;
+    ending.finish_frame(); if(crew) crew->outgoing.leaving = ending.quitting;
     finished = finished || !ending.active || !network->state.active;
   }
   if(quit_prompt) {

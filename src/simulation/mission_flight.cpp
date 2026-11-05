@@ -7,7 +7,7 @@ mission_flight::mission_flight(resources::mission_definition const &definition, 
   : mission{definition}, actors{units}, spatial{locations}, models{objects}, terrain{land}, trig{angles}, surface{std::move(materials)}, player{index}, arcade_mode{settings.arcade} {
   auto &unit{actors.units.at(player)}; spatial.player = player;
   auto const status{unit.object.status}; unit.object = render::construct_model(models, 103, unit.object.world, settings.pods); unit.object.status = status & ~0x10u;
-  if(on_carrier()) prepare_carrier();
+  if(on_carrier()) prepare_carrier(settings.game_mode);
   unit.network = 0;
   auto const height{[this](int32_t x, int32_t y){ return on_carrier() ? math::add(deck(), 2304) : terrain.elevation(x, y); }};
   realistic_world.height = arcade_world.height = height; realistic_world.surface = arcade_world.surface = surface;
@@ -41,11 +41,11 @@ void mission_flight::swap_slots(size_t const other) {
   for(auto index : {player, other}) { auto &unit{actors.units[index]}; auto &slot{actors.carriers[*unit.carrier].slots[*unit.carrier_slot]}; unit.object.relative = slot.relative; slot.reserved = index; if(unit.conditions & 0x400) slot.occupant = index; }
   actors.synchronize_models();
 }
-void mission_flight::prepare_carrier() {
+void mission_flight::prepare_carrier(unsigned int const game_mode) {
   auto &unit{actors.units[player]};
   if(!unit.carrier || !unit.carrier_slot) throw std::runtime_error{"Player carrier placement has no assigned slot"};
   auto &carrier{actors.carriers.at(*unit.carrier)}; auto &ship{actors.units[carrier.actor]};
-  if(ship.object.id == 130 && *unit.carrier_slot != 7 && carrier.slots.size() > 7) {
+  if(game_mode != 2 && ship.object.id == 130 && *unit.carrier_slot != 7 && carrier.slots.size() > 7) {
     auto const other{carrier.slots[7].reserved};
     if(other) swap_slots(*other);
     else { auto &old{carrier.slots[*unit.carrier_slot]}; old.occupant.reset(); ship.object.children[old.attachment].reset(); unit.carrier_slot = 7; }

@@ -6,10 +6,17 @@
 #include <ostream>
 #include <stdexcept>
 
-void inspect_session(apache::resources::data_store const &data, int const mission, unsigned int const video, bool const arcade, std::istream &input, std::ostream &output, int const shared_seat) {
+void inspect_session(apache::resources::data_store const &data, int const mission, unsigned int const video, bool const arcade, std::istream &input, std::ostream &output, int const shared_seat, int const network_mode, unsigned int const local, unsigned int const players) {
   apache::frontend::mission_options options{.arcade{arcade}, .video_mode{video}, .detail{9}};
   if(shared_seat >= 0) options.shared_seat = static_cast<apache::multiplayer::crew_role>(shared_seat);
-  auto owner{mission < 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::frontend::mission_session::quick_start(data, -mission), options) : std::make_unique<apache::frontend::mission_session>(data, mission, options)};
+  if(network_mode > 0) {
+    if(players < 2 || players > 16 || local >= players) throw std::runtime_error{"Invalid network fixture roster"};
+    options.connection.emplace(); auto &connection{*options.connection};
+    connection.local = local; connection.game.mode = static_cast<apache::multiplayer::game_mode>(network_mode); connection.game.second_seat = local != 0;
+    for(size_t i{0}; i < 16; ++i) { auto &player{connection.players[i]}; player.flags = i < players ? static_cast<uint32_t>(i << 8) : 0xff00;
+      player.name = i < players ? "PLAYER" + std::to_string(i) : ""; player.aircraft.model = i < players ? 64 : 0; }
+  }
+  auto owner{mission == 0 && network_mode > 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::resources::mission_briefing{.id{0}, .flow{network_mode == 5 ? 6 : 5}, .zone{2}}, options) : mission < 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::frontend::mission_session::quick_start(data, -mission), options) : std::make_unique<apache::frontend::mission_session>(data, mission, options)};
   auto &session{*owner};
   std::vector<apache::resources::bytes> incoming;
   bool packet_mode{false};
@@ -41,12 +48,20 @@ void inspect_session(apache::resources::data_store const &data, int const missio
   while(input >> command) {
     if(command == "packet-mode") { packet_mode = true; }
     else if(command == "receive" || command == "receive-packet") {
-      if(!session.crew) throw std::runtime_error{"Shared session required"};
+      if(!session.network) throw std::runtime_error{"Network session required"};
       std::string bytes; input >> bytes;
-      if(bytes.size() != (command == "receive" ? 208 : 816)) throw std::runtime_error{"Invalid incoming packet length"};
+      if(command == "receive" ? bytes.size() != 208 : bytes.size() != 816 && bytes.size() != 1032) throw std::runtime_error{"Invalid incoming packet length"};
       apache::resources::bytes decoded;
       for(size_t i{0}; i < bytes.size(); i += 2) decoded.push_back(static_cast<uint8_t>(std::stoul(bytes.substr(i, 2), nullptr, 16)));
       incoming.push_back(std::move(decoded));
+    }
+    else if(command == "network-ready") { if(!session.network) throw std::runtime_error{"Network session required"}; session.network->state.server_in_game = true; }
+    else if(command == "network-poll") { if(session.wait_network) session.wait_network(); }
+    else if(command == "server-frame") { session.send_server_frame(); }
+    else if(command == "network-status") {
+      if(!session.network) throw std::runtime_error{"Network session required"};
+      auto const &n{*session.network}; output << "network " << static_cast<unsigned int>(n.lifecycle.mode) << ' ' << n.state.local << ' ' << n.state.server << ' ' << n.state.client_server << ' ' << session.runtime.move_actors << ' ' << *session.runtime.timing.player << ' ' << session.runtime.player_armament->control_mode << '\n';
+      for(size_t i{0}; i < 16; ++i) { auto const &p{n.state.players[i]}; output << "peer " << i << ' ' << (n.actor(static_cast<uint32_t>(i)) ? static_cast<int64_t>(*n.actor(static_cast<uint32_t>(i))) : -1) << ' ' << p.aircraft.model << ' ' << p.flags; for(auto v : p.aircraft.location.position) output << ' ' << v; for(auto v : p.aircraft.location.rotation) output << ' ' << v; output << '\n'; }
     }
     else if(command == "crew-status") {
       auto const &arm{*session.runtime.player_armament};
@@ -68,6 +83,18 @@ void inspect_session(apache::resources::data_store const &data, int const missio
       output << "flight" << std::hex;
       for(auto const value : {d.x, d.y, d.u, d.v, f.dx, f.dy, d.zdot}) output << ' ' << std::bit_cast<uint64_t>(value);
       output << std::dec << ' ' << d.wind_strength << ' ' << d.wind_gust << '\n';
+    }
+    else if(command == "combat-targets") {
+      if(!session.network) throw std::runtime_error{"Network session required"};
+      auto const &runtime{session.runtime};
+      for(size_t i{0}; i < runtime.actors.units.size(); ++i) {
+        auto const &a{runtime.actors.units[i]}; auto const &arm{runtime.combat.armaments[i]};
+        output << "combat " << i << ' ' << a.serial << ' ' << (a.conditions & ~0x8000u) << ' ' << a.network << ' ' << a.weapon << ' ' << a.weapon_slot;
+        for(auto v : arm.deadlines) output << ' ' << v;
+        output << ' ' << runtime.combat.attention[i].range << ' ' << a.random;
+        auto const target{arm.target ? session.network->identify(*arm.target) : apache::multiplayer::target_state{}};
+        output << ' ' << target.kind; for(auto v : target.data) output << ' ' << v; output << '\n';
+      }
     }
     else if(command == "scene-state") {
       for(size_t index{0}; index < session.runtime.actors.units.size(); ++index) {

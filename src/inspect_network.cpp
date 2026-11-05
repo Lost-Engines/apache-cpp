@@ -105,7 +105,7 @@ void inspect_network(std::istream &input, std::ostream &output) {
       else output << "empty";
       output << std::dec << ' ' << queue.take_mobile(sender, "PILOT123").has_value() << ' ' << queue.take_scenery(sender, "PILOT123").has_value() << '\n'; continue;
     }
-    if(command == "lifecycle") {
+    if(command == "lifecycle" || command == "departure") {
       multiplayer::replication state; multiplayer::lifecycle life{state}; unsigned int mode;
       in >> state.local >> state.server >> state.active >> state.client_server >> mode >> life.following >> life.other_players;
       life.mode = static_cast<multiplayer::game_mode>(mode);
@@ -137,11 +137,19 @@ void inspect_network(std::istream &input, std::ostream &output) {
       life.events.flag_won = [&](uint32_t id){ events << " flag " << id; };
       life.events.notice = [&](std::string_view text, int32_t priority, int32_t lifetime){ events << " notice " << std::quoted(std::string{text}) << ' ' << priority << ' ' << lifetime; };
       life.events.scores = [&](){ events << " scores"; };
+      int32_t now{0}; uint32_t next_server{0};
+      if(command == "departure") {
+        in >> now >> next_server >> state.server_in_game >> state.server_waiting >> state.new_server_data >> state.all_synced >> state.answer_deadline;
+        life.events.unregister = [&](uint32_t slot){ events << " unregister " << slot; };
+        life.events.next_server = [&](uint32_t slot){ events << " next " << slot; return next_server; };
+        life.events.unplace = [&](size_t id){ events << " leave " << id; };
+      }
       std::string hex; in >> hex; auto const message{multiplayer::packet::decode(hex_bytes(hex))};
       if(!in || !message) throw std::runtime_error{"Incomplete lifecycle context"};
-      life.receive(*message);
+      life.receive(*message, now);
       output << state.active << ' ' << life.following << ' ' << life.other_players;
       for(size_t i{0}; i < 16; ++i) output << ' ' << state.players[i].flags << ' ' << state.players[i].score << ' ' << destroyed[i];
+      if(command == "departure") output << ' ' << state.server << ' ' << state.server_in_game << ' ' << state.server_waiting << ' ' << state.new_server_data << ' ' << state.all_synced << ' ' << state.answer_deadline;
       output << events.str() << '\n'; continue;
     }
     if(command == "exchange") {

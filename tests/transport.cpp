@@ -91,6 +91,7 @@ int main() try {
   pump(0);
   require(leader.members().other_count() == 1 && wingman.members().other_count() == 1, "two independent sockets discover each other");
   require(leader.state.local == 0 && wingman.state.local == 1, "peers agree on connection numbers");
+  require(leader.state.server == 0 && wingman.state.server == 0, "peers agree on the initial server");
   require(leader.state.players[1].name == "WINGMAN" && wingman.state.players[0].name == "LEADER", "lobby names delivered");
   wingman.name("GUNNER"); pump(10);
   require(leader.state.players[1].name == "GUNNER", "name changes reach peers");
@@ -107,6 +108,16 @@ int main() try {
   wingman.game_packet = [&](packet const &packet, int32_t tick){ require(packet.type() == message_type::crew && packet.sender() == 0 && tick == 50, "flight callback retains sender and arrival clock"); ++flight_packets; };
   leader.send(crew(0, "LEADER", std::array<uint8_t, 104>{})); pump(50);
   require(flight_packets == 1, "same sockets deliver live crew records after lobby freeze");
+  leader.state.players[0].flags |= 0x20000;
+  unsigned int sync_packets{0}, server_packets{0};
+  leader.game_packet = [&](packet const &message, int32_t) {
+    if(message.type() == message_type::synchronise) ++sync_packets;
+    else if(message.type() == message_type::server_state) ++server_packets;
+  };
+  wingman.send(identification(message_type::synchronise, 1, "GUNNER", 64));
+  wingman.send(server_state(std::array<aircraft_state, 16>{})); pump(55);
+  require(sync_packets == 1 && !(leader.state.players[1].flags & 0x20000), "flight initialization reaches the mission receiver without mutating the lobby copy");
+  require(server_packets == 0, "a client cannot supply the server's headerless state packet");
   leader.resume(); wingman.resume(); pump(60);
   require(!leader.all_ready() && !wingman.all_ready(), "return to lobby clears readiness");
   wingman.leave(); leader.poll(70);

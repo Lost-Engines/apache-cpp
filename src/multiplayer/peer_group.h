@@ -33,5 +33,6 @@ public:
   void freeze();
   void resume();
   void leave();
+  void forget(uint32_t slot);
 };
 } // namespace apache::multiplayer

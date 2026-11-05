@@ -128,7 +128,7 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
   if(weapons) weapons->environment.now = now;
   if(damage) damage->environment.flow = timing.game_flow;
   synchronize_player_target();
-  movement.update(timing);
+  if(move_actors) movement.update(timing);
   double const dt{static_cast<double>(elapsed) * 0.005};
   if(pilot && flight_active) {
     int32_t flight_delta{delta}; double flight_dt{dt}; unsigned int substeps{1};
@@ -150,7 +150,8 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
   if(weapons) weapons->update({now, delta, dt, smoke_radius, smoke_lifetime, smoke_density});
   if(player_armament) { player_armament->synchronize_countermeasures(true); player_armament->finish_update(now); }
   if(events.player_weapon_update) events.player_weapon_update();
-  combat.update(); actors.synchronize_models(false);
+  if(move_actors) combat.update();
+  actors.synchronize_models(false);
   if(events.instrument_update) events.instrument_update();
   if(sensors && pilot && player_armament) { sensors->update(actors.units[*timing.player].object.world, pilot->readings().angles[0], spatial.mobile_id(*timing.player), player_armament->control_mode, pilot->faults()); synchronize_player_target(); }
   if(sensors && pilot) {

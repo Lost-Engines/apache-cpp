@@ -22,6 +22,8 @@ struct avionics_instruments {
   std::vector<radar_contact> tactical_contacts;
   std::vector<waypoint_mark> route;
   size_t waypoint{0};
+  std::optional<multiplayer_scores> scores;
+  int32_t delta{0};
   int32_t map_range{0x400000};
   model_instance *target_model{nullptr};
   math::vector3 target_camera_aim{0, 0, 0};

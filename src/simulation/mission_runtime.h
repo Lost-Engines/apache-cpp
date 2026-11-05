@@ -72,7 +72,7 @@ public:
   player_route route;
   movement_time timing;
   size_t frame{0};
-  bool check_collisions{true}, subdivide_flight{true}, flight_active{true};
+  bool check_collisions{true}, subdivide_flight{true}, flight_active{true}, move_actors{true};
   int32_t smoke_radius{2048}, smoke_lifetime{400};
   unsigned int smoke_density{2};
   fragments debris;

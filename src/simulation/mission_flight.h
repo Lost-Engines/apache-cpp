@@ -9,6 +9,7 @@ struct mission_flight_settings {
   double fuel{2442};
   uint32_t faults{0};
   std::array<uint32_t, 24> pods{};
+  unsigned int game_mode{0};
 };
 // Binds the flight model to the mission's player object, carrier and spatial lists.
 class mission_flight {
@@ -25,7 +26,7 @@ class mission_flight {
   flight_environment realistic_world;
   arcade_environment arcade_world;
   void swap_slots(size_t other);
-  void prepare_carrier();
+  void prepare_carrier(unsigned int game_mode);
   void land_on_carrier(size_t owner, render::model_instance const &object);
   math::pose place(math::pose const &position);
   void leave_carrier();

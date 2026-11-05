@@ -21,6 +21,9 @@ struct lifecycle_events {
   std::function<void(uint32_t)> flag_won;
   std::function<void(std::string_view, int32_t, int32_t)> notice;
   std::function<void()> scores;
+  std::function<void(size_t)> unplace;
+  std::function<void(uint32_t)> unregister;
+  std::function<uint32_t(uint32_t)> next_server;
 };
 // APNET's in-flight events. Scene identities and effects belong to the mission.
 class lifecycle {
@@ -34,6 +37,6 @@ public:
   int32_t other_players{0};
   bool following{false};
   explicit lifecycle(replication &replicas) : state{replicas} {}
-  bool receive(packet const &message);
+  bool receive(packet const &message, int32_t now = 0);
 };
 } // namespace apache::multiplayer

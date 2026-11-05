@@ -10,7 +10,10 @@
 #include <string_view>
 #include <vector>
 #include <utility>
+#include <thread>
+#include <bit>
 #include "frontend/mission_frontend.h"
+#include "frontend/mission_link.h"
 #include "audio/engine.h"
 #include "platform/audio_output.h"
 #include "frontend/mission_session.h"
@@ -231,12 +234,27 @@ int main(int const argc, char const *const argv[]) try {
     }
   }
   if(sound) sound->cinematic(false);
+  std::unique_ptr<apache::frontend::mission_link> network_link;
+  auto const network_epoch{std::chrono::steady_clock::now()};
+  auto const network_clock{[&](){ return std::bit_cast<int32_t>(static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - network_epoch).count() / 5)); }};
   bool in_flight_help{false};
   unsigned int frames{0};
   auto previous_time{std::chrono::steady_clock::now()};
   double tick_fraction{0};
   if(mission) { mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title); }
   while(window.poll() && !menu.quit_requested()) {
+    if(network_link && !network_link->ready()) {
+      if(std::ranges::any_of(input.keys, [](auto const &k){ return k.down && !k.character && k.value == GLFW_KEY_ESCAPE; })) mission->finished = true;
+      input.keys.clear(); input.clicks.clear(); network_link->poll();
+      if(mission->finished) {
+        network_link.reset(); if(sound) sound->mission(false); frontend.complete(std::move(mission)); window.title("Apache C++");
+      } else if(network_link->ready()) {
+        mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title);
+      } else { window.present(frame); glfwWaitEventsTimeout(0.005); }
+      previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
+      if(frame_limit && ++frames == frame_limit) break;
+      continue;
+    }
     if(mission && !in_flight_help) {
       for(auto const &key : input.keys) if(!key.character && !key.repeat) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
       input.keys.clear(); input.clicks.clear();
@@ -273,6 +291,7 @@ int main(int const argc, char const *const argv[]) try {
         menu.show("_help_screen");
       }
       if(mission->finished) {
+        network_link.reset();
         if(sound) sound->mission(false);
         if(launched_from_menu) frontend.complete(std::move(mission));
         else { mission.reset(); menu.show("_main_screen"); }
@@ -282,6 +301,8 @@ int main(int const argc, char const *const argv[]) try {
       continue;
     }
     auto const now{std::chrono::steady_clock::now()};
+    if(!in_flight_help) frontend.poll_network(static_cast<uint32_t>(network_clock()));
+    else if(network_link) network_link->poll();
     frontend.interface.tick(std::chrono::duration<double>(now - previous_time).count());
     if(!in_flight_help) frontend.planner.tick(std::chrono::duration<double>(now - previous_time).count());
     previous_time = now; tick_fraction = 0;
@@ -323,7 +344,11 @@ int main(int const argc, char const *const argv[]) try {
     window.present(frame);
     if(auto launched{frontend.takeoff()}) {
       mission = std::move(launched); launched_from_menu = true; connect_audio();
-      mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title);
+      if(mission->network && frontend.network.peers) {
+        network_link = std::make_unique<apache::frontend::mission_link>(*frontend.network.peers, *mission, network_clock);
+        network_link->yield = [&](){ std::this_thread::sleep_for(std::chrono::milliseconds{1}); return window.poll(); };
+        window.title("Apache C++ | Waiting for other players");
+      } else { mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title); }
       previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;
     }
     if(frame_limit && ++frames == frame_limit) break;

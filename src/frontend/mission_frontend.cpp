@@ -27,7 +27,9 @@ std::string zone_name(int const zone) {
 }
 }
 mission_frontend::mission_frontend(resources::data_store const &data, mission_options const settings)
-  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, help{data, interface}, planner{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings} {
+  : data{data}, definitions{resources::read_mission_briefings(data.read("MISSDATA/MISSIONS.BLK"))}, interface{data}, options{settings}, settings{data}, preferences{data, interface, this->settings}, help{data, interface}, planner{data, interface, this->settings}, logs{hours_now()}, pilots{data, interface, logs, definitions}, scores{data, interface, this->settings}, network{interface, this->settings} {
+  network.start = [this](){ start_network(); };
+  network.mission_selection = [this](unsigned int code, int value){ receive_selection(code, value); };
   interface.link_scroll("_map_briefing_subtitle_text", "_map_briefing_subtitle_scrollbar");
   interface.link_scroll("_situation_text", "_situation_scroll_bar");
   interface.number_changed = [this](widget &object, bool final){ planner.number_changed(object, final); };
@@ -82,7 +84,7 @@ void mission_frontend::list() {
   visible("_mission_select_background", false);
   visible("_training_infinite_weapons_button", flow == 2); visible("_training_no_crashes_button", flow == 2);
   for(auto &object : interface.objects()) if(object.action == "notify_mission_selection_level_") object.flags &= ~1u;
-  interface.show("_mission_select_screen");
+  interface.show("_mission_select_screen"); network_controls();
 }
 void mission_frontend::select(int const row) {
   selected = row == selected || row < 0 || static_cast<size_t>(row) >= listed.size() ? -1 : row;
@@ -94,6 +96,7 @@ void mission_frontend::prepare(int const id) {
   auto choice{options};
   choice.infinite_weapons = flow == 2 && interface.named("_training_infinite_weapons_button").on;
   choice.no_crashes = flow == 2 && interface.named("_training_no_crashes_button").on;
+  if(network.selecting()) choice.connection = network.connection();
   result.reset(); prepared = std::make_unique<mission_session>(data, id, choice);
   auto const &definition{prepared->briefing}; flow = definition.flow; zone = definition.zone;
   auto const mid{static_cast<uint32_t>(id)};
@@ -105,7 +108,7 @@ void mission_frontend::prepare(int const id) {
   interface.named("_map_briefing_subtitle_title").text = definition.title;
   interface.named("_map_briefing_subtitle_text").text = text(definition, "Description");
   interface.named("_map_briefing_subtitle_text").start_line = 0;
-  subtitles(true); map(); interface.show("_map_screen");
+  subtitles(true); map(); interface.show("_map_screen"); network_controls();
   if(flow == 4 && settings.animations && movie) movie(zone, definition.level);
   if(flow == 4 && speak) speak(3, flow, zone, definition.level, id);
 }
@@ -152,6 +155,10 @@ std::unique_ptr<mission_session> mission_frontend::takeoff() {
   planner.close(); return std::move(prepared);
 }
 void mission_frontend::complete(std::unique_ptr<mission_session> mission) {
+  if(mission->network && network.peers) {
+    auto const mode{mission->network->lifecycle.mode}; network.completed(*mission->network);
+    if(mode == multiplayer::game_mode::combat || mode == multiplayer::game_mode::multiplayer || mode == multiplayer::game_mode::capture_the_flag) { planner.close(); prepared.reset(); interface.show(mode == multiplayer::game_mode::combat ? "_modem_screen" : "_network_screen"); return; }
+  }
   if(mission->briefing.flow == 1) {
     if(first_quick) { first_quick = false; interface.show("_main_screen"); }
     else if(!invincible_quick) { interface.back(); scores.record(mission->runtime.quick_score, pilot().name); scores.show(); }
@@ -189,6 +196,7 @@ void mission_frontend::log_result(bool const keep) {
     pilot().update(definitions); awards = pilot().awards; last_result = static_cast<unsigned int>(result->mission); logs.save();
   }
   planner.close(); prepared.reset(); result.reset(); interface.back();
+  if(network.peers) { interface.show("_modem_screen"); return; }
   if(flow != 4) list();
   if(pilot().status != 2) show_pilots(flow == 4);
   else if(flow == 4 && !awards) campaign();
@@ -198,6 +206,7 @@ void mission_frontend::back() {
   if(interface.dismiss_popup()) return;
   auto const current{interface.current()};
   if(stop_speech && (current == "_map_screen" || current == "_mission_select_screen" || current == "_situation_screen")) stop_speech();
+  if(network.peers && (current == "_network_screen" || current == "_modem_screen" || (network.selecting() && (current == "_world_screen" || current == "_mission_select_screen" || current == "_map_screen")))) { leave_network(); return; }
   if(current == "_preferences_screen") {
     settings.save(); apply_preferences();
     if(first_launch) { first_launch = false; first_quick = true; invincible_quick = true; zone = preferences.zone; launch_quick(); return; }
@@ -227,6 +236,14 @@ bool mission_frontend::activate(widget &object, int const line) {
   if(action == "notify_log_button_" || action == "notify_mission_select_log_") {
     show_pilots(flow == 4 && interface.current() != "_main_screen" && interface.current() != "_flight_screen"); return true;
   }
+  if(action == "notify_flight_network_button_" || action == "notify_flight_2_player_button_") {
+    try { network.open(action == "notify_flight_2_player_button_", pilot().name); }
+    catch(std::exception const &error) { interface.popup({{error.what(), 0}, {"OK", 0}}, [](int){}); }
+    return true;
+  }
+  if(action == "notify_network_exit_button_" || action == "notify_modem_exit_button_") { leave_network(); return true; }
+  if(network.activate(object)) return true;
+  if(network.selecting() && network.remote_controlled() && (action.starts_with("notify_map_") || action.starts_with("notify_mission_selection_") || action == "notify_takeoff_button_")) return true;
   if(help.activate(object)) return true;
   if(planner.activate(object)) return true;
   if(pilots.activate(object, line)) return true;
@@ -241,11 +258,12 @@ bool mission_frontend::activate(widget &object, int const line) {
   else if(action == "notify_single_button_" || action == "notify_campaign_button_") { flow = action == "notify_single_button_" ? 3 : 4; interface.show("_world_screen"); }
   else if(action == "notify_map_yemen_button_" || action == "notify_map_korea_button_" || action == "notify_map_cyprus_button_") {
     zone = action == "notify_map_yemen_button_" ? 1 : action == "notify_map_korea_button_" ? 2 : 3; preferences.zone = zone;
+    if(network.selecting()) network.send_selection(static_cast<unsigned int>(12 + zone));
     if(flow == 1) launch_quick(); else if(flow == 4) campaign(pilot().campaign.warzone != static_cast<uint32_t>(zone)); else list();
-  } else if(action == "notify_mission_selection_list_") select(line);
-  else if(action == "notify_mission_selection_load_") { if(selected >= 0) prepare(definitions[listed[static_cast<size_t>(selected)]].id); }
+  } else if(action == "notify_mission_selection_list_") { select(line); if(network.selecting()) network.send_selection(17, line); }
+  else if(action == "notify_mission_selection_load_") { if(selected >= 0) { if(network.selecting()) network.send_selection(16); prepare(definitions[listed[static_cast<size_t>(selected)]].id); } }
   else if(action == "notify_situation_ok_button_") { if(campaign_mission == 0) campaign(); else if(campaign_mission > 0) prepare(campaign_mission); }
-  else if(action == "notify_takeoff_button_") departing = prepared != nullptr;
+  else if(action == "notify_takeoff_button_") { departing = prepared != nullptr; if(departing && network.selecting()) network.send_selection(18); }
   else if(action == "notify_debrief_log_button_") log_result(true);
   else if(action == "notify_debrief_do_not_log_button_") log_result(false);
   else if(action == "notify_debrief_retry_mission_button_") { if(prepared) prepare(prepared->briefing.id); }

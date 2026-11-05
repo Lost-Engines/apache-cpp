@@ -15,13 +15,12 @@ void peer_group::refresh() { room.other_players = static_cast<int32_t>(roster.ot
 void peer_group::reorder(std::array<connection, 16> const &previous) {
   std::array<player_replica, 16> players{};
   for(auto &player : players) player.flags = 0xff00;
-  auto const server{previous[state.server].node};
   for(size_t i{0}; i < roster.entries.size(); ++i) {
     auto const node{roster.entries[i].node}; if(!node) continue;
     for(size_t j{0}; j < previous.size(); ++j) if(previous[j].node == node) { players[i] = std::move(state.players[j]); break; }
     players[i].flags = (players[i].flags & ~0xff00u) | static_cast<uint32_t>(i << 8);
   }
-  state.players = std::move(players); state.local = roster.local(); state.server = roster.find(server).value_or(state.local);
+  state.players = std::move(players); state.local = roster.local(); state.server = 0;
   state.players[state.local].name = room.own_name; state.players[state.local].aircraft.model = 64;
   refresh();
 }
@@ -58,6 +57,9 @@ void peer_group::resume() {
 void peer_group::leave() {
   send(packet{message_type::disconnected, state.local, room.own_name}); room.active = state.active = false;
 }
+void peer_group::forget(uint32_t const slot) {
+  if(slot < roster.entries.size() && slot != state.local) roster.remove(roster.entries[slot].node);
+}
 void peer_group::poll(uint32_t const now) {
   if(!room.active) return;
   for(auto &incoming : wire.poll()) {
@@ -73,7 +75,9 @@ void peer_group::poll(uint32_t const now) {
     if(message.type() == message_type::disconnected && !state.active) {
       auto const old{roster.entries}; roster.remove(incoming.node); reorder(old); continue;
     }
-    if(!room.receive(message, *source) && game_packet) game_packet(message, std::bit_cast<int32_t>(now));
+    if(message.type() == message_type::server_state && *source != state.server) continue;
+    if(state.active && game_packet) game_packet(message, std::bit_cast<int32_t>(now));
+    else room.receive(message, *source);
   }
   if(!state.active) {
     auto const previous{roster.entries}; if(roster.expire(now)) reorder(previous);

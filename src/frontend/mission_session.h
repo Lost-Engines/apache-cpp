@@ -11,6 +11,12 @@
 #include "simulation/player_views.h"
 
 namespace apache::frontend {
+struct mission_connection {
+  multiplayer::game_settings game;
+  uint32_t local{0}, server{0};
+  std::array<multiplayer::player_replica, 16> players;
+  bool defer_initialisation{false};
+};
 struct mission_options {
   bool arcade{true};
   bool invulnerable{false}, infinite_weapons{false}, no_crashes{false};
@@ -20,11 +26,13 @@ struct mission_options {
   unsigned int deadband{10};
   std::array<simulation::joystick_axis, 4> axes;
   std::optional<multiplayer::crew_role> shared_seat;
+  std::optional<mission_connection> connection;
 };
 // Platform-independent live mission. Elapsed time is supplied in original 200 Hz ticks.
 class mission_session {
   mission_options settings;
   simulation::mission_random_state initial_seeds;
+  std::optional<resources::mission_definition> network_definition;
   uint32_t library_random{1};
   unsigned int keyboard_remainder{0};
   size_t frame_number{0};
@@ -41,6 +49,7 @@ class mission_session {
   std::optional<simulation::view_target> missile_target(size_t index);
   void command(uint16_t key);
   void crash(bool airborne);
+  void send_frame();
 public:
   resources::mission_briefing briefing;
   std::string zone;
@@ -66,7 +75,9 @@ public:
   std::function<void(unsigned int, int32_t, int32_t)> play_sound;
   std::function<void(simulation::flight_event)> flight_sound;
   // The transport services incoming packets here, at the original render barrier.
-  std::function<void()> wait_network;
+  std::function<void()> wait_network, poll_network;
+  std::function<int32_t()> network_clock;
+  int32_t network_wait_ticks{0};
   mission_session(resources::data_store const &data, int mission_id, mission_options options = {});
   mission_session(resources::data_store const &data, resources::mission_briefing briefing, mission_options options = {}, resources::mission_definition const *edited = nullptr);
   mission_options const &launch_options() const { return settings; }
@@ -79,6 +90,8 @@ public:
   void request_end(unsigned int cause);
   void detail(unsigned int level);
   void step(unsigned int ticks);
+  void initialise_remote_players();
+  void send_server_frame();
   void draw();
 };
 } // namespace apache::frontend

@@ -92,4 +92,25 @@ void mfd_renderer::status(framebuffer &target, rectangle const area, uint32_t co
     field(warning.name, warning.bit == 0x1000 ? "DAMAGED" : "FAILED", y); ++row;
   }
 }
+void mfd_renderer::scores(framebuffer &target, rectangle const area, multiplayer_scores &state, int32_t const delta) const {
+  off(target, area);
+  auto const saved_clip{target.clip}; target.clip = area;
+  projection2 const plane{area, {-0x100000, -0x100000, 0x100000, 0x100000}};
+  auto const text{[&](std::string_view value, int32_t x, int32_t y, bool right = false){
+    auto const point{plane.project({x, y})}; font.draw(target, value, point.x - (right ? font.width(value) - 1 : 0), point.y, 222);
+  }};
+  text("KILLS:", -0xf3333, 0xe6666);
+  if(auto const line{plane.clip_line({-0xf3333, 0xb3333}, {0xf3333, 0xb3333})}) rasterizer{target}.line((*line)[0], (*line)[1], 222);
+  bool const second{state.players.size() > 8 && state.timer >= 1000};
+  if(state.players.size() > 8) {
+    state.timer = math::add(state.timer, math::multiply_q31(delta, 200));
+    if(second && state.timer > 2000) state.timer = 0;
+  }
+  size_t const first{second ? 8u : 0u};
+  for(size_t i{first}; i < state.players.size(); ++i) {
+    int32_t const y{static_cast<int32_t>(576716.8 - static_cast<double>(i - first) * 214958.08)};
+    text(state.players[i].first, -0xf3333, y); text(std::to_string(state.players[i].second), 0xf3333, y, true);
+  }
+  target.clip = saved_clip;
+}
 } // namespace apache::render

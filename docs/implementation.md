@@ -4,7 +4,7 @@ The reconstruction follows the January 1998 Windows software engine using data s
 
 The sibling analysis project supplies original-code reference runs and independent numerical tests. C++ comparisons are added as each subsystem is implemented. Passing original-against-original repeatability tests is not counted as C++ acceptance.
 
-The complete game is undergoing final release verification. Single-player campaigns and LAN multiplayer pass original-instruction, deterministic-frame and real-window comparisons in normal and sanitizer builds. The detailed entries below retain the implementation history.
+The complete game is ready for human beta testing. Single-player campaigns and LAN multiplayer pass original-instruction, deterministic-frame and real-window comparisons in normal and sanitizer builds. All six Debug/Release CI configurations pass, and the three platform packages are published. The detailed entries below retain the implementation history.
 
 Current implementation:
 
@@ -367,3 +367,11 @@ A clean Release build with bundled GLFW and static compiler runtimes passes all 
 First-launch checks verify all 1,504 reference files (305,373,380 bytes), image extraction, missing-file repair, preserved existing files, remembered paths, checksum checking and temporary download cleanup. These use the existing local reference image and temporary destinations.
 
 Packaging checks exercise tar.gz and zip creation, compare every archive member with the explicit installed list, and reject extra files, hidden files, unexpected directories and file/directory symbolic links. The runtime contains eight files: the executable, setup helper, project documents and dependency licences. Tests and original game data are not included.
+
+### Beta release verification
+
+Commit `84d418b` passed all six Debug/Release CI configurations on Linux x86-64, Windows x86-64 and macOS Apple Silicon. The release job published the three runtime archives and their SHA-256 checksums. Downloaded archives contain exactly the nine intended runtime files, with no game data or validation captures. The published Linux executable also reproduces the original main menu's 307,200 pixels exactly.
+
+The first macOS run exposed a timing assumption in the localhost transport test. It now waits up to two seconds for each expected event, while retaining the payload, single-delivery and sender checks. It passes both macOS configurations, normal/sanitizer tests locally and 50 repeated optimized runs. No game behaviour changed for this fix.
+
+The normal workspace build is current and passes all five CTest targets. Physical joysticks, host audio devices and subjective playability are the remaining human beta-test items. The shipped software-reference gameplay has no known unfinished integration path.

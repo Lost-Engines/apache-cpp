@@ -7,6 +7,11 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 include(CTest)
 
 add_library(apache_core
+  src/multiplayer/peer_group.cpp src/multiplayer/peer_group.h
+  src/multiplayer/connections.cpp src/multiplayer/connections.h
+  src/multiplayer/lobby.cpp src/multiplayer/lobby.h
+  src/platform/datagram.cpp src/platform/datagram.h
+  src/multiplayer/transport.cpp src/multiplayer/transport.h
   src/multiplayer/packet.cpp src/multiplayer/packet.h
   src/multiplayer/crew.cpp src/multiplayer/crew.h
   src/multiplayer/replication.cpp src/multiplayer/replication.h
@@ -284,10 +289,17 @@ add_executable(apache
 target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL pcm_device)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
+if(WIN32)
+  target_link_libraries(apache_core PUBLIC ws2_32)
+endif()
+
 add_executable(apache_inspect src/inspect_network.cpp src/inspect_network.h src/inspect_briefing.cpp src/inspect_briefing.h src/inspect_audio.cpp src/inspect_audio.h src/inspect_menu.cpp src/inspect_menu.h src/inspect_debrief.cpp src/inspect_debrief.h src/inspect_logbook.cpp src/inspect_logbook.h src/inspect_session.cpp src/inspect_session.h src/inspect_cameras.cpp src/inspect_cameras.h src/inspect_sensors.cpp src/inspect_sensors.h src/inspect_targeting.cpp src/inspect_targeting.h src/inspect_player_weapons.cpp src/inspect_controls.cpp src/inspect.cpp src/inspect_flight.cpp src/inspect_flight.h src/inspect_arcade.cpp src/inspect_arcade.h src/inspect_weapons.cpp src/inspect_weapons.h src/inspect_navigation.cpp src/inspect_navigation.h src/inspect_collisions.cpp src/inspect_collisions.h src/inspect_seekers.cpp src/inspect_seekers.h src/inspect_projectiles.cpp src/inspect_projectiles.h src/inspect_projectile_pool.cpp src/inspect_projectile_pool.h src/inspect_targets.cpp src/inspect_targets.h src/inspect_tracking.cpp src/inspect_tracking.h src/inspect_countermeasures.cpp src/inspect_countermeasures.h src/inspect_damage.cpp src/inspect_damage.h src/inspect_blasts.cpp src/inspect_blasts.h src/inspect_combat_effects.cpp src/inspect_combat_effects.h src/inspect_mission_combat.cpp src/inspect_mission_targets.cpp src/inspect_mission_spatial.cpp src/inspect_mission_radar.cpp src/inspect_mission_scenery.cpp src/inspect_combat_update.cpp src/inspect_war_grid.cpp src/inspect_battles.cpp src/inspect_patrol.cpp src/inspect_actor_targeting.cpp src/inspect_target_search.cpp src/inspect_actor_reactions.cpp src/inspect_actor_firing.cpp src/inspect_firing.cpp src/inspect_firing.h)
 target_link_libraries(apache_inspect PRIVATE apache_core)
 
 if(BUILD_TESTING)
+  add_executable(transport_tests tests/transport.cpp)
+  target_link_libraries(transport_tests PRIVATE apache_core)
+  add_test(NAME transport_tests COMMAND transport_tests)
   add_executable(network_tests tests/network.cpp)
   target_link_libraries(network_tests PRIVATE apache_core)
   add_test(NAME network_tests COMMAND network_tests)

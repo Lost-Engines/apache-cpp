@@ -4,6 +4,7 @@
 #include "multiplayer/replication.h"
 #include "multiplayer/rules.h"
 #include "multiplayer/lifecycle.h"
+#include "multiplayer/lobby.h"
 #include "multiplayer/casualties.h"
 #include "simulation/remote_weapons.h"
 #include "simulation/mission_end.h"
@@ -25,6 +26,39 @@ void inspect_network(std::istream &input, std::ostream &output) {
   while(std::getline(input, line)) {
     if(line.empty()) continue;
     std::istringstream in{line}; std::string command; in >> command;
+    if(command == "lobby") {
+      multiplayer::replication state; multiplayer::lobby lobby{state}; unsigned int mode, source;
+      in >> state.local >> state.server >> state.active >> mode >> lobby.flow >> lobby.other_players >> lobby.remote_rank >> lobby.second_product >> lobby.selected_mission >> lobby.rank >> lobby.active >> lobby.cd_available >> lobby.cd_found >> std::quoted(lobby.own_name) >> std::quoted(lobby.last_message);
+      lobby.mode = static_cast<multiplayer::game_mode>(mode);
+      for(auto &value : lobby.preferences) in >> value;
+      for(auto &value : lobby.two_player) in >> value;
+      for(auto &player : state.players) in >> player.flags >> player.aircraft.model >> std::quoted(player.name);
+      in >> source; std::string hex; in >> hex;
+      if(!in) throw std::runtime_error{"Incomplete lobby context"};
+      std::ostringstream events;
+      lobby.events.connection_name = [&](auto id, auto name){ events << " name " << id << ' ' << std::quoted(std::string{name}); };
+      lobby.events.identify = [&](auto id){ events << " identify " << id; };
+      lobby.events.announce = [&](){ events << " announce"; };
+      lobby.events.refresh = [&](){ events << " refresh"; };
+      lobby.events.recount = [&](){ events << " recount"; };
+      lobby.events.preferences_changed = [&](){ events << " preferences"; };
+      lobby.events.reset_connection = [&](){ events << " reset"; };
+      lobby.events.settings_changed = [&](){ events << " settings"; };
+      lobby.events.start = [&](){ events << " start"; };
+      lobby.events.buttons = [&](bool enabled){ events << " buttons " << enabled; };
+      lobby.events.selection = [&](unsigned int choice, auto const &arguments){ events << " selection " << choice; for(auto value : arguments) events << ' ' << value; };
+      lobby.events.message = [&](auto text){ events << " message " << std::quoted(std::string{text}); };
+      lobby.events.chat = [&](auto text){ events << " chat " << std::quoted(std::string{text}); };
+      lobby.events.cd_reply = [&](auto id){ events << " cd-reply " << id; };
+      auto const message{multiplayer::packet::decode(hex_bytes(hex))};
+      if(!message) throw std::runtime_error{"Invalid lobby packet"};
+      lobby.receive(*message, source);
+      output << lobby.other_players << ' ' << lobby.remote_rank << ' ' << lobby.second_product << ' ' << lobby.selected_mission << ' ' << lobby.rank << ' ' << lobby.active << ' ' << lobby.cd_found << ' ' << std::quoted(lobby.own_name) << ' ' << std::quoted(lobby.last_message);
+      for(auto value : lobby.preferences) output << ' ' << value;
+      for(auto value : lobby.two_player) output << ' ' << value;
+      for(auto const &player : state.players) output << ' ' << player.flags << ' ' << player.aircraft.model << ' ' << std::quoted(player.name);
+      output << events.str() << '\n'; continue;
+    }
     if(command == "mission-end") {
       simulation::mission_end state; bool invulnerable, no_crashes; unsigned int reason, frames;
       in >> state.cause >> state.active >> state.connected >> state.countdown >> state.advance_frames >> state.quitting >> invulnerable >> no_crashes >> reason >> frames;

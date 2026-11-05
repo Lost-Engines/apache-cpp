@@ -319,3 +319,10 @@ Damage callbacks now send the original casualty batches, local death notificatio
 Normal and sanitizer builds match 729 casualty source/notification cases in four warzones, including all seven mode values, 87 destroyed launchers and both server roles. The comparison covers 414 packets, 11,614 defined bytes and 58 score notices. Original destruction/effect paths retain their separate scene comparisons.
 
 The expanded shared-cockpit matrix passes all four warzones, both resolutions and both flight models: 3,200 seat frames, 240,000 state fields and 315,568 meaningful crew bytes. Its 665 complete safe frames match 129,177,600 pixels. This suite isolates crew exchange; the full APNET replay separately covers firing, countermeasures, collision and crash messages.
+
+
+### LAN transport and lobby receiver
+
+APNET now has a nonblocking UDP transport, with original packet contents inside a small versioned node-identity envelope. The connection table sorts peers while in the lobby, fixes connection slots during flight, and expires absent lobby peers after 20 seconds. Sockets are created only when requested. Loopback tests cover discovery, names, preferences, readiness, menu messages, flight delivery, return to lobby and disconnect, along with malformed datagrams and a full 16-player roster. Both normal and sanitizer CTest runs pass all five targets.
+
+The menu branches of the original receiver match 1,200 cases and 82,414 state/event fields in both builds, including all twelve lobby message types. Trace SHA-256: `142cbd368bcbe9c6cc7bd80cd3951ca692ddfd668823ed038f0a5e44a541cc54`. The full shared-seat matrix also passes the sanitizer run with the same 3,200 frames and trace digest as the normal build. Connecting the actual network screens and all multiplayer mission modes remains in progress. CI remains disabled.

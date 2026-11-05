@@ -79,6 +79,35 @@ bool play_clip(apache::resources::data_store const &data, apache::frontend::pres
   }
   return true;
 }
+// goodbye_sequence_: three 50-retrace fades around an 800-tick hold.
+// Ordinary keys and the confirming mouse click do not skip this sequence.
+void play_goodbye(apache::resources::data_store const &data, apache::platform::window &window,
+                  apache::render::framebuffer &menu, events &input) {
+  auto const picture{apache::resources::read_iff(data.read("MENUSCRN/GOODBYE.LBM"))};
+  // load_graphics_ clips the 640x512 artwork to the 640x480 menu screen.
+  apache::render::framebuffer goodbye{640, 480}; goodbye.blit(picture, 0, 0);
+  auto const menu_colours{menu.image.colours};
+  glfwSetInputMode(window.get(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+  auto const start{std::chrono::steady_clock::now()};
+  while(window.poll()) {
+    input.keys.clear(); input.clicks.clear();
+    double const elapsed{std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count()};
+    int const retrace{static_cast<int>(std::min(elapsed * 60, 390.0))};
+    auto &frame{retrace < 50 ? menu : goodbye};
+    auto const &base{retrace < 50 ? menu_colours : picture.colours};
+    int const fade{retrace < 50 ? retrace : retrace < 100 ? 99 - retrace : retrace < 340 ? 0 : retrace - 340};
+    apache::render::palette_rgb colours;
+    for(size_t i{0}; i != 256; ++i) { colours[i * 3] = base[i].r; colours[i * 3 + 1] = base[i].g; colours[i * 3 + 2] = base[i].b; }
+    apache::render::palette_fader const fader{false, 0, 0, 256, static_cast<int32_t>(int64_t{fade} * INT32_MAX / 50), {0, 0, 0}};
+    colours = apache::render::apply_faders(colours, std::span{&fader, 1});
+    for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {colours[i * 3], colours[i * 3 + 1], colours[i * 3 + 2]};
+    window.present(frame);
+    if(retrace == 390) return;
+    auto const next{start + std::chrono::duration<double>{(retrace + 1) / 60.0}};
+    double const remaining{std::chrono::duration<double>(next - std::chrono::steady_clock::now()).count()};
+    if(remaining > 0) glfwWaitEventsTimeout(remaining);
+  }
+}
 } // namespace
 
 int main(int const argc, char const *const argv[]) try {
@@ -313,6 +342,7 @@ int main(int const argc, char const *const argv[]) try {
     auto const cursor{window.cursor_position()};
     menu.move(cursor ? static_cast<int>(cursor->x) : -1, cursor ? static_cast<int>(cursor->y) : -1);
     for(auto const &click : input.clicks) menu.button(click.down, click.button);
+    if(menu.quit_requested()) break;
     input.clicks.clear();
     for(auto const &key : input.keys) {
       if(!key.down) continue;
@@ -357,6 +387,7 @@ int main(int const argc, char const *const argv[]) try {
     }
     if(frame_limit && ++frames == frame_limit) break;
   }
+  if(menu.quit_requested() && !glfwWindowShouldClose(window.get())) play_goodbye(data, window, frame, input);
   frontend.logs.save(); frontend.settings.save();
   return EXIT_SUCCESS;
 } catch(std::exception const &error) {

@@ -375,3 +375,10 @@ Commit `84d418b` passed all six Debug/Release CI configurations on Linux x86-64,
 The first macOS run exposed a timing assumption in the localhost transport test. It now waits up to two seconds for each expected event, while retaining the payload, single-delivery and sender checks. It passes both macOS configurations, normal/sanitizer tests locally and 50 repeated optimized runs. No game behaviour changed for this fix.
 
 The normal workspace build is current and passes all five CTest targets. Physical joysticks, host audio devices and subjective playability are the remaining human beta-test items. The shipped software-reference gameplay has no known unfinished integration path.
+
+
+### Goodbye presentation
+
+Confirming Exit now runs the original `goodbye_sequence_`: fade the menu out, fade `MENUSCRN/GOODBYE.LBM` in, hold it for four seconds, then fade to black before quitting. Each fade lasts 50 presentation steps at 60 Hz. The 640 × 512 artwork is cropped to the 640 × 480 menu screen, as in the original loader. Intro skipping and disabled menu animations do not suppress this sequence, and ordinary keys do not interrupt it.
+
+The analysis tool `check_cpp_goodbye.py` records the original routine's 151 fader levels, 150 retraces, two screen downloads and 800-tick wait. Normal and AddressSanitizer/UndefinedBehaviorSanitizer window checks reproduce all 307,200 RGB pixels, preserve the four-second hold after Escape/Enter/Space input, and complete the fades before process exit. Choosing No returns to the main menu. Validation uses private Xvfb displays and temporary saves.

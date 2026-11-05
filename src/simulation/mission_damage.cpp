@@ -33,6 +33,7 @@ void mission_damage::kill(target_identity const &id, target_identity const &sour
     if(invulnerable) return;
     combat.attention[*index].damage = combat.attention[*index].processed_damage = 0;
     if(events.player) events.player(damage_action::kill, source);
+    if(events.player_killed) events.player_killed(source);
     return;
   }
   if(events.killed && source.kind != target_kind::none) events.killed(id, source);

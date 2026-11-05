@@ -311,3 +311,11 @@ Original uninitialized memory and out-of-bounds effects are excluded. Invalid re
 The reference engine loads and projects super-feature vertices but never submits their faces. The resource inspection commands can render those records; the game scene preserves their absence.
 
 Embedded resources currently use the January 1998 software `APACHE95.EXE`, loaded from `SOFTWARE/APACHE95.EXE` on the selected CD or from the installation root. Other executable layouts are not silently interpreted using those offsets.
+
+### Outgoing casualties and wider shared-seat coverage
+
+Damage callbacks now send the original casualty batches, local death notifications and remote-player kill notifications. Score updates and notices follow the original client/server branches. Source allegiance ignores the destroyed flag, so a missile landing after its launcher dies is still attributed correctly.
+
+Normal and sanitizer builds match 729 casualty source/notification cases in four warzones, including all seven mode values, 87 destroyed launchers and both server roles. The comparison covers 414 packets, 11,614 defined bytes and 58 score notices. Original destruction/effect paths retain their separate scene comparisons.
+
+The expanded shared-cockpit matrix passes all four warzones, both resolutions and both flight models: 3,200 seat frames, 240,000 state fields and 315,568 meaningful crew bytes. Its 665 complete safe frames match 129,177,600 pixels. This suite isolates crew exchange; the full APNET replay separately covers firing, countermeasures, collision and crash messages.

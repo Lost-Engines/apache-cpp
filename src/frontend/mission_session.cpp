@@ -138,6 +138,7 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     if(crew && landing.grade) crew->outgoing.pilot.landing = static_cast<uint8_t>(landing.grade);
   };
   runtime.events.killed = [this](auto const &target, auto const &source){
+    if(network) network->record_kill(target, source);
     uint32_t const who{source.kind == simulation::target_kind::mobile ? source.index : UINT32_MAX};
     if(target.kind == simulation::target_kind::mobile) records.add({{8, static_cast<uint32_t>(runtime.timing.now), who, 0, 0, target.index}});
     else if(target.kind == simulation::target_kind::scenery) records.add({{9, static_cast<uint32_t>(runtime.timing.now), who, static_cast<uint32_t>(target.layer), 0, target.index}});
@@ -153,6 +154,8 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     network->state.seat = *options.shared_seat; network->state.local = static_cast<uint32_t>(*options.shared_seat);
     network->state.players[network->state.local].name = *options.shared_seat == multiplayer::crew_role::pilot ? "PILOT" : "GUNNER";
     network->lifecycle.mode = multiplayer::game_mode::pilot_gunner;
+    runtime.pilot->realistic.game_mode = 3; runtime.damage->environment.mode = 3;
+    runtime.events.player_killed = [this](auto const &source){ network->player_killed(source); };
     auto const player_index{*runtime.timing.player};
     runtime.actors.units[player_index].network = static_cast<int32_t>(network->state.local);
     if(!network->bind(network->state.local, player_index)) throw std::runtime_error{"Cannot bind shared aircraft"};
@@ -350,8 +353,7 @@ void mission_session::step(unsigned int const ticks) {
     auto const packet{crew->transmit(ticks)};
     if(network->send) {
       network->send(packet);
-      if(auto casualties{network->casualties.take_mobile(network->state.local, network->state.players[network->state.local].name)}) network->send(*casualties);
-      if(auto casualties{network->casualties.take_scenery(network->state.local, network->state.players[network->state.local].name)}) network->send(*casualties);
+      network->send_casualties();
     }
     runtime.random.global_seed = 1;
   }

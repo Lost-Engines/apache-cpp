@@ -28,6 +28,11 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
     }
     return 0;
   }};
+  auto const decode_identity{[&](uint32_t const value) -> simulation::target_identity {
+    if(value >= 200001 && value < 300001) return {simulation::target_kind::mobile, 0, spatial.mobile_id(value - 200001)};
+    if(value && value < 200001) return {simulation::target_kind::scenery, (value - 1) / 100000, (value - 1) % 100000};
+    return {};
+  }};
   auto const reference{[&](simulation::target_reference const *target){
     if(!target || target->identity.kind == simulation::target_kind::none) { output << " 0 0 0 0"; return; }
     auto const &t{target->identity};
@@ -249,6 +254,28 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       for(auto &player : network.state.players) player.aircraft.model = 64;
       network.remote_killed = [&](auto const &target, uint8_t source){ output << "remote-kill " << identity(target) << ' ' << static_cast<unsigned int>(source) << '\n'; };
     }
+    else if(command == "network-owner") { size_t index; input >> index; if(index >= actors.units.size()) throw std::runtime_error{"Invalid network owner"}; spatial.player = index; }
+    else if(command == "network-output") {
+      input >> network.state.players.at(network.state.local).name;
+      network.send = [&](auto const &message){
+        output << "network-send ";
+        for(auto byte : message.bytes()) output << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(byte);
+        output << std::dec << std::setfill(' ') << '\n';
+      };
+    }
+    else if(command == "network-source-flags") {
+      uint32_t code, flags; input >> code >> flags; auto const id{decode_identity(code)};
+      if(id.kind == simulation::target_kind::mobile) mobiles.at(id.index).status = flags;
+      else if(id.kind == simulation::target_kind::scenery) (id.layer ? scene.extra : scene.base).at(id.index).status = static_cast<uint16_t>(flags);
+    }
+    else if(command == "network-score-context") {
+      input >> network.state.active >> network.state.client_server >> network.state.server;
+      for(auto &player : network.state.players) input >> player.score;
+      events.notice = [&](auto text, auto priority, auto lifetime){ output << "network-notice " << std::quoted(std::string{text}) << ' ' << priority << ' ' << lifetime << '\n'; };
+    }
+    else if(command == "network-record-kill") { uint32_t target, source; input >> target >> source; network.record_kill(decode_identity(target), decode_identity(source)); }
+    else if(command == "network-player-killed") { uint32_t source; input >> source; network.player_killed(decode_identity(source)); }
+    else if(command == "network-send-casualties") network.send_casualties();
     else if(command == "network-receive") {
       int32_t now; std::string hex; input >> now >> hex; resources::bytes bytes;
       for(size_t i{0}; i < hex.size(); i += 2) bytes.push_back(static_cast<uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));

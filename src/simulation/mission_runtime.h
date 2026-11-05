@@ -17,7 +17,7 @@ struct mission_runtime_events {
   std::function<void(size_t, projectile_record const &)> launched;
   std::function<void(size_t, projectile_record &, projectile_event_info const &)> projectile;
   std::function<void(target_identity const &, target_identity const &)> killed;
-  std::function<void(target_identity const &)> collision;
+  std::function<void(target_identity const &)> collision, player_killed;
   std::function<void(unsigned int, bool)> sound;
   std::function<void(std::string_view)> message;
   std::function<void(std::string_view, int32_t, int32_t)> notice;

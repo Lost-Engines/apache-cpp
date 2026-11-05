@@ -63,6 +63,7 @@ mission_runtime::mission_runtime(resources::data_store const &data, std::string 
     callbacks.score = [this, difficulty](int32_t model){ quick_score = math::add(quick_score, quick_start_points(*models.at(static_cast<size_t>(model)), difficulty)); };
     callbacks.killed = [this](auto const &target, auto const &source){ if(events.killed) events.killed(target, source); };
     callbacks.player = [this](auto action, auto const &source){ if(player_damage) player_damage->apply(action, source, targets.now); };
+    callbacks.player_killed = [this](auto const &source){ if(events.player_killed) events.player_killed(source); };
     callbacks.sound = [this](unsigned int id, bool cockpit){ if(events.sound) events.sound(id, cockpit); };
     callbacks.message = [this](std::string_view text){ if(events.message) events.message(text); if(events.notice) events.notice(text, 2, 200); };
     damage = std::make_unique<mission_damage>(mission, scene, actors, spatial, targets, combat, *weapons, models, terrain, structures, mobiles, trig, random, weapon_random, tables.skill(difficulty), [this](int32_t x, int32_t y){ return static_cast<uint8_t>(resources::surface_type(features, super_features, x, y)); }, callbacks);

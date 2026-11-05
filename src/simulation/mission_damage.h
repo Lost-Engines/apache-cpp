@@ -7,6 +7,7 @@ namespace apache::simulation {
 struct mission_damage_callbacks {
   std::function<void(target_identity const &, target_identity const &)> killed;
   std::function<void(damage_action, target_identity const &)> player;
+  std::function<void(target_identity const &)> player_killed;
   std::function<void(unsigned int, bool)> sound;
   std::function<void(std::string_view)> message;
   std::function<void(int32_t)> score;

@@ -52,6 +52,67 @@ mission_network::mission_network(mission_runtime &mission) : runtime{mission}, l
     if(send) send(multiplayer::scores(state.local, state.players[state.local].name, values));
   };
 }
+void mission_network::send_player_kill(uint32_t const victim) {
+  if(!enabled || !state.active || !send || state.local >= state.players.size() || !runtime.spatial.player) return;
+  auto &player{state.players[state.local]};
+  if(state.client_server) {
+    if(state.server == state.local) {
+      player.score = math::add(player.score, 1);
+      if(lifecycle.events.scores) lifecycle.events.scores();
+    }
+    if(runtime.events.notice) runtime.events.notice("Score : " + std::to_string(player.score), 3, 200);
+  }
+  auto const &unit{runtime.actors.units[*runtime.spatial.player]};
+  send(multiplayer::event(multiplayer::message_type::killed_player, state.local, player.name,
+    static_cast<int32_t>(victim), static_cast<int32_t>(unit.location.task)));
+}
+void mission_network::player_killed(target_identity const &source) {
+  if(!runtime.spatial.player || runtime.actors.units[*runtime.spatial.player].destroyed) return;
+  if(source.kind == target_kind::scenery || (source.kind == target_kind::mobile && runtime.spatial.actor_index(source.index))) {
+    send_player_kill(static_cast<uint32_t>(runtime.actors.units[*runtime.spatial.player].serial));
+  }
+}
+void mission_network::record_kill(target_identity const &target, target_identity const &source) {
+  if(!enabled || lifecycle.mode == multiplayer::game_mode::single_player) return;
+  auto const source_actor{source.kind == target_kind::mobile ? runtime.spatial.actor_index(source.index) : std::nullopt};
+  uint32_t allegiance{0};
+  if(source_actor) allegiance = runtime.actors.units[*source_actor].object.status;
+  else if(source.kind == target_kind::scenery && runtime.structures.contains(source.layer, source.index)) allegiance = runtime.structures.at(source.layer, source.index).status;
+  else return;
+  auto const mode{lifecycle.mode};
+  uint8_t cause{static_cast<uint8_t>(((allegiance >> 1) & 3) == 1 ? 1 : 2)};
+  if(mode == multiplayer::game_mode::apache_vs_hind) cause = static_cast<uint8_t>(3 - cause);
+  if(source_actor && ((state.local < 2 && source_actor == actor(1 - state.local)) || (mode == multiplayer::game_mode::pilot_gunner && source_actor == runtime.spatial.player))) cause = 3;
+  bool const cooperative{mode == multiplayer::game_mode::single_missions || mode == multiplayer::game_mode::pilot_gunner || mode == multiplayer::game_mode::apache_vs_hind};
+  if(target.kind == target_kind::scenery) {
+    if(cooperative && runtime.structures.contains(target.layer, target.index)) {
+      auto const &object{runtime.structures.at(target.layer, target.index)};
+      if(!(object.status & 1)) casualties.scenery(object.x, object.y, cause);
+    }
+    return;
+  }
+  auto const index{target.kind == target_kind::mobile ? runtime.spatial.actor_index(target.index) : std::nullopt};
+  if(!index || index == runtime.spatial.player) return;
+  auto const &unit{runtime.actors.units[*index]}; if(unit.object.status & 1) return;
+  if(cooperative) {
+    auto task{static_cast<int32_t>(unit.location.task)};
+    if(mode == multiplayer::game_mode::apache_vs_hind && task < 2) task = 1 - task;
+    casualties.mobile(task, unit.serial, cause);
+  }
+  if(source_actor == runtime.spatial.player && source_actor && !unit.destroyed) {
+    for(uint32_t connection{0}; connection < assignments.size(); ++connection) if(assignments[connection] == index) {
+      if(lifecycle.events.remove) lifecycle.events.remove(*index);
+      send_player_kill(connection);
+      break;
+    }
+  }
+}
+void mission_network::send_casualties() {
+  if(!enabled || !state.active || !send || state.local >= state.players.size()) return;
+  auto const &name{state.players[state.local].name};
+  if(auto message{casualties.take_mobile(state.local, name)}) send(*message);
+  if(auto message{casualties.take_scenery(state.local, name)}) send(*message);
+}
 std::optional<size_t> mission_network::actor(uint32_t const connection) const {
   if(connection >= state.players.size()) return {};
   return assignments[connection];

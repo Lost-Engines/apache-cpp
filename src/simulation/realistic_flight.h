@@ -39,6 +39,7 @@ struct flight_environment {
   std::function<math::pose(math::pose const&)> place;
   std::function<void(realistic_flight&)> leave_carrier;
   int32_t carrier_deck{0};
+  std::function<void()> landing_award;
 };
 struct flight_step_result {
   flight_events events;

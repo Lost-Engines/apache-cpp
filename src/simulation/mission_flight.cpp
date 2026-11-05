@@ -23,6 +23,7 @@ mission_flight::mission_flight(resources::mission_definition const &definition, 
     auto const &route{mission.tasks.at(unit.location.task).actors.at(unit.location.group).waypoints};
     auto const &target{route.at(*unit.waypoint).position}; start.heading = trig.arctangent(math::subtract(target[0], position[0]), math::subtract(target[1], position[1]));
   }
+  realistic_world.landing_award = arcade_world.landing_award = [this](){ if(landing_award) landing_award(); };
   realistic_world.carrier_deck = deck();
   if(arcade_mode) { arcade.initialise(start, trig, arcade_world); unit.angles[1] = unit.angles[2] = 0; }
   else realistic.initialise(start, trig, realistic_world);
@@ -82,6 +83,50 @@ void mission_flight::receive_shared(flight_readings const &state, bool const lan
   auto &engine{arcade_mode ? arcade.power : realistic.dynamics.power}; engine.endurance = endurance; model_weight = weight;
   if(arcade_mode) arcade.landed = landed; else realistic.landed = landed;
 }
+void mission_flight::reposition(math::vector3 const &position) {
+  if(arcade_mode) { arcade.x = position[0]; arcade.y = position[1]; arcade.z = position[2]; }
+  else { realistic.dynamics.x = position[0] / 256; realistic.dynamics.y = position[1] / 256; realistic.dynamics.z = position[2] / 256; }
+  auto &display{arcade_mode ? arcade.readings : realistic.readings};
+  display.position.position = position; display.position = place(display.position); synchronize();
+}
+void mission_flight::refuel(double const fuel) {
+  auto &engine{arcade_mode ? arcade.power : realistic.dynamics.power};
+  engine.weight = arcade_mode ? fuel - engine.fuel + engine.weight : fuel + model_weight;
+  engine.fuel = fuel;
+  if(fuel > 0) engine.faults &= ~0x300000u;
+  else if(fuel == 0) engine.faults |= 0x300000;
+}
+void mission_flight::restart(int const flow, double const fuel) {
+  auto &unit{actors.units[player]};
+  flight_start start; start.position = unit.object.world.position; start.on_carrier = on_carrier(); start.object_heading = unit.angles[0];
+  start.dry_weight = model_weight; start.fuel = fuel; start.quick_flight = flow == 1;
+  start.wind_strength = realistic.dynamics.wind_strength; start.wind_direction = realistic.wind_direction;
+  start.ground_height = realistic_world.height(start.position[0], start.position[1]);
+  auto position{start.position};
+  if(!arcade_mode) for(size_t i{0}; i < 2; ++i) position[i] = (position[i] / 256) * 256;
+  if(unit.waypoint) {
+    auto const &target{mission.tasks.at(unit.location.task).actors.at(unit.location.group).waypoints.at(*unit.waypoint).position};
+    start.heading = trig.arctangent(math::subtract(target[0], position[0]), math::subtract(target[1], position[1]));
+  }
+  if(arcade_mode) {
+    auto const old{arcade}; arcade.initialise(start, trig, arcade_world);
+    auto const pose{arcade.readings.position}; arcade.readings = old.readings; arcade.readings.position = pose;
+    arcade.power = old.power; arcade.power.weight = 14058 + fuel - old.power.fuel + fuel; arcade.power.fuel = fuel; arcade.power.faults = 0;
+    arcade.power.rotor_sound = 1; arcade.power.overheat_message = false; arcade.power.overtorque_timer = 0;
+    arcade.delta_heading = old.delta_heading; arcade.delta_throttle = old.delta_throttle;
+    arcade.delta_forward_velocity = old.delta_forward_velocity; arcade.delta_lateral_velocity = old.delta_lateral_velocity;
+    arcade.infinite_fuel = old.infinite_fuel; arcade.invulnerable = old.invulnerable; arcade.no_crashes = old.no_crashes;
+    unit.angles[1] = unit.angles[2] = 0;
+  } else {
+    auto const old{realistic}; realistic.initialise(start, trig, realistic_world);
+    realistic.readings.airspeed = old.readings.airspeed; realistic.readings.sidespeed = old.readings.sidespeed;
+    realistic.readings.climb = old.readings.climb; realistic.readings.torque = old.readings.torque; realistic.readings.fuel = old.readings.fuel;
+    realistic.infinite_fuel = old.infinite_fuel; realistic.invulnerable = old.invulnerable; realistic.no_crashes = old.no_crashes; realistic.game_mode = old.game_mode;
+    realistic.pull_up_timer = old.pull_up_timer; realistic.dynamics.power.warning_timer = old.dynamics.power.warning_timer;
+  }
+  realistic.died = arcade.died = [this](){ if(died) died(); };
+  collision_model = 0; hit_actor.reset(); synchronize();
+}
 void mission_flight::request_death(unsigned int const cause) {
   if(!arcade_mode) realistic.request_death(cause);
   else arcade.request_death(cause);
@@ -132,6 +177,7 @@ std::optional<landing_result> mission_flight::collide(math::vector3 const &previ
     auto const result{evaluate_landing((forward - speed) * 0.00390625, vertical, surface(display.position.position[0], display.position.position[1]), true, death())};
     if(result.landed) { if(arcade_mode) arcade.landed = true; else realistic.landed = true; }
     if(result.death) request_death(result.death);
+    if(result.award && landing_award) landing_award();
     synchronize(); return result;
   }
   if(!on_carrier()) { request_death(2); if(mobile_collision) mobile_collision(); if(hit_actor && destroy) destroy(spatial.targets[*hit_actor]->identity); }

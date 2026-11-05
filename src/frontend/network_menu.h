@@ -8,6 +8,7 @@ namespace apache::frontend {
 class network_menu {
   menu &interface;
   configuration::settings &settings;
+  bool start_requested{false};
   bool two_player{false}, starting{false}, editing_name{false}, editing_host{false};
   unsigned int channel{0};
   std::string own_name, host, entry;

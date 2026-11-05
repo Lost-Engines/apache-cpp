@@ -11,7 +11,8 @@ class mission_link {
   std::function<int32_t()> clock;
   int32_t deadline{0};
   unsigned int attempts{0};
-  bool complete{false}, closed{false};
+  uint32_t synchronised_server{0};
+  bool complete{false}, closed{false}, transferring{false};
   void receive(multiplayer::packet const &message, int32_t now);
   void initial_state();
   void initialised();
@@ -25,6 +26,6 @@ public:
   void poll();
   void wait();
   void close();
-  bool ready() const { return complete; }
+  bool ready() const { return complete && !transferring; }
 };
 } // namespace apache::frontend

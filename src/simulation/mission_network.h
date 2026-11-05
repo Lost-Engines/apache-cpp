@@ -19,6 +19,7 @@ public:
   std::function<void(target_identity const &, uint8_t)> remote_killed;
   std::function<void(multiplayer::packet const &)> send;
   bool enabled{false};
+  std::optional<uint32_t> flag_winner;
   explicit mission_network(mission_runtime &mission);
   std::optional<size_t> actor(uint32_t connection) const;
   bool bind(uint32_t connection, size_t actor_index);

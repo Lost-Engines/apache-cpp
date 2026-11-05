@@ -103,7 +103,7 @@ flight_step_result realistic_flight::advance(double const dt, int32_t const delt
   ground_height = relative_height() / 256;
   if(d.z <= ground_height && dz != 0 && !landed) {
     auto const landing{evaluate_landing(d.u, d.zdot, environment.surface(readings.position.position[0], readings.position.position[1]), on_carrier, death)};
-    if(landing.grade) { result.landing = landing; landed = true; if(landing.death) request_death(landing.death); }
+    if(landing.grade) { result.landing = landing; landed = true; if(landing.death) request_death(landing.death); if(landing.award && environment.landing_award) environment.landing_award(); }
   }
   bool const pull_up{ground_height + 250 >= d.z && d.zdot < 0 && !landed && -d.zdot * 0.045454545454545456 > std::max(1.0, (d.z - ground_height) * 0.02) * 0.8};
   if(pull_up) {

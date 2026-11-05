@@ -1,4 +1,5 @@
 #pragma once
+#include "multiplayer_chat.h"
 #include "render/avionics.h"
 #include "render/landscape.h"
 #include "simulation/control_input.h"
@@ -34,6 +35,7 @@ class mission_session {
   simulation::mission_random_state initial_seeds;
   std::optional<resources::mission_definition> network_definition;
   uint32_t library_random{1};
+  unsigned int last_start_position{0};
   unsigned int keyboard_remainder{0};
   size_t frame_number{0};
   int32_t next_radio{6000};
@@ -50,6 +52,8 @@ class mission_session {
   void command(uint16_t key);
   void crash(bool airborne);
   void send_frame();
+  void network_crash_complete();
+  void restart_player();
 public:
   resources::mission_briefing briefing;
   std::string zone;
@@ -59,6 +63,7 @@ public:
   simulation::mission_end ending;
   simulation::control_input controls;
   simulation::communications communications;
+  std::unique_ptr<multiplayer_chat> chat;
   simulation::debrief_records records;
   std::unique_ptr<simulation::player_views> views;
   std::unique_ptr<simulation::mission_instruments> instruments;
@@ -92,6 +97,7 @@ public:
   void step(unsigned int ticks);
   void initialise_remote_players();
   void send_server_frame();
+  void landing_award();
   void draw();
 };
 } // namespace apache::frontend

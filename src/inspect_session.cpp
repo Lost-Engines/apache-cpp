@@ -14,7 +14,7 @@ void inspect_session(apache::resources::data_store const &data, int const missio
     options.connection.emplace(); auto &connection{*options.connection};
     connection.local = local; connection.game.mode = static_cast<apache::multiplayer::game_mode>(network_mode); connection.game.second_seat = local != 0;
     for(size_t i{0}; i < 16; ++i) { auto &player{connection.players[i]}; player.flags = i < players ? static_cast<uint32_t>(i << 8) : 0xff00;
-      player.name = i < players ? "PLAYER" + std::to_string(i) : ""; player.aircraft.model = i < players ? 64 : 0; }
+      player.name = i < players ? "PLAYER" + std::to_string(i) : ""; player.aircraft.model = i < players ? (network_mode == 6 && i != local ? 222 : 64) : 0; }
   }
   auto owner{mission == 0 && network_mode > 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::resources::mission_briefing{.id{0}, .flow{network_mode == 5 ? 6 : 5}, .zone{2}}, options) : mission < 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::frontend::mission_session::quick_start(data, -mission), options) : std::make_unique<apache::frontend::mission_session>(data, mission, options)};
   auto &session{*owner};
@@ -134,6 +134,9 @@ void inspect_session(apache::resources::data_store const &data, int const missio
       visit(visit, session.runtime.actors.units[*session.runtime.timing.player].object);
     }
     else if(command == "record") { apache::simulation::debrief_record record; for(auto &v : record.words) input >> v; session.records.add(record); }
+    else if(command == "fixture_crash_timer") { input >> session.views->context.crash_timer; }
+    else if(command == "fixture_position") { apache::math::vector3 value; for(auto &v : value) input >> v; session.runtime.pilot->reposition(value); }
+    else if(command == "fixture_landing_award") { session.landing_award(); }
     else if(command == "fixture_death") { unsigned int death; input >> death; if(arcade) session.runtime.pilot->arcade.death = death; else session.runtime.pilot->realistic.death = death; }
     else if(command == "fixture_targets") {
       bool outstanding; input >> outstanding; auto &runtime{session.runtime}; unsigned int marked{0};

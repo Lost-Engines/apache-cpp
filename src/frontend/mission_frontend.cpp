@@ -238,11 +238,12 @@ bool mission_frontend::activate(widget &object, int const line) {
   }
   if(action == "notify_flight_network_button_" || action == "notify_flight_2_player_button_") {
     try { network.open(action == "notify_flight_2_player_button_", pilot().name); }
-    catch(std::exception const &error) { interface.popup({{error.what(), 0}, {"OK", 0}}, [](int){}); }
+    catch(std::exception const &error) { network_error(error.what()); }
     return true;
   }
   if(action == "notify_network_exit_button_" || action == "notify_modem_exit_button_") { leave_network(); return true; }
-  if(network.activate(object)) return true;
+  try { if(network.activate(object)) return true; }
+  catch(std::exception const &error) { network_error(error.what()); return true; }
   if(network.selecting() && network.remote_controlled() && (action.starts_with("notify_map_") || action.starts_with("notify_mission_selection_") || action == "notify_takeoff_button_")) return true;
   if(help.activate(object)) return true;
   if(planner.activate(object)) return true;

@@ -8,6 +8,7 @@ struct arcade_environment {
   std::function<unsigned int(int32_t, int32_t)> surface;
   std::function<math::pose(math::pose const&)> place;
   std::function<void(arcade_flight&)> leave_carrier;
+  std::function<void()> landing_award;
 };
 struct arcade_flight {
   powerplant power;

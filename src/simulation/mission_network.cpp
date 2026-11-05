@@ -47,6 +47,7 @@ mission_network::mission_network(mission_runtime &mission) : runtime{mission}, l
     if(remote_killed) remote_killed(id, source);
     if(runtime.damage) runtime.damage->destroy(id);
   };
+  lifecycle.events.flag_won = [this](uint32_t slot){ flag_winner = slot; };
   lifecycle.events.notice = [this](auto text, auto priority, auto lifetime){ if(runtime.events.notice) runtime.events.notice(text, priority, lifetime); };
   lifecycle.events.scores = [this](){
     std::array<int32_t, 16> values{}; for(size_t i{0}; i < values.size(); ++i) values[i] = state.players[i].score;

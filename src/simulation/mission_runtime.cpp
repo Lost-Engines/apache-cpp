@@ -73,6 +73,7 @@ mission_runtime::mission_runtime(resources::data_store const &data, std::string 
 }
 void mission_runtime::start_player(size_t const index, mission_flight_settings const &settings) {
   sensors.reset(); route = {}; player_armament.reset(); player_damage.reset(); combat.player_target.reset(); timing.player = index;
+  timing.arcade = settings.arcade;
   pilot = std::make_unique<mission_flight>(mission, actors, spatial, models, terrain, trig, environment.surface, index, settings);
   combat.player_position = pilot->readings().position.position; combat.player_heading = pilot->readings().angles[0];
   if(damage) {
@@ -136,7 +137,7 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
     for(unsigned int i{0}; i != substeps; ++i) {
       auto const previous{pilot->readings().position.position};
       if(!player_armament || player_armament->control_mode != 1) {
-        auto const result{pilot->advance(flight_dt, flight_delta, input, flight_random ? flight_random() : 0)};
+        auto const result{pilot->advance(flight_dt, flight_delta, input, flight_random && !pilot->uses_arcade() ? flight_random() : 0)};
         if(events.flight) events.flight(result);
       }
       combat.player_position = pilot->readings().position.position; combat.player_heading = pilot->readings().angles[0];

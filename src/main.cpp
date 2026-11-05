@@ -206,6 +206,10 @@ int main(int const argc, char const *const argv[]) try {
     frontend.speech_playing = [&](){ return sound->speaking(); };
   }
   auto const connect_audio{[&](){
+    if(mission && mission->chat) {
+      mission->chat->language = static_cast<unsigned int>(std::clamp(frontend.settings.values.integer("Product Language").value_or(1), 0, 8));
+      mission->chat->change_language = [&](unsigned int language){ frontend.settings.set("Product Language", static_cast<int>(language)); frontend.settings.save(); };
+    }
     if(!sound || !mission) return;
     sound->mission(true);
     mission->play_sound = [&](auto id, auto volume, auto pan){ sound->play(id, volume, pan); };
@@ -256,7 +260,7 @@ int main(int const argc, char const *const argv[]) try {
       continue;
     }
     if(mission && !in_flight_help) {
-      for(auto const &key : input.keys) if(!key.character && !key.repeat) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
+      for(auto const &key : input.keys) if(!key.character && (!key.repeat || (mission->chat && mission->chat->writing))) if(auto scan{apache::platform::scan_code(key.value, key.modifiers)}) mission->key(*scan, key.down);
       input.keys.clear(); input.clicks.clear();
       if(!window.focused()) { mission->controls.held.fill(false); mission->controls.counts.fill(0); }
       mission->controls.joystick_present = window.focused() && glfwJoystickPresent(GLFW_JOYSTICK_1);

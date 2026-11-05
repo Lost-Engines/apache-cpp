@@ -25,6 +25,7 @@ class mission_frontend {
   void receive_selection(unsigned int code, int value);
   void network_controls();
   void leave_network();
+  void network_error(std::string const &message);
   void count_run();
   std::optional<simulation::campaign_progress> transferred_campaign;
   void show_pilots(bool transfer_campaign);
@@ -58,7 +59,7 @@ public:
   void load_profiles(std::filesystem::path const &path);
   void startup();
   void poll_network(uint32_t ticks);
-  bool text_input(unsigned int value) { return network.key(value) || scores.key(value) || pilots.key(value); }
+  bool text_input(unsigned int value);
   mission_frontend(resources::data_store const &data, mission_options options = {});
   std::unique_ptr<mission_session> takeoff();
   void complete(std::unique_ptr<mission_session> mission);

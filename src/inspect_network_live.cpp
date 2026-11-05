@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 namespace apache {
-void inspect_network_live(resources::data_store const &data, unsigned int const mode, std::ostream &out) {
+void inspect_network_live(resources::data_store const &data, unsigned int const mode, std::ostream &out, bool const expect_rejection) {
   auto require{[](bool condition, std::string const &message){ if(!condition) throw std::runtime_error{message}; }};
   require(mode >= 1 && mode <= 5, "Loopback mode must be 1 to 5");
   frontend::mission_options options; options.video_mode = 0; options.detail = 1; options.arcade = false;
@@ -39,6 +39,11 @@ void inspect_network_live(resources::data_store const &data, unsigned int const 
   }
   click(a, two ? "_start_game_button" : "_network_takeoff_button"); pump();
   click(b, two ? "_start_game_button" : "_network_takeoff_button"); pump();
+  if(expect_rejection) {
+    require(!a.network.selecting() && !b.network.selecting() && !a.takeoff() && !b.takeoff(), "Incomplete capture mission is rejected before takeoff");
+    require(a.interface.dismiss_popup() || b.interface.dismiss_popup(), "Missing mission data is explained in the menu");
+    out << "{\"incomplete_capture_rejected\":true,\"transport\":\"IPv4 loopback, broadcast disabled\"}" << std::endl; return;
+  }
   require(a.network.selecting() && b.network.selecting(), "Both players proceed from ready lobby");
   if(mode == 2 || mode == 3) {
     require(a.interface.current() == "_world_screen" && b.interface.current() == "_world_screen", "Both players see world selection");
@@ -65,12 +70,19 @@ void inspect_network_live(resources::data_store const &data, unsigned int const 
     clock += 10;
     if(frame == 3) { left->post(0x1c); right->post(0x1b); }
     if(frame == 6) { left->post(0x3d); right->post(0x3c); }
+    if(frame == 15) left->post(0x4032);
+    if(frame == 16) { left->post(0x23); left->post(0x17); }
+    if(frame == 17) left->post(0x1c);
+    if(frame == 20) { left->post(0x3b); right->post(0x19); }
     if(frame == 12) { left->post(0x2e); right->post(0x21); }
     left->step(10); right->step(10); left->draw(); right->draw();
     require(!left->finished && !right->finished, "Flight stays connected");
     require(clock < start_clock + 1000, "Frame synchronization does not time out");
     hash ^= resources::fingerprint(left->frame.image.pixels) ^ resources::fingerprint(right->frame.image.pixels);
   }
+  require(left->chat && right->chat && !left->chat->writing, "Chat editor sends and closes");
+  require(std::ranges::any_of(right->chat->messages, [](auto const &text){ return text.starts_with("> PILOT: hi"); }), "Chat arrives at the other aircraft");
+  require(!left->help_requested && !right->paused, "Original network help and pause restrictions preserve synchronization");
   if(mode == 3) {
     require(left->crew && right->crew, "Pilot/gunner state exchange enabled");
     require(right->crew->next_frame_ticks == 10, "Pilot timing arrives in crew packet");
@@ -86,5 +98,47 @@ void inspect_network_live(resources::data_store const &data, unsigned int const 
   link_b.reset(); a.complete(std::move(left)); b.complete(std::move(right));
   require(!a.network.peers->state.active && !b.network.peers->state.active, "Debrief releases frozen connection roster");
   out << "{\"mode\":" << mode << ",\"frames\":80,\"menu_clicks\":" << clicks << ",\"initial_ticks\":" << start_clock << ",\"frame_hash\":" << hash << ",\"transport\":\"IPv4 loopback, broadcast disabled\"}" << std::endl;
+}
+} // namespace apache
+
+namespace apache {
+void inspect_network_group(resources::data_store const &data, unsigned int const count, std::ostream &out) {
+  auto const require{[](bool condition, std::string_view message){ if(!condition) throw std::runtime_error{std::string{message}}; }};
+  require(count >= 3 && count <= 8, "Group check requires 3 to 8 Apache players");
+  std::vector<std::unique_ptr<multiplayer::peer_group>> peers;
+  std::vector<std::unique_ptr<frontend::mission_session>> missions;
+  std::vector<std::unique_ptr<frontend::mission_link>> links;
+  int32_t clock{0};
+  for(unsigned int i{0}; i < count; ++i) {
+    multiplayer::transport_options wire{.bind{0x7f000001, 0}, .broadcast{false}, .peers{}, .node{100 + i}};
+    for(auto const &other : peers) wire.peers.push_back(other->address());
+    peers.push_back(std::make_unique<multiplayer::peer_group>(wire, "PLAYER" + std::to_string(i)));
+  }
+  for(unsigned int pass{0}; pass < count * 8; ++pass) for(auto &peer : peers) peer->poll(static_cast<uint32_t>(clock));
+  for(unsigned int i{0}; i < count; ++i) { require(peers[i]->room.other_players == static_cast<int32_t>(count - 1), "Every peer discovers the full roster"); peers[i]->ready(); }
+  for(unsigned int pass{0}; pass < count * 8; ++pass) for(auto &peer : peers) peer->poll(static_cast<uint32_t>(clock));
+  for(unsigned int i{0}; i < count; ++i) {
+    require(peers[i]->all_ready(), "Full group agrees on readiness");
+    frontend::mission_options options; options.video_mode = 0; options.detail = 1; options.arcade = false;
+    options.connection.emplace(); auto &connection{*options.connection}; connection.game.mode = multiplayer::game_mode::multiplayer;
+    connection.local = peers[i]->state.local; connection.server = peers[i]->state.server; connection.players = peers[i]->state.players; connection.defer_initialisation = true;
+    missions.push_back(std::make_unique<frontend::mission_session>(data, resources::mission_briefing{.flow{5}, .zone{2}}, options));
+    links.push_back(std::make_unique<frontend::mission_link>(*peers[i], *missions[i], [&](){ return clock; }));
+  }
+  for(unsigned int i{0}; i < count; ++i) links[i]->yield = [&, i](){ ++clock; for(unsigned int j{0}; j < count; ++j) if(i != j && links[j]) links[j]->poll(); return clock < 20000; };
+  auto pump{[&](){ for(auto &link : links) if(link) link->poll(); }};
+  for(; clock < 2000; ++clock) { pump(); if(std::ranges::all_of(links, [](auto const &link){ return link->ready(); })) break; }
+  require(clock < 2000, "Full group starts without timeout");
+  auto const tick{[&](unsigned int first){ clock += 10; for(unsigned int i{first}; i < count; ++i) missions[i]->step(10); for(unsigned int i{first}; i < count; ++i) missions[i]->draw(); pump(); }};
+  for(unsigned int frame{0}; frame < 6; ++frame) tick(0);
+  // The host leaves. Every remaining client must nominate the same successor.
+  links[0].reset(); for(unsigned int pass{0}; pass < 4; ++pass) pump();
+  for(unsigned int i{1}; i < count; ++i) require(missions[i]->network->state.server == 1, "Group agrees on the new server");
+  auto const before{missions[1]->network->state.client_frames};
+  for(unsigned int frame{0}; frame < 6; ++frame) tick(1);
+  auto const received{missions[1]->network->state.client_frames - before};
+  for(unsigned int i{1}; i < count; ++i) require(!missions[i]->finished, "Remaining players stay in flight");
+  out << "{\"players\":" << count << ",\"frames\":" << 6 * count + 6 * (count - 1) << ",\"handover_client_updates\":" << received << ",\"transport\":\"IPv4 loopback, broadcast disabled\"}" << std::endl;
+  require(received > 0, "Client positions continue reaching the replacement server");
 }
 } // namespace apache

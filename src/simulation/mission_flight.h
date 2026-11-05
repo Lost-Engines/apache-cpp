@@ -32,7 +32,7 @@ class mission_flight {
   void leave_carrier();
   void synchronize();
 public:
-  std::function<void()> died, mobile_collision;
+  std::function<void()> died, mobile_collision, landing_award;
   uint32_t collision_model{0};
   int32_t model_weight{14058};
   std::optional<size_t> hit_actor;
@@ -45,6 +45,7 @@ public:
   powerplant const &power() const { return arcade_mode ? arcade.power : realistic.dynamics.power; }
   void receive_shared(flight_readings const &state, bool landed, double endurance, int32_t weight);
   bool on_carrier() const { return (actors.units[player].conditions & 0x400) != 0; }
+  bool uses_arcade() const { return arcade_mode; }
   bool landed() const { return arcade_mode ? arcade.landed : realistic.landed; }
   uint32_t faults() const { return arcade_mode ? arcade.power.faults : realistic.dynamics.power.faults; }
   void set_faults(uint32_t value) { if(arcade_mode) arcade.power.faults = value; else realistic.dynamics.power.faults = value; }
@@ -52,6 +53,9 @@ public:
   unsigned int death() const { return arcade_mode ? arcade.death : realistic.death; }
   int32_t deck() const;
   void request_death(unsigned int cause);
+  void reposition(math::vector3 const &position);
+  void restart(int flow, double fuel = 2442);
+  void refuel(double fuel = 2442);
   std::optional<landing_result> collide(math::vector3 const &previous, scenery_collisions const &scenery, render::mobile_scene const &mobiles, craters const &marks, std::function<void(target_identity const &)> const &destroy);
   flight_step_result advance(double dt, int32_t delta, flight_input const &input, unsigned int random_sample);
 };

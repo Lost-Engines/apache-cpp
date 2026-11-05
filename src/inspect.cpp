@@ -172,6 +172,9 @@ int main(int const argc, char const *const argv[]) try {
   apache::resources::data_store const data{argv[1]};
   std::string_view const command{argv[2]};
   if(inspect_briefing(data, command, std::cin, std::cout, argc > 3 ? argv[3] : "")) return 0;
+  if(command == "chat") { apache::inspect_chat(data, std::cin, std::cout); return 0; }
+  if(command == "network-group") { apache::inspect_network_group(data, argc > 3 ? static_cast<unsigned int>(std::stoul(argv[3])) : 3, std::cout); return 0; }
+  if(command == "network-incomplete-flag") { apache::inspect_network_live(data, 5, std::cout, true); return 0; }
   if(command == "network-loopback") { apache::inspect_network_live(data, argc > 3 ? static_cast<unsigned int>(std::stoul(argv[3])) : 4, std::cout); return 0; }
   if(command == "network") { apache::inspect_network(std::cin, std::cout); return 0; }
   if(command == "frontend") { inspect_frontend(data, std::cin, std::cout); return 0; }

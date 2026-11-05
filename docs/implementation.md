@@ -334,3 +334,19 @@ The original network and two-player screens now drive discovery, names, roles, p
 Five loopback journeys use actual menu clicks, two sockets and 80 seat frames per mode: two-player combat, single missions, pilot/gunner, multiplayer combat and capture the flag. They also cover departure, returning to the lobby and a two-player server handover. Broadcast is disabled in these tests. Normal and sanitizer builds pass all five journeys and all five CTest targets. The dedicated server/client departure comparison matches 800 original cases and 49,668 state/event fields.
 
 The combat MFD now draws the original kill scoreboard. Mission initialization applies connection difficulty before constructing actors, and combat-only modes skip the ordinary AI war simulation. The six-mode original-session matrix is still running. Remaining multiplayer integration includes respawn, landing rewards, flag completion, following a surviving partner and chat input. CI remains disabled.
+
+### Multiplayer recovery, chat and completed mode comparison
+
+Connected crash recovery, combat landing rewards, flag completion, cooperative survivor views and chat. Respawn restores the original flight-model fields, armament, sensor modes and cockpit state. Arcade consumes no flight-jitter random calls, preserving the original random sequence for the next spawn. The selected flight model also reaches AI movement: Arcade helicopters use the original fourfold acceleration adjustment and pitch response.
+
+The six-mode session matrix now passes 48 cases and 3,840 frames: 288,000 state/camera fields, 2,949,120 palette bytes, 172,815,553 defined cockpit pixels and 200,524,800 pixels in 1,051 complete safe frames. State trace SHA-256: `fb5166a8fb0647fc10767784ef141eb4e39ec224f3e4d8da9610ed9b1442a4aa`. A separate Mission 141 check compares all 154 actors in both flight models, matching 24,640 actor states and 394,240 fields over 160 frames. This covers the Apache side of Apache-versus-Hind with an advertised remote Hind, not a reconstructed Hind client.
+
+Recovery comparisons cover repeated crashes and landing rewards in combat and cooperative modes, plus the complete flag mission's landing-distance boundary. Normal and sanitizer checks agree on the flag mission's 128 states and 4,751,360 defined cockpit pixels. The complete flag data is supplied only in a temporary test tree; original media are unchanged.
+
+Most European CDs ship an incomplete two-task `CAPTURE.DTA`. The US and Japanese editions include four tasks, supplying the flag and sixteen respawn positions. The menu rejects incomplete data before takeoff. Bounds checks replace the original missing-task dereference.
+
+Shift+M opens the original chat editor. Editing, recall, cancellation, text limits, scrolling, blanking, shadows, all eight slash commands and the hidden terrain palette editor match 1,123 original steps, 46,043 fields and 18,432,000 pixels in normal and sanitizer builds. Four original 320-pixel frames contain text writes beyond the row width; their editor state is checked, while C++ clips the text safely.
+
+Live localhost checks cover all five Apache menu modes, chat delivery, the original help/pause restrictions and departures. An eight-player check verifies continued client updates after the server leaves. Server succession repeats the existing waiting/ready exchange, preserving aircraft and scores. This repairs the original receiver's cleared upload gate after server departure.
+
+Remaining work: final window journeys and release/build verification, followed by CI. The separate MANEDIT and earlier-engine research continues in the analysis checkout.

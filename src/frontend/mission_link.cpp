@@ -11,7 +11,7 @@ mission_link::mission_link(multiplayer::peer_group &group, mission_session &sess
   : peers{group}, mission{session}, clock{std::move(timer)} {
   if(!mission.network || !clock) throw std::invalid_argument{"A network mission and clock are required"};
   auto &state{mission.network->state};
-  peers.freeze(); peers.state.server = state.server;
+  peers.freeze(); peers.state.server = state.server; synchronised_server = state.server;
   state.war_seed = mission.runtime.random.value; state.weapon_seed = mission.runtime.weapon_random.value;
   state.wind_strength = mission.runtime.mission.wind_strength; state.wind_direction = mission.runtime.mission.wind_direction;
   if(state.client_server && state.server == state.local) state.players[state.local].flags |= 0x20000;
@@ -45,7 +45,8 @@ void mission_link::receive(multiplayer::packet const &message, int32_t const now
   auto &network{*mission.network}; auto &state{network.state};
   if(message.type() == chat) {
     std::string text; for(size_t i{24}; i < 104 && message.bytes()[i]; ++i) text += static_cast<char>(message.bytes()[i]);
-    mission.communications.add(message.name() + " : " + text, 3, 1000); return;
+    if(mission.chat) mission.chat->add("> " + message.name() + ": " + text, mission.runtime.timing.now);
+    return;
   }
   if(message.type() == menu_selection && message.word(44) == 19) {
     network.receive(multiplayer::packet{left, message.sender(), message.name()}, now); return;
@@ -64,6 +65,7 @@ void mission_link::initial_state() {
   peers.send(multiplayer::initial_state(state.local, state.players[state.local].name, position, runtime.random.value, runtime.weapon_random.value));
 }
 void mission_link::initialised() {
+  if(transferring) { transferring = false; return; }
   auto &state{mission.network->state};
   if(!state.client_server) {
     mission.runtime.random.value = state.war_seed; mission.runtime.weapon_random.value = state.weapon_seed;
@@ -76,8 +78,16 @@ void mission_link::poll() {
   auto &state{mission.network->state}; auto const now{clock()};
   peers.state.server = state.server; peers.poll(static_cast<uint32_t>(now));
   if(!state.active) { mission.finished = true; return; }
-  if(complete) return;
-  auto const needed{static_cast<uint32_t>(std::max(0, mission.network->lifecycle.other_players))};
+  if(complete && state.client_server && synchronised_server != state.server) {
+    // A successor needs a fresh ready notification. The original departure
+    // receiver clears server_in_game, so state packets alone cannot restart
+    // client uploads. Keep the existing aircraft and scores during handover.
+    synchronised_server = state.server; transferring = true; attempts = 0; deadline = now;
+    state.reset_server();
+  }
+  if(complete && !transferring) return;
+  uint32_t needed{0};
+  for(uint32_t i{0}; i < 16; ++i) if(i != state.local && peers.members().entries[i].node) ++needed;
   if(!state.client_server) {
     if(due(now, deadline)) {
       initial_state(); deadline = math::add(now, 2000);
@@ -103,9 +113,9 @@ void mission_link::poll() {
   }
 }
 void mission_link::wait() {
-  if(!complete || closed) return;
+  if(!ready() || closed) return;
   auto &state{mission.network->state}; poll();
-  if(!state.active || mission.finished) return;
+  if(!ready() || !state.active || mission.finished) return;
   if(state.client_server && state.server == state.local) { mission.send_server_frame(); return; }
   auto const started{clock()}; int32_t retry{math::add(started, 200)}; unsigned int failures{0};
   auto waiting{[&](){ return state.client_server ? state.server_in_game && !state.new_server_data : state.number_synced < static_cast<uint32_t>(std::max(0, mission.network->lifecycle.other_players)); }};

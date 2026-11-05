@@ -60,6 +60,7 @@ flight_step_result arcade_flight::advance(double const dt, flight_input const &i
       if(landing.grade) {
         result.landing = landing; landed = true;
         if(landing.death) request_death(landing.death);
+        if(landing.award && environment.landing_award) environment.landing_award();
       }
     }
   }

@@ -67,7 +67,7 @@ void network_menu::connect() {
   room.events.message = room.events.chat = [this](std::string_view text){ message(text); };
   room.events.selection = [this](auto code, auto const &arguments){ selection(code, arguments); };
   room.events.settings_changed = [this](){ controls(); };
-  room.events.start = [this](){ starting = true; if(start) start(); };
+  room.events.start = [this](){ start_requested = true; };
   preferences(); controls(); refresh(); buttons(true);
 }
 void network_menu::open(bool const two, std::string name) {
@@ -87,7 +87,7 @@ void network_menu::open(bool const two, std::string name) {
 }
 void network_menu::close() {
   if(peers) { peers->leave(); peers.reset(); }
-  starting = editing_name = editing_host = false; buttons(true);
+  start_requested = starting = editing_name = editing_host = false; buttons(true);
 }
 void network_menu::announce_selection(unsigned int const code, int const value) {
   if(peers) peers->send(multiplayer::menu_selection(peers->state.local, peers->room.own_name, code, {0, -1, value, 0, 0}));
@@ -137,7 +137,7 @@ bool network_menu::key(unsigned int const c) {
   else if(c == 27) entry.clear();
   else if(c == 10 || c == 13) {
     if(editing_name) { own_name = entry; peers->name(entry); settings.values.set("Network name", entry); interface.named("_enter_name_button").on = false; }
-    else { host = entry; settings.values.set("Network host", host); auto const values{peers->room.two_player}; connect(); peers->room.two_player = values; controls(); }
+    else { host = entry; auto const values{peers->room.two_player}; connect(); peers->room.two_player = values; controls(); settings.values.set("Network host", host); }
     editing_name = editing_host = false; settings.save();
   } else if(c >= 32 && c < 127 && entry.size() < (editing_name ? 8u : 80u)) entry += static_cast<char>(c);
   if(editing_name) interface.named("_player_name").text = entry;
@@ -148,6 +148,7 @@ void network_menu::poll(uint32_t const ticks) {
   if(!peers) return;
   peers->poll(ticks);
   if(!peers->room.active) return;
+  if(start_requested) { start_requested = false; starting = true; if(start) start(); return; }
   if(!starting && !peers->state.active && peers->all_ready()) {
     if(two_player && (peers->room.other_players != 1 || peers->room.rank == peers->room.remote_rank)) return;
     starting = true; if(start) start();
@@ -162,6 +163,9 @@ mission_connection network_menu::connection() const {
 void network_menu::completed(simulation::mission_network const &network) {
   if(!peers) return;
   for(size_t i{0}; i < 16; ++i) peers->state.players[i].score = network.state.players[i].score;
+  auto const winner{network.flag_winner};
+  std::string const winner_name{winner ? network.state.players[*winner].name : ""};
   peers->resume(); peers->game_packet = {}; starting = false; interface.named("_status_text").text = "Debrief"; refresh();
+  if(winner) message(winner_name + " captured the flag");
 }
 } // namespace apache::frontend

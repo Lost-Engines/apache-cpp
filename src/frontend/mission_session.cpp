@@ -116,6 +116,7 @@ mission_session::mission_session(resources::data_store const &data, resources::m
   views->context.has_lock = [this](size_t i){ auto *r{round(i)}; return r && simulation::weapon_definitions()[r->state.weapon].movement_class == 2 && (r->state.body.seeker.flags & 2); };
   views->crashed = [this](bool airborne){ crash(airborne); };
   runtime.pilot->died = [this](){ select_view(19); };
+  runtime.pilot->landing_award = [this](){ landing_award(); };
   runtime.events.projectile = [this](size_t i, auto &, auto const &event){ if(event.kind == simulation::projectile_event::removed) views->removed(i); };
   runtime.events.explosion_sound = [this](simulation::explosion_audio const &sound){
     // The original sound selector shares Watcom rand() with wind gusts, even
@@ -177,6 +178,14 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     if(added) communications.add_changing(id, text, 2); else communications.remove(id);
   };
   if(settings.shared_seat || settings.connection) {
+    chat = std::make_unique<multiplayer_chat>(runtime.executable);
+    chat->change_terrain = [this](auto const &values){ world.palette.grass_colours(values); };
+    chat->send = [this](std::string_view text){
+      if(!network) return;
+      auto const &state{network->state}; auto const &name{state.players[state.local].name};
+      if(network->send) network->send(multiplayer::chat(state.local, name, text));
+      chat->add("> " + name + ": " + std::string{text}, runtime.timing.now);
+    };
     network = std::make_unique<simulation::mission_network>(runtime);
     network->enabled = network->state.active = true;
     if(settings.connection) {
@@ -296,6 +305,12 @@ void mission_session::key(uint16_t const scan, bool const down, bool const dispa
   controls.key(scan & 127, down); if(down && dispatch) post(scan);
 }
 void mission_session::command(uint16_t const key) {
+  if(chat && chat->writing) {
+    chat->key(key, runtime.timing.now);
+    if(!chat->writing) { controls.counts[0x48] = controls.counts[0x39] = 0; }
+    return;
+  }
+  if(chat && key == 0x4032) { chat->begin(); return; }
   if(quit_prompt) {
     if((key & 255) == 0x15) request_end(1);
     else if((key & 255) == 0x31) { quit_prompt = false; quit_drawn = false; views->modes.changed = true; }
@@ -320,7 +335,7 @@ void mission_session::command(uint16_t const key) {
       if(crew) { crew->notify_key(key); request_end(1); }
       else quit_prompt = true;
       break;
-    case 0x3b: help_requested = true; break;
+    case 0x3b: if(!network) help_requested = true; break;
     case 1: case 0x200f: if(!network) accelerated_time = 1; break;
     case 0x400f: if(!network) accelerated_time = 8; break;
     case 0xf: if(!network) accelerated_time = accelerated_time == 8 ? 1 : accelerated_time * 2; break;
@@ -387,7 +402,7 @@ void mission_session::step(unsigned int const ticks) {
   for(auto key : commands) { command(key); if(quit_prompt != was_prompt || help_requested || finished) break; }
   commands.clear();
   if(paused || (finished && !network) || was_prompt || help_requested) return;
-  if(controls.held[0x39]) runtime.fire_player(runtime.timing.now, frame_time, 0x39);
+  if(!(chat && chat->writing) && controls.held[0x39]) runtime.fire_player(runtime.timing.now, frame_time, 0x39);
   if(network) {
     network->state.dead = runtime.pilot->death() != 0;
     if(crew) {
@@ -398,9 +413,11 @@ void mission_session::step(unsigned int const ticks) {
     if(!crew) { network->state.extrapolate(network_clock ? network_clock() : runtime.timing.now); network->update(); }
   }
   for(unsigned int i{0}; i != accelerated_time; ++i) {
-    auto const buttons{controls.button_commands()};
-    for(size_t j{0}; j != buttons.count; ++j) post(static_cast<uint16_t>(buttons.keys[j]));
-    controls.update(views->modes.movement, views->modes.crew == 1, buttons.alternate);
+    if(!(chat && chat->writing)) {
+      auto const buttons{controls.button_commands()};
+      for(size_t j{0}; j != buttons.count; ++j) post(static_cast<uint16_t>(buttons.keys[j]));
+      controls.update(views->modes.movement, views->modes.crew == 1, buttons.alternate);
+    }
     runtime.pilot->realistic.acceleration = static_cast<int32_t>(accelerated_time);
     runtime.weapons->night = daylight.light.night != 0;
     runtime.frame = frame_number;
@@ -409,13 +426,14 @@ void mission_session::step(unsigned int const ticks) {
     records.position(runtime.pilot->readings().position.position);
     communications.advance(frame_time);
     auto const cause{runtime.pilot->death()};
-    if((cause == 2 || cause == 3 || cause == 4 || cause == 10 || cause == 11 || cause == 12) && views->modes.mode != 19) select_view(19);
+    if((cause == 2 || cause == 3 || cause == 4 || cause == 10 || cause == 11 || cause == 12) && views->modes.mode != 19 && !views->context.following) select_view(19);
   }
   runtime.player_armament->update_hydra(runtime.timing.now, last_delta, controls.keyboard[4]);
 }
 void mission_session::draw() {
   if(quit_prompt && quit_drawn) return;
   if(help_requested) return;
+  if(network && views->modes.mode == 19 && int64_t{views->context.crash_timer} + (paused ? 0 : last_delta) / 4 > INT32_MAX) network_crash_complete();
   camera = views->update(sources(), {controls.external[3], controls.external[2], controls.keyboard[5], paused ? 0 : last_delta}, runtime.random.global_seed);
   finished = finished || camera.finished;
   visual.lighting = daylight.light; visual.infrared = night_vision || camera.infrared ? 1 : 0;
@@ -453,6 +471,7 @@ void mission_session::draw() {
     .weapon{simulation::weapon_definitions()[arm.inventory.current].name}});
   frame.reset_clip(); panels.draw(frame, views->modes.mode, views->modes.changed); avionics.draw(frame, state, world, visual.lighting);
   for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world.palette.modified[i * 3], world.palette.modified[i * 3 + 1], world.palette.modified[i * 3 + 2]};
+  if(chat) chat->draw(frame, runtime.timing.now);
   views->modes.changed = false;
   if(network) {
     ending.finish_frame(); if(crew) crew->outgoing.leaving = ending.quitting;

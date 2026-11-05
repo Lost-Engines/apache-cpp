@@ -134,8 +134,10 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
     if(subdivide_flight) while(flight_delta > 0x3fffffff) { flight_delta /= 2; flight_dt *= 0.5; substeps *= 2; }
     for(unsigned int i{0}; i != substeps; ++i) {
       auto const previous{pilot->readings().position.position};
-      auto const result{pilot->advance(flight_dt, flight_delta, input, flight_random ? flight_random() : 0)};
-      if(events.flight) events.flight(result);
+      if(!player_armament || player_armament->control_mode != 1) {
+        auto const result{pilot->advance(flight_dt, flight_delta, input, flight_random ? flight_random() : 0)};
+        if(events.flight) events.flight(result);
+      }
       combat.player_position = pilot->readings().position.position; combat.player_heading = pilot->readings().angles[0];
       if(check_collisions) {
         auto const landing{pilot->collide(previous, structures, mobiles, damage ? damage->marks : collision_marks, [this](auto const &id){ if(damage) damage->destroy(id); else if(events.collision) events.collision(id); })};
@@ -148,6 +150,7 @@ void mission_runtime::advance(int32_t const now, int32_t const delta, flight_inp
   if(player_armament) { player_armament->synchronize_countermeasures(true); player_armament->finish_update(now); }
   if(events.player_weapon_update) events.player_weapon_update();
   combat.update(); actors.synchronize_models();
+  if(events.instrument_update) events.instrument_update();
   if(sensors && pilot && player_armament) { sensors->update(actors.units[*timing.player].object.world, pilot->readings().angles[0], spatial.mobile_id(*timing.player), player_armament->control_mode, pilot->faults()); synchronize_player_target(); }
   if(sensors && pilot) {
     auto &actor{actors.units[*timing.player]};

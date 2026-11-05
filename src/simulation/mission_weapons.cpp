@@ -101,6 +101,17 @@ bool mission_weapons::decoy(size_t const index, unsigned int const id) {
   *decoys[index].targets[id - 7] = target_reference{{target_kind::mobile, 0, *rounds.at(*round).mobile}, {}, 0};
   return true;
 }
+bool mission_weapons::release_countermeasure(unsigned int const weapon, uint16_t const key) {
+  if(!spatial.player) return false;
+  size_t const index{*spatial.player}; auto &actor{actors.units[index]}; auto &decoy_state{decoys[index]};
+  countermeasure_actor state{static_cast<int32_t>(actor.classification), true, actor.object.world.position, actor.conditions, actor.random, actor.retreat_until, decoy_state.deadlines[0], decoy_state.deadlines[1]};
+  countermeasure_callbacks callbacks;
+  callbacks.launch = [&](unsigned int id){ return decoy(index, id); };
+  callbacks.key_event = player_key_event; callbacks.released = countermeasure_released;
+  bool const released{release_player_countermeasure(state, player_countermeasures, weapon, key, environment.now, tables.skill(difficulty), war_random.global_seed, callbacks)};
+  actor.conditions = state.conditions; actor.random = state.random; actor.retreat_until = state.retreat_until; decoy_state.deadlines = {state.chaff_at, state.flare_at};
+  return released;
+}
 void mission_weapons::incoming(size_t const round_index, projectile_record &round) {
   auto const *target{adjusted_projectile_target(round, targets.world, {})};
   if(!target || target->identity.kind != target_kind::mobile) return;
@@ -108,6 +119,7 @@ void mission_weapons::incoming(size_t const round_index, projectile_record &roun
   auto &actor{actors.units[*index]}; auto &decoys{this->decoys[*index]};
   countermeasure_actor state{static_cast<int32_t>(actor.classification), spatial.player == index, actor.object.world.position, actor.conditions, actor.random, actor.retreat_until, decoys.deadlines[0], decoys.deadlines[1]};
   countermeasure_callbacks callbacks; callbacks.launch = [&](unsigned int id){ return decoy(*index, id); }; callbacks.warning = [&](int32_t arrival){ if(events.incoming) events.incoming(round_index, round.state.weapon, arrival); };
+  callbacks.key_event = player_key_event; callbacks.released = countermeasure_released;
   notify_incoming_missile(state, player_countermeasures, weapons.at(round.state.weapon), round.state.body.pose.position, round.state.body.motion.speed, environment.now, tables.skill(difficulty), war_random.global_seed, callbacks);
   actor.conditions = state.conditions; actor.random = state.random; actor.retreat_until = state.retreat_until; decoys.deadlines = {state.chaff_at, state.flare_at};
 }

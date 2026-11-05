@@ -5,7 +5,7 @@
 
 namespace apache::simulation {
 struct view_context {
-  unsigned int control_mode{2};
+  unsigned int control_mode{2}, game_mode{0};
   bool following{false}, network{false}, serial_connection{false}, drone{false};
   int32_t crash_timer{0};
   unsigned int target_kind{0};

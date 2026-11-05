@@ -5,6 +5,8 @@
 #include "simulation/communications.h"
 #include "simulation/daylight.h"
 #include "simulation/mission_debrief.h"
+#include "simulation/mission_crew.h"
+#include "simulation/mission_end.h"
 #include "simulation/mission_instruments.h"
 #include "simulation/player_views.h"
 
@@ -17,6 +19,7 @@ struct mission_options {
   simulation::control_configuration controls;
   unsigned int deadband{10};
   std::array<simulation::joystick_axis, 4> axes;
+  std::optional<multiplayer::crew_role> shared_seat;
 };
 // Platform-independent live mission. Elapsed time is supplied in original 200 Hz ticks.
 class mission_session {
@@ -42,6 +45,9 @@ public:
   resources::mission_briefing briefing;
   std::string zone;
   simulation::mission_runtime runtime;
+  std::unique_ptr<simulation::mission_network> network;
+  std::unique_ptr<simulation::mission_crew> crew;
+  simulation::mission_end ending;
   simulation::control_input controls;
   simulation::communications communications;
   simulation::debrief_records records;
@@ -59,6 +65,8 @@ public:
   unsigned int accelerated_time{1};
   std::function<void(unsigned int, int32_t, int32_t)> play_sound;
   std::function<void(simulation::flight_event)> flight_sound;
+  // The transport services incoming packets here, at the original render barrier.
+  std::function<void()> wait_network;
   mission_session(resources::data_store const &data, int mission_id, mission_options options = {});
   mission_session(resources::data_store const &data, resources::mission_briefing briefing, mission_options options = {}, resources::mission_definition const *edited = nullptr);
   mission_options const &launch_options() const { return settings; }
@@ -68,6 +76,7 @@ public:
   void key(uint16_t scan, bool down, bool dispatch = true);
   void post(uint16_t key) { commands.push_back(key); }
   void select_view(unsigned int mode);
+  void request_end(unsigned int cause);
   void detail(unsigned int level);
   void step(unsigned int ticks);
   void draw();

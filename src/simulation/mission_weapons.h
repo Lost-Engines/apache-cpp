@@ -44,6 +44,9 @@ public:
   projectiles rounds;
   std::vector<actor_decoys> decoys;
   countermeasure_controls player_countermeasures;
+  std::function<bool(uint16_t)> player_key_event;
+  std::function<void(unsigned int)> countermeasure_released;
+  bool release_countermeasure(unsigned int weapon, uint16_t key);
   mission_weapons(resources::mission_definition const &mission, mission_actors &actors, mission_spatial &spatial, mission_targets &targets, mission_combat &combat, resources::model_archive const &models, resources::terrain const &terrain, scenery_collisions const &scenery, render::mobile_scene &mobiles, math::trigonometry const &trig, combat_tables const &tables, combat_random &war, combat_random &weapon, int difficulty, mission_weapon_callbacks events = {});
   ~mission_weapons();
   mission_weapons(mission_weapons const &) = delete;

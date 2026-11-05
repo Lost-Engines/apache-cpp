@@ -6,6 +6,7 @@
 #include "multiplayer/lifecycle.h"
 #include "multiplayer/casualties.h"
 #include "simulation/remote_weapons.h"
+#include "simulation/mission_end.h"
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -24,6 +25,15 @@ void inspect_network(std::istream &input, std::ostream &output) {
   while(std::getline(input, line)) {
     if(line.empty()) continue;
     std::istringstream in{line}; std::string command; in >> command;
+    if(command == "mission-end") {
+      simulation::mission_end state; bool invulnerable, no_crashes; unsigned int reason, frames;
+      in >> state.cause >> state.active >> state.connected >> state.countdown >> state.advance_frames >> state.quitting >> invulnerable >> no_crashes >> reason >> frames;
+      if(!in) throw std::runtime_error{"Incomplete mission ending context"};
+      bool const crash{state.request(reason, invulnerable, no_crashes)};
+      output << state.cause << ' ' << state.active << ' ' << state.countdown << ' ' << crash;
+      for(unsigned int i{0}; i < frames; ++i) state.finish_frame();
+      output << ' ' << state.active << ' ' << state.countdown << ' ' << state.quitting << '\n'; continue;
+    }
     if(command == "rules") {
       multiplayer::game_settings settings; multiplayer::mission_rules state; unsigned int mode;
       in >> mode >> settings.second_seat >> settings.night >> settings.difficult >> settings.weather >> settings.infinite_fuel >> settings.infinite_weapons >> settings.crashes;

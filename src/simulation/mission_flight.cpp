@@ -14,7 +14,7 @@ mission_flight::mission_flight(resources::mission_definition const &definition, 
   realistic_world.place = arcade_world.place = [this](auto const &position){ return place(position); };
   realistic_world.leave_carrier = [this](realistic_flight &flight){ auto const &ship{actors.units[actors.carriers.at(*actors.units[player].carrier).actor]}; flight.transfer_from_carrier(ship.speed, ship.angles[0], trig); leave_carrier(); };
   arcade_world.leave_carrier = [this](arcade_flight &flight){ auto const &ship{actors.units[actors.carriers.at(*actors.units[player].carrier).actor]}; flight.transfer_from_carrier(ship.speed, ship.angles[0], trig); leave_carrier(); };
-  flight_start start; start.position = unit.object.world.position; start.on_carrier = on_carrier(); start.object_heading = unit.angles[0]; start.dry_weight = 14058; start.fuel = settings.fuel; start.faults = settings.faults; start.quick_flight = settings.flow == 1; start.wind_strength = mission.wind_strength; start.wind_direction = mission.wind_direction;
+  flight_start start; start.position = unit.object.world.position; start.on_carrier = on_carrier(); start.object_heading = unit.angles[0]; start.dry_weight = model_weight; start.fuel = settings.fuel; start.faults = settings.faults; start.quick_flight = settings.flow == 1; start.wind_strength = mission.wind_strength; start.wind_direction = mission.wind_direction;
   start.ground_height = height(start.position[0], start.position[1]);
   auto position{start.position};
   if(on_carrier()) position = place(unit.object.world).position;
@@ -79,7 +79,7 @@ void mission_flight::receive_shared(flight_readings const &state, bool const lan
     auto &object{actors.units[player].object}; object.world.rotation = state.position.rotation;
     spatial.move(actors.units[player], state.position.position); object.relative = object.world;
   } else current.position = previous;
-  auto &engine{arcade_mode ? arcade.power : realistic.dynamics.power}; engine.endurance = endurance; engine.weight = weight;
+  auto &engine{arcade_mode ? arcade.power : realistic.dynamics.power}; engine.endurance = endurance; model_weight = weight;
   if(arcade_mode) arcade.landed = landed; else realistic.landed = landed;
 }
 void mission_flight::request_death(unsigned int const cause) {

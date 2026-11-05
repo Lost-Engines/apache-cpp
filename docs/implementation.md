@@ -290,6 +290,16 @@ The scene connection passes 360 event sequences across four warzones and the mul
 
 The shared-cockpit scene adapter matches 640 original receives across four warzones and both flight models, including instrument readings, live pose matrices, dead-aircraft placement guards, target lookup, radio selection, landing notifications and key-dispatch permissions. Another 66,560 outgoing packet bytes and 37,092 reported state/event fields agree in normal and sanitizer builds. Frontend action dispatch and synchronized sessions remain in progress.
 
+### Shared cockpit sessions
+
+Pilot and gunner sessions now exchange their real crew records at the original world-rendering callback. Controls retain seat permissions, queued actions, radio calls, waypoint changes, countermeasure cooldowns and mission-exit handling. The gunner receives the pilot's flight and instrument state while retaining independent views and displays. The transport and multiplayer menus are still being connected.
+
+Two paired 100-frame sequences, one for each flight model, match 400 seat frames, 30,000 state fields and 41,600 transmitted bytes. All 326 complete frames without invalid original reads match 25,036,800 indexed pixels. Normal and sanitizer traces have SHA-256 `2e97837aac0d59e553d71da3678043e6c5846cf4d19a3bf2f4ac82dfc6e688f8`. These sequences isolate crew exchange; APNET firing, casualty and connection-event integration is being checked separately.
+
+The comparisons exposed three ordering details. Instruments sample flight readings before the receive/render barrier. Debris uses the attachment transforms already established in the scene. The shared crash sequence ends both seats after its fade, while other multiplayer modes have different restart/follow rules. The original dry aircraft weight is transmitted separately from fuel-inclusive physical weight.
+
+Manual C/F now release chaff/flares through their own handlers. Live comparisons cover 320 frames, 24,000 state fields, 5,600,420 defined cockpit pixels and 7,756,800 complete-frame pixels in normal and sanitizer builds. Negative flight-plan speeds retain signed arrival times: 1,150 cases match 220,800,000 pixels in each build. The initial ship-attack radio deadline is -60,000 ticks, allowing a reaction immediately. Mission-ending rules match all 3,072 cause/immunity/connection cases and 21,504 fields. Fragment scene checks retain 83 matching complete frames; casualty/restart checks retain all 439,192 matching fields.
+
 Remaining integration: multiplayer, complete game journeys and final build/release verification. CI follows once integration is finished.
 
 Original uninitialized memory and out-of-bounds effects are excluded. Invalid resources and unsafe states receive bounded handling. No game media or generated screenshots are committed.

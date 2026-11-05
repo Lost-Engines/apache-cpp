@@ -48,6 +48,8 @@ public:
   void finish_update(int32_t now);
   bool fire(int32_t now, double dt, uint16_t key);
   bool select(int32_t now, uint16_t key);
+  bool release_countermeasure(int32_t now, unsigned int weapon, uint16_t key);
+  bool toggle_countermeasures(uint16_t key) { return inventory.toggle_countermeasures(key, context(0, 0)); }
   void synchronize_countermeasures(bool receive);
   void removed(size_t round, unsigned int weapon) { impacts.remove(round, weapon); }
 };

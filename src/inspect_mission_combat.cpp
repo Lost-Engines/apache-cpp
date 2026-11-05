@@ -231,7 +231,7 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       auto const &f{pilot->readings()}; auto const &target{runtime.sensors->state.current};
       output << "crew-state"; for(auto v : f.angles) output << ' ' << v;
       for(auto v : f.position.position) output << ' ' << v; for(auto v : f.position.rotation) output << ' ' << v;
-      output << ' ' << f.climb << ' ' << f.fuel << ' ' << f.torque << ' ' << f.sidespeed << ' ' << f.airspeed << ' ' << std::setprecision(17) << pilot->power().weight << ' ' << pilot->power().endurance;
+      output << ' ' << f.climb << ' ' << f.fuel << ' ' << f.torque << ' ' << f.sidespeed << ' ' << f.airspeed << ' ' << std::setprecision(17) << pilot->model_weight << ' ' << pilot->power().endurance;
       for(auto v : f.engines) output << ' ' << v;
       output << ' ' << pilot->landed() << ' ' << static_cast<unsigned int>(crew->next_frame_ticks) << ' ' << crew->leaving << ' ' << runtime.player_armament->control_mode << ' ' << pilot->death();
       output << ' ' << static_cast<unsigned int>(target.identity.kind) << ' ' << identity(target.identity);
@@ -240,6 +240,7 @@ void inspect_mission_combat(std::istream &input, std::ostream &output, apache::r
       for(auto v : runtime.sensors->current_display) output << ' ' << v;
       output << '\n';
     }
+    else if(command == "network-maintain") { for(auto &actor : actors.units) { actor.object.relative = actor.object.world; render::maintain_model(actor.object); } }
     else if(command == "network-context") {
       unsigned int mode;
       input >> network.state.local >> mode >> network.lifecycle.following >> network.lifecycle.other_players;

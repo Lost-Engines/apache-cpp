@@ -180,6 +180,7 @@ int main(int const argc, char const *const argv[]) try {
   if(command == "logbook") { inspect_logbook(data, std::cin, std::cout); return 0; }
   if(command == "audio") { inspect_audio(data, std::cin, std::cout); return 0; }
   if(command == "communications") { inspect_communications(std::cin, std::cout); return 0; }
+  if(command == "session-shared") { if(argc < 7) throw std::runtime_error{"session-shared requires mission, video mode, flight model and seat"}; inspect_session(data, std::stoi(argv[3]), static_cast<unsigned int>(std::stoul(argv[4])), std::stoi(argv[5]) == 2, std::cin, std::cout, std::stoi(argv[6])); return 0; }
   if(command == "session") { if(argc < 6) throw std::runtime_error{"session requires mission, video mode and flight model"}; inspect_session(data, std::stoi(argv[3]), static_cast<unsigned int>(std::stoul(argv[4])), std::stoi(argv[5]) == 2, std::cin, std::cout); return 0; }
   if(command == "mission-sensors") { if(argc < 5) throw std::runtime_error{"mission-sensors requires a warzone and mission path"}; inspect_sensors(data, argv[3], argv[4], std::cin, std::cout); return 0; }
   if(command == "cameras") { inspect_cameras(data, std::cin, std::cout); return 0; }
@@ -546,7 +547,7 @@ int main(int const argc, char const *const argv[]) try {
           bool tree{false}; uint32_t model{0}, flags{0}, h{0}, p{0}, r{0}; apache::math::pose pose;
           std::cin >> tree >> model >> flags >> pose.position[0] >> pose.position[1] >> pose.position[2] >> h >> p >> r;
           pose.rotation = trig.transformation(h, p, r);
-          if(tree) { auto object{apache::render::construct_model(fragment_models, model, pose)}; object.flags = flags; apache::render::fracture_model(object, world->fragments, seed); }
+          if(tree) { auto object{apache::render::construct_model(fragment_models, model, pose)}; object.flags = flags; apache::render::maintain_model(object); apache::render::fracture_model(object, world->fragments, seed); }
           else world->fragments.create(model, flags, pose, seed);
         }
         for(size_t i{0}; i != steps; ++i) world->advance(delta, seed);
@@ -750,7 +751,7 @@ int main(int const argc, char const *const argv[]) try {
           uint32_t id{0}, flags{0}, h{0}, p{0}, r{0}; apache::math::pose pose;
           std::cin >> id >> flags >> pose.position[0] >> pose.position[1] >> pose.position[2] >> h >> p >> r; pose.rotation = trig.transformation(h, p, r);
           if(operation == "single") world->fragments.create(id, flags, pose, seed);
-          else { auto object{apache::render::construct_model(models, id, pose)}; object.flags = flags; apache::render::fracture_model(object, world->fragments, seed); }
+          else { auto object{apache::render::construct_model(models, id, pose)}; object.flags = flags; apache::render::maintain_model(object); apache::render::fracture_model(object, world->fragments, seed); }
         } else throw std::runtime_error{"Unknown fragment-state operation"};
       }
     }

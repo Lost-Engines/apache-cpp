@@ -16,6 +16,7 @@ add_library(apache_core
   src/simulation/remote_weapons.cpp src/simulation/remote_weapons.h
   src/simulation/mission_network.cpp src/simulation/mission_network.h
   src/simulation/mission_crew.cpp src/simulation/mission_crew.h
+  src/simulation/mission_end.cpp src/simulation/mission_end.h
   src/audio/engine.cpp src/audio/engine.h
   src/audio/effects.cpp src/audio/effects.h src/audio/stream.cpp src/audio/stream.h
   src/frontend/score_menu.cpp

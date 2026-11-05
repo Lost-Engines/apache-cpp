@@ -14,6 +14,7 @@ public:
   uint8_t next_frame_ticks{0};
   std::function<void(uint16_t)> key;
   std::function<void(uint8_t)> landing;
+  std::function<void(unsigned int)> death;
   std::function<void(std::string_view, uint8_t)> radio;
   mission_crew(mission_runtime &mission, mission_network &connection);
   ~mission_crew();

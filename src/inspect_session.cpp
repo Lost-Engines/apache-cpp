@@ -6,13 +6,46 @@
 #include <ostream>
 #include <stdexcept>
 
-void inspect_session(apache::resources::data_store const &data, int const mission, unsigned int const video, bool const arcade, std::istream &input, std::ostream &output) {
-  apache::frontend::mission_options const options{.arcade{arcade}, .video_mode{video}, .detail{9}};
+void inspect_session(apache::resources::data_store const &data, int const mission, unsigned int const video, bool const arcade, std::istream &input, std::ostream &output, int const shared_seat) {
+  apache::frontend::mission_options options{.arcade{arcade}, .video_mode{video}, .detail{9}};
+  if(shared_seat >= 0) options.shared_seat = static_cast<apache::multiplayer::crew_role>(shared_seat);
   auto owner{mission < 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::frontend::mission_session::quick_start(data, -mission), options) : std::make_unique<apache::frontend::mission_session>(data, mission, options)};
   auto &session{*owner};
+  std::vector<apache::resources::bytes> incoming;
+  auto const hex{[&](std::span<uint8_t const> bytes){
+    for(auto b : bytes) output << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(b);
+    output << std::dec << std::setfill(' ');
+  }};
+  if(session.network) {
+    session.network->send = [&](apache::multiplayer::packet const &message){
+      if(message.type() == apache::multiplayer::message_type::crew) { output << "transmit "; hex(message.bytes().subspan(24, 104)); output << '\n'; }
+    };
+    session.wait_network = [&](){
+      for(auto const &bytes : incoming) {
+        auto const message{apache::multiplayer::decode_crew(shared_seat ? apache::multiplayer::crew_role::pilot : apache::multiplayer::crew_role::gunner, bytes)};
+        if(!message) throw std::runtime_error{"Invalid incoming crew fixture"};
+        session.crew->receive(*message);
+      }
+      incoming.clear();
+    };
+  }
   std::string command;
   while(input >> command) {
-    if(command == "step") { unsigned int ticks; input >> ticks; session.step(ticks); }
+    if(command == "receive") {
+      if(!session.crew) throw std::runtime_error{"Shared session required"};
+      std::string bytes; input >> bytes;
+      if(bytes.size() != 208) throw std::runtime_error{"Expected 104-byte crew packet"};
+      apache::resources::bytes decoded;
+      for(size_t i{0}; i < bytes.size(); i += 2) decoded.push_back(static_cast<uint8_t>(std::stoul(bytes.substr(i, 2), nullptr, 16)));
+      incoming.push_back(std::move(decoded));
+    }
+    else if(command == "crew-status") {
+      auto const &arm{*session.runtime.player_armament};
+      output << "crew-status " << session.finished << ' ' << session.ending.countdown << ' ' << arm.control_mode << ' ' << arm.inventory.automatic_chaff;
+      for(auto v : arm.inventory.deadlines) output << ' ' << v;
+      output << '\n';
+    }
+    else if(command == "step") { unsigned int ticks; input >> ticks; session.step(ticks); }
     else if(command == "key") { unsigned int key; bool down; input >> key >> down; session.key(static_cast<uint16_t>(key), down, false); }
     else if(command == "post") { unsigned int key; input >> key; session.post(static_cast<uint16_t>(key)); }
     else if(command == "joystick") {

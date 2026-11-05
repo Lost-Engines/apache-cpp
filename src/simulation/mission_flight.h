@@ -33,6 +33,7 @@ class mission_flight {
 public:
   std::function<void()> died;
   uint32_t collision_model{0};
+  int32_t model_weight{14058};
   std::optional<size_t> hit_actor;
   realistic_flight realistic;
   arcade_flight arcade;

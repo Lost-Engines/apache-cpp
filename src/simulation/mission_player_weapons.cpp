@@ -46,6 +46,11 @@ std::optional<size_t> mission_player_weapons::launch(player_shot const &shot) {
   return weapons.launch_player(request, !shot.guided && shot.untracked);
 }
 bool mission_player_weapons::fire(int32_t const now, double const dt, uint16_t const key) { weapons.environment.now = now; return inventory.fire(key, context(now, dt)); }
+bool mission_player_weapons::release_countermeasure(int32_t const now, unsigned int const weapon, uint16_t const key) {
+  weapons.environment.now = now; synchronize_countermeasures(false);
+  bool const released{weapons.release_countermeasure(weapon, key)};
+  synchronize_countermeasures(true); return released;
+}
 bool mission_player_weapons::select(int32_t const now, uint16_t const key) { return inventory.select(key, context(now, 0)); }
 void mission_player_weapons::prepare(int32_t const now, int32_t const delta, int32_t const hydra_input) {
   update_hydra(now, delta, hydra_input); evaluate_sight(now);

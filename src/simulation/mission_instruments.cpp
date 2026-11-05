@@ -35,14 +35,20 @@ void mission_instruments::radar_contacts(std::span<radar_return const> const con
     output.push_back({contact.display[0], contact.display[1], symbol, selected.identity.kind != target_kind::none && equivalent_targets(selected, contact.target)});
   }
 }
+instrument_state mission_instruments::flight_display() const {
+  if(!mission.pilot || !mission.timing.player) throw std::runtime_error{"Instruments require a player aircraft"};
+  auto const &flight{mission.pilot->readings()}; auto const &actor{mission.actors.units[*mission.timing.player]}; auto const &body{actor.object};
+  auto const &path{mission.mission.tasks[actor.location.task].actors[actor.location.group].waypoints}; auto const labels{letters(path)};
+  instrument_inputs input{.position{body.world.position}, .heading{flight.angles[0]}, .pitch{flight.angles[1]}, .roll{flight.angles[2]}, .mission_time{mission.mission.time_of_day}, .game_time{mission.timing.now}, .terrain_height{mission.terrain.elevation(body.world.position[0], body.world.position[1])}, .climb_rate{flight.climb}, .airspeed{flight.airspeed}, .sidespeed{flight.sidespeed}, .torque{flight.torque}, .waypoint{}};
+  if(actor.waypoint && *actor.waypoint < path.size()) { auto const i{*actor.waypoint}; input.waypoint = {path[i].position[0], path[i].position[1], labels[i]}; }
+  return instrument_values(input, mission.trig);
+}
 void mission_instruments::update(unsigned int const view, math::pose const &camera, render::projection const &projection) {
   if(!mission.pilot || !mission.player_armament || !mission.sensors || !mission.timing.player) throw std::runtime_error{"Cockpit requires a player mission"};
   auto &pilot{*mission.pilot}; auto &arm{*mission.player_armament}; auto &sensors{*mission.sensors}; auto &target{sensors.state.current};
   auto const &flight{pilot.readings()}; auto &actor{mission.actors.units[*mission.timing.player]}; auto &body{actor.object};
   auto const &path{mission.mission.tasks[actor.location.task].actors[actor.location.group].waypoints}; auto const labels{letters(path)};
-  instrument_inputs input{.position{body.world.position}, .heading{flight.angles[0]}, .pitch{flight.angles[1]}, .roll{flight.angles[2]}, .mission_time{mission.mission.time_of_day}, .game_time{mission.timing.now}, .terrain_height{mission.terrain.elevation(body.world.position[0], body.world.position[1])}, .climb_rate{flight.climb}, .airspeed{flight.airspeed}, .sidespeed{flight.sidespeed}, .torque{flight.torque}, .waypoint{}};
-  if(actor.waypoint && *actor.waypoint < path.size()) { auto const i{*actor.waypoint}; input.waypoint = {path[i].position[0], path[i].position[1], labels[i]}; }
-  auto const display{instrument_values(input, mission.trig)}; auto &h{state.helmet};
+  auto const display{sampled ? *sampled : flight_display()}; auto &h{state.helmet};
   h.view = view; h.mode = arm.inventory.helmet_mode; h.faults = pilot.faults(); h.aircraft = body.world; h.camera = camera;
   h.heading = display.heading; h.pitch = display.pitch; h.roll = display.roll; h.command_heading = display.command_heading;
   h.barometric_altitude = display.barometric_altitude; h.radar_altitude = display.radar_altitude; h.climb_rate = display.climb_rate; h.airspeed = display.airspeed; h.torque = display.torque;
@@ -92,7 +98,7 @@ void mission_instruments::update(unsigned int const view, math::pose const &came
     auto &radar{tactical ? state.tactical : state.radar}; auto const &s{sensors.state};
     radar.mode = tactical ? render::radar_mode::tactical : s.ground ? render::radar_mode::ground : s.air ? render::radar_mode::air : render::radar_mode::inactive;
     radar.range = tactical ? s.tactical_range : s.ground ? s.ground_range : s.air_range; radar.corner_range = tactical ? s.tactical_corner : radar.range;
-    radar.mark_length = tactical ? s.tactical_mark : s.ground ? s.ground_mark : 0x3f4aa; radar.heading = h.heading; radar.failed = (h.faults & 0x200) != 0;
+    radar.mark_length = tactical ? s.tactical_mark : s.ground ? s.ground_mark : 0x3f4aa; radar.heading = flight.angles[0]; radar.failed = (h.faults & 0x200) != 0;
     radar.frozen = s.frozen; radar.tads = s.tads; radar.locked = s.locked; radar.scan_all = s.scan_all; radar.threat = s.threat; radar.range_index = s.ground_range_index;
     radar.has_target = target.identity.kind == target_kind::scenery || target.identity.kind == target_kind::mobile;
     radar.target_name = radar.has_target && description.model < mission.models.size() && mission.models[description.model] ? mission.models[description.model]->name : "";

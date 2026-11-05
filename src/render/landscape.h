@@ -56,6 +56,7 @@ class landscape {
   void refresh_scenery(size_t index);
 public:
   scene_palette palette;
+  std::function<void()> before_mobile_scan;
   mobile_scene mobiles;
   int32_t sun_glare{0};
   simulation::effects effects;

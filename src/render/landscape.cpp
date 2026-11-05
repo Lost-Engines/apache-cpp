@@ -191,6 +191,7 @@ void landscape::draw(framebuffer &target, math::pose camera, landscape_options c
   submit_craters(queue, active_craters, camera, {.cloud_mode{sky.cloud_mode}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   submit_effects(queue, active_effects, camera, {.cloud_mode{sky.cloud_mode}, .infra_red{options.infrared}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
   submit_fragments(queue, active_fragments, camera, {.cloud_mode{sky.cloud_mode}, .cloud_bottom{options.cloud_bottom}, .cloud_top{options.cloud_top}, .near_depth{options.near_object_depth}, .far_depth{options.far_object_depth}});
+  if(before_mobile_scan) before_mobile_scan();
   shadow_projection casting{terrain, trig, options.lighting};
   casting.cloud_mode = sky.cloud_mode; casting.cloud_top = options.cloud_top;
   casting.receiver = [&](math::vector3 const &position){ return active_mobiles.shadow_receiver(position); };

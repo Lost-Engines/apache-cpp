@@ -10,7 +10,8 @@ void fracture_parts(model_instance const &object, simulation::fragments &fragmen
 }
 } // namespace
 void fracture_model(model_instance &object, simulation::fragments &fragments, uint32_t &random_seed) {
-  maintain_model(object);
+  // Children retain the transform established by their most recent maintenance.
+  // Advancing the attachments here changes the original crash/debris poses.
   fracture_parts(object, fragments, random_seed);
 }
 void submit_fragments(draw_queue &queue, simulation::fragments const &fragments, math::pose const &camera, effect_visibility const &visibility) {

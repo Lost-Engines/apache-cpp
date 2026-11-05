@@ -66,7 +66,7 @@ view_frame player_views::update(view_sources const &sources, camera_input const 
   else if(modes.mode == 19) {
     auto const timer{int64_t{context.crash_timer} + input.delta / 4};
     context.crash_timer = static_cast<int32_t>(std::min<int64_t>(timer, INT32_MAX));
-    result.finished = timer > INT32_MAX && !context.network && !context.serial_connection;
+    result.finished = timer > INT32_MAX && ((!context.network && !context.serial_connection) || (context.network && context.game_mode == 3));
     if(context.crash_timer > 0x40000000) result.fade = math::add(context.crash_timer - 0x40000000, context.crash_timer - 0x40000000);
   }
   auto const track{[&](view_subject const &subject){ return geometry.tracking(tracking, subject.position, subject.model, subject.radius, input); }};

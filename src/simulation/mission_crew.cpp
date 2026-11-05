@@ -40,20 +40,22 @@ void mission_crew::receive(multiplayer::crew_state const &state) {
     radio(messages[role][index], samples[role][index]);
   }
   if(state.leaving) leaving = true;
-  if(state.death && state.death <= 12) pilot.request_death(state.death);
+  if(death) death(state.death);
+  else if(state.death && state.death <= 12) pilot.request_death(state.death);
   auto const old_mode{arm.control_mode}; arm.control_mode = 2;
   try { for(auto code : state.keys) if(key) key(code); }
   catch(...) { arm.control_mode = old_mode; throw; }
   arm.control_mode = old_mode;
 }
 multiplayer::packet mission_crew::transmit(unsigned int const ticks) {
+  if(network.state.local >= network.state.players.size()) throw std::runtime_error{"Invalid local shared-cockpit participant"};
   if(!runtime.pilot || !runtime.player_armament || !runtime.sensors) throw std::runtime_error{"Shared cockpit requires a player aircraft"};
   auto const &pilot{*runtime.pilot}; outgoing.death = static_cast<uint8_t>(pilot.death());
   if(network.state.seat == multiplayer::crew_role::pilot) {
     auto const &readings{pilot.readings()}; auto const &power{pilot.power()}; auto &p{outgoing.pilot};
     for(size_t i{0}; i < 3; ++i) p.angles[i] = std::bit_cast<int32_t>(readings.angles[i]);
     p.position = readings.position.position; p.flight_time = power.endurance; p.climb = readings.climb;
-    p.fuel = readings.fuel; p.weight = static_cast<int32_t>(power.weight); p.torque = readings.torque;
+    p.fuel = readings.fuel; p.weight = pilot.model_weight; p.torque = readings.torque;
     p.sidespeed = readings.sidespeed; p.airspeed = readings.airspeed; p.engines = readings.engines;
     p.frame_ticks = static_cast<uint8_t>(ticks); p.landed = pilot.landed();
   } else {

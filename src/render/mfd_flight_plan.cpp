@@ -7,7 +7,7 @@ namespace apache::render {
 void mfd_renderer::flight_plan(framebuffer &target, rectangle const area, std::span<waypoint_mark const> const route, size_t const current, int32_t const x, int32_t const y, uint32_t const heading, int32_t const airspeed, math::trigonometry const &trig) const {
   off(target, area);
   if(route.empty()) return;
-  if(current >= route.size() || airspeed < 0) throw std::runtime_error{"Invalid flight-plan instrument state"};
+  if(current >= route.size()) throw std::runtime_error{"Invalid flight-plan instrument state"};
   auto const distance{[&](waypoint_mark const &point){ int64_t const dx{math::subtract(point.x, x)}, dy{math::subtract(point.y, y)}; return math::integer_sqrt(static_cast<uint64_t>(dx * dx) + static_cast<uint64_t>(dy * dy)); }};
   auto const to_waypoint{distance(route[current])};
   uint32_t range{to_waypoint};
@@ -39,7 +39,7 @@ void mfd_renderer::flight_plan(framebuffer &target, rectangle const area, std::s
   text(std::format("{:03}", degrees(trig.arctangent(math::subtract(route[current].x, x), math::subtract(route[current].y, y)))), 0xe6666, 0xccccc, true);
   text(std::format("{:03}", degrees(heading)), -0xe6666, 0xccccc, false);
   text(std::format("{:02}.{:02}", to_waypoint / 0x17bc00, to_waypoint % 0x17bc00 / 0x3cc2), -0xe6666, -0xccccc, false);
-  uint32_t const seconds{airspeed ? static_cast<uint32_t>(to_waypoint / (int64_t{airspeed} * 432)) : 0};
+  int32_t const seconds{airspeed ? static_cast<int32_t>(to_waypoint / (int64_t{airspeed} * 432)) : 0};
   text(airspeed ? std::format("{:02}:{:02}", seconds / 60, seconds % 60) : "--:--", 0xe6666, -0xccccc, true);
 }
 } // namespace apache::render

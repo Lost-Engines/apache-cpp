@@ -43,30 +43,36 @@ mission_session::mission_session(resources::data_store const &data, int const mi
   : mission_session{data, find_mission(data, mission_id), options} {}
 mission_session::mission_session(resources::data_store const &data, resources::mission_briefing definition, mission_options const options, resources::mission_definition const *edited)
   : settings{options}, initial_seeds{weapon_seeds()}, briefing{std::move(definition)}, zone{warzone(briefing.zone)},
-    runtime{data, zone, mission_path(briefing), true, true, options.difficulty, initial_seeds, edited},
+    runtime{data, zone, mission_path(briefing), true, true, options.shared_seat ? 2 : options.difficulty, initial_seeds, edited},
     daylight{runtime.executable, runtime.mission.time_of_day}, world{data, zone}, panels{data, options.video_mode},
     avionics{panels, runtime.trig, runtime.executable}, frame{options.video_mode ? 640u : 320u, options.video_mode ? 480u : 240u} {
+  if(options.shared_seat) {
+    if(*options.shared_seat != multiplayer::crew_role::pilot && *options.shared_seat != multiplayer::crew_role::gunner) throw std::runtime_error{"Invalid shared cockpit seat"};
+    settings.difficulty = 2; settings.invulnerable = settings.infinite_weapons = settings.no_crashes = false;
+  }
   auto const player{std::ranges::find_if(runtime.actors.units, [this](auto const &actor){ return runtime.mission.tasks[actor.location.task].user && actor.location.group == 0 && actor.location.member == 0; })};
   if(player == runtime.actors.units.end()) throw std::runtime_error{"Mission has no player aircraft"};
   runtime.timing.game_flow = briefing.flow;
   runtime.start_player(static_cast<size_t>(player - runtime.actors.units.begin()), {.arcade{options.arcade}, .flow{briefing.flow}});
-  runtime.equip_player(runtime.mission.weapons); runtime.enable_player_sensors();
-  runtime.pilot->arcade.invulnerable = runtime.pilot->realistic.invulnerable = runtime.damage->invulnerable = options.invulnerable;
-  runtime.pilot->arcade.no_crashes = runtime.pilot->realistic.no_crashes = options.no_crashes;
-  runtime.pilot->arcade.infinite_fuel = runtime.pilot->realistic.infinite_fuel = briefing.flow == 1;
-  runtime.player_armament->inventory.infinite |= options.infinite_weapons || briefing.flow == 1;
+  runtime.equip_player(runtime.mission.weapons); runtime.enable_player_sensors(options.shared_seat ? 3 : 0);
+  runtime.pilot->arcade.invulnerable = runtime.pilot->realistic.invulnerable = runtime.damage->invulnerable = settings.invulnerable;
+  runtime.pilot->arcade.no_crashes = runtime.pilot->realistic.no_crashes = settings.no_crashes;
+  runtime.pilot->arcade.infinite_fuel = runtime.pilot->realistic.infinite_fuel = briefing.flow == 1 && !options.shared_seat;
+  runtime.player_armament->inventory.infinite |= !options.shared_seat && (options.infinite_weapons || briefing.flow == 1);
   if(briefing.flow == 1) { runtime.player_armament->inventory.armed = true; if(!runtime.player_armament->inventory.helmet_mode) runtime.player_armament->inventory.helmet_mode = 1; }
   runtime.player_damage->state.random = initial_seeds.damage;
+  runtime.combat.warnings.ships_attacked = -60000;
   runtime.sensors->state.tads = false;
   controls.configuration = options.controls; controls.configuration.resolve();
   controls.curve = simulation::joystick_curve{options.deadband}; controls.joystick = options.axes;
-  views = std::make_unique<simulation::player_views>(runtime.executable, runtime.trig, runtime.environment.height, runtime.sensors->state);
+  views = std::make_unique<simulation::player_views>(runtime.executable, runtime.trig, runtime.environment.height, runtime.sensors->state, options.shared_seat ? static_cast<unsigned int>(*options.shared_seat) : 2);
   runtime.player_armament->helmet_direction = [this](){
     if(views->modes.mode == 12) return runtime.player_armament->helmet;
     auto const &rotation{runtime.pilot->readings().position.rotation};
     return math::vector3{rotation[3], rotation[4], rotation[5]};
   };
   instruments = std::make_unique<simulation::mission_instruments>(runtime, options.video_mode);
+  runtime.events.instrument_update = [this](){ instruments->sample(); };
   instruments->state.damaged_display_seed = 0;
   world.initialise_model_metadata(runtime.executable);
   world.bind_scene(runtime.scene.base, runtime.scene.extra, runtime.mobiles, runtime.weapons->visuals, runtime.damage->marks, runtime.debris);
@@ -104,7 +110,10 @@ mission_session::mission_session(resources::data_store const &data, resources::m
   };
   runtime.events.missile_camera = [this](size_t i){ views->context.latest_weapon = i; };
   runtime.events.flight = [this](simulation::flight_step_result const &result){
-    if(result.landing) records.add({{12, 0, 0, 0, 0, result.landing->grade}});
+    if(result.landing) {
+      records.add({{12, 0, 0, 0, 0, result.landing->grade}});
+      if(crew) crew->outgoing.pilot.landing = static_cast<uint8_t>(result.landing->grade);
+    }
     using enum simulation::flight_event;
     for(auto event : result.events) { if(flight_sound) flight_sound(event); }
     for(auto event : result.events) switch(event) {
@@ -124,7 +133,10 @@ mission_session::mission_session(resources::data_store const &data, resources::m
       default: break;
     }
   };
-  runtime.events.landing = [this](auto const &landing){ if(landing.grade) records.add({{12, 0, 0, 0, 0, landing.grade}}); };
+  runtime.events.landing = [this](auto const &landing){
+    if(landing.grade) records.add({{12, 0, 0, 0, 0, landing.grade}});
+    if(crew && landing.grade) crew->outgoing.pilot.landing = static_cast<uint8_t>(landing.grade);
+  };
   runtime.events.killed = [this](auto const &target, auto const &source){
     uint32_t const who{source.kind == simulation::target_kind::mobile ? source.index : UINT32_MAX};
     if(target.kind == simulation::target_kind::mobile) records.add({{8, static_cast<uint32_t>(runtime.timing.now), who, 0, 0, target.index}});
@@ -135,6 +147,28 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     auto const id{static_cast<uint32_t>(slot + 1)};
     if(added) communications.add_changing(id, text, 2); else communications.remove(id);
   };
+  if(options.shared_seat) {
+    network = std::make_unique<simulation::mission_network>(runtime);
+    network->enabled = network->state.active = true;
+    network->state.seat = *options.shared_seat; network->state.local = static_cast<uint32_t>(*options.shared_seat);
+    network->state.players[network->state.local].name = *options.shared_seat == multiplayer::crew_role::pilot ? "PILOT" : "GUNNER";
+    network->lifecycle.mode = multiplayer::game_mode::pilot_gunner;
+    runtime.player_armament->control_mode = static_cast<unsigned int>(*options.shared_seat);
+    runtime.player_armament->inventory.helmet_mode = *options.shared_seat == multiplayer::crew_role::pilot ? 2 : 3;
+    crew = std::make_unique<simulation::mission_crew>(runtime, *network);
+    crew->key = [this](uint16_t code){ command(code); };
+    crew->death = [this](unsigned int cause){ request_end(cause); };
+    crew->landing = [this](uint8_t grade){ records.add({{12, 0, 0, 0, 0, grade}}); };
+    crew->radio = [this](std::string_view text, uint8_t sample){ communications.add(text, 3, 1000); if(play_sound) play_sound(sample, 63, 32768); };
+    runtime.player_armament->inventory.events.key_event = runtime.weapons->player_key_event = [this](uint16_t code){ return crew->notify_key(code); };
+    network->lifecycle.events.death = [this](unsigned int cause){ request_end(cause); };
+    views->context.network = true; views->context.game_mode = 3;
+    world.before_mobile_scan = [this](){
+      if(wait_network) wait_network();
+      network->state.begin_frame();
+      if(crew->leaving) ending.countdown = 1;
+    };
+  }
   select_view(views->modes.home);
 }
 void mission_session::detail(unsigned int const level) {
@@ -182,36 +216,49 @@ void mission_session::crash(bool const airborne) {
     runtime.weapons->visuals.add_air_explosion(object.world.position, 0x3200, {bytes.i32(), bytes.i32(), bytes.i32()});
   } else runtime.weapons->visuals.add_ground_explosion(object.world.position, 0x3200, runtime.terrain);
 }
+void mission_session::request_end(unsigned int const cause) {
+  ending.cause = runtime.pilot->death();
+  bool const crash_view{ending.request(cause, settings.invulnerable, settings.no_crashes)};
+  runtime.pilot->realistic.death = runtime.pilot->arcade.death = ending.cause;
+  finished = finished || !ending.active;
+  if(crash_view) select_view(19);
+}
 void mission_session::key(uint16_t const scan, bool const down, bool const dispatch) {
   controls.key(scan & 127, down); if(down && dispatch) post(scan);
 }
 void mission_session::command(uint16_t const key) {
   if(quit_prompt) {
-    if((key & 255) == 0x15) finished = true;
+    if((key & 255) == 0x15) request_end(1);
     else if((key & 255) == 0x31) { quit_prompt = false; quit_drawn = false; views->modes.changed = true; }
     return;
   }
   auto &arm{*runtime.player_armament}; auto &sensors{runtime.sensors->state}; auto &displays{instruments->state.displays};
   auto const mode{arm.control_mode}; auto const faults{runtime.pilot->faults()}; bool const gunner{views->modes.crew == 1};
-  simulation::targeting_events const target_events{.key_event{}, .cockpit_sound{runtime.events.sound ? std::function<void(unsigned int)>{[this](unsigned int id){ runtime.events.sound(id, true); }} : nullptr}, .show_radar{[&](){ displays.show_radar(gunner, faults); }}};
+  simulation::targeting_events const target_events{.key_event{crew ? std::function<bool(uint16_t)>{[this](uint16_t code){ return crew->notify_key(code); }} : nullptr}, .cockpit_sound{runtime.events.sound ? std::function<void(unsigned int)>{[this](unsigned int id){ runtime.events.sound(id, true); }} : nullptr}, .show_radar{[&](){ displays.show_radar(gunner, faults); }}};
   if((key & 255) == 0x1c) { arm.select(runtime.timing.now, key); return; }
   if((key & 255) == 0x13) { sensors.cycle_radar(key, mode, target_events); return; }
   if((key & 255) == 0x26) { sensors.toggle_lock(key, mode, faults, target_events); return; }
+  if(crew && key >= 0x203b && key <= 0x2044) { crew->outgoing.message = static_cast<uint8_t>(key - 0x203a); return; }
   if(key >= 2 && key <= 11) {
+    if(!settings.arcade) runtime.pilot->realistic.dynamics.hover.active = false;
+    if(mode == 1 || (mode == 0 && crew && crew->notify_key(key))) return;
     if(settings.arcade) { static std::array<double, 10> constexpr values{-.8, -.6, -.4, -.2, 0, .2, .4, .6, .8, 1}; runtime.pilot->arcade.delta_vertical_velocity = values[key - 2]; }
     else { runtime.pilot->realistic.dynamics.hover.active = false; runtime.pilot->realistic.dynamics.power.collective = static_cast<double>(key - 1) * 10.0; }
     return;
   }
   switch(key) {
-    case 0x2001: case 0x2010: case 0x102d: quit_prompt = true; break;
+    case 0x2001: case 0x2010: case 0x102d:
+      if(crew) { crew->notify_key(key); request_end(1); }
+      else quit_prompt = true;
+      break;
     case 0x3b: help_requested = true; break;
-    case 1: case 0x200f: accelerated_time = 1; break;
-    case 0x400f: accelerated_time = 8; break;
-    case 0xf: accelerated_time = accelerated_time == 8 ? 1 : accelerated_time * 2; break;
-    case 0x19: paused = !paused; break;
+    case 1: case 0x200f: if(!network) accelerated_time = 1; break;
+    case 0x400f: if(!network) accelerated_time = 8; break;
+    case 0xf: if(!network) accelerated_time = accelerated_time == 8 ? 1 : accelerated_time * 2; break;
+    case 0x19: if(!network) paused = !paused; break;
     case 0x31: case 0x4031: {
       auto &actor{runtime.actors.units[*runtime.timing.player]};
-      runtime.route.cycle(runtime.mission.tasks[actor.location.task].actors[actor.location.group].waypoints, actor.waypoint, key == 0x31, key, mode); break;
+      runtime.route.cycle(runtime.mission.tasks[actor.location.task].actors[actor.location.group].waypoints, actor.waypoint, key == 0x31, key, mode, {.key_event{target_events.key_event}, .achieved{}, .sound{}, .surface{}}); break;
     }
     case 0x33: case 0x34:
       if(views->modes.in_cockpit) {
@@ -251,8 +298,9 @@ void mission_session::command(uint16_t const key) {
         if(candidate != *runtime.timing.player && !actor.destroyed && runtime.mobiles.contains(runtime.spatial.mobile_id(candidate))) { drone = candidate; select_view(11); break; }
       } break;
     }
-    case 0x39: case 0x2e: case 0x21: runtime.fire_player(runtime.timing.now, frame_time, key); break;
-    case 0x202e: arm.inventory.automatic_chaff = !arm.inventory.automatic_chaff; break;
+    case 0x39: runtime.fire_player(runtime.timing.now, frame_time, key); break;
+    case 0x2e: case 0x21: arm.release_countermeasure(runtime.timing.now, key == 0x2e ? 7 : 8, key); break;
+    case 0x202e: arm.toggle_countermeasures(key); break;
     case 0x1a: case 0x1b: case 0x401a: case 0x401b: displays.cycle(gunner, (key & 255) == 0x1b, (key & 0x4000) == 0); break;
     case 0x201a: case 0x201b: displays.toggle(gunner, (key & 255) == 0x1b, faults); break;
     case 0x18: if(settings.arcade) runtime.pilot->arcade.toggle_hover(); else runtime.pilot->realistic.dynamics.hover.toggle(runtime.pilot->realistic.dynamics.u); break;
@@ -269,8 +317,15 @@ void mission_session::step(unsigned int const ticks) {
   bool const was_prompt{quit_prompt};
   for(auto key : commands) { command(key); if(quit_prompt != was_prompt || help_requested || finished) break; }
   commands.clear();
-  if(paused || finished || was_prompt || help_requested) return;
+  if(paused || (finished && !network) || was_prompt || help_requested) return;
   if(controls.held[0x39]) runtime.fire_player(runtime.timing.now, frame_time, 0x39);
+  if(network && crew) {
+    network->state.dead = runtime.pilot->death() != 0;
+    if(network->send) network->send(crew->transmit(ticks));
+    if(auto casualties{network->casualties.take_mobile(network->state.local, network->state.players[network->state.local].name)}; casualties && network->send) network->send(*casualties);
+    if(auto casualties{network->casualties.take_scenery(network->state.local, network->state.players[network->state.local].name)}; casualties && network->send) network->send(*casualties);
+    runtime.random.global_seed = 1;
+  }
   for(unsigned int i{0}; i != accelerated_time; ++i) {
     auto const buttons{controls.button_commands()};
     for(size_t j{0}; j != buttons.count; ++j) post(static_cast<uint16_t>(buttons.keys[j]));
@@ -282,7 +337,8 @@ void mission_session::step(unsigned int const ticks) {
     records.add({{2, ticks, 0, 0, 0, 0}});
     records.position(runtime.pilot->readings().position.position);
     communications.advance(frame_time);
-    if(runtime.pilot->death() && views->modes.mode != 19) select_view(19);
+    auto const cause{runtime.pilot->death()};
+    if((cause == 2 || cause == 3 || cause == 4 || cause == 10 || cause == 11 || cause == 12) && views->modes.mode != 19) select_view(19);
   }
   runtime.player_armament->update_hydra(runtime.timing.now, last_delta, controls.keyboard[4]);
 }
@@ -320,6 +376,10 @@ void mission_session::draw() {
   frame.reset_clip(); panels.draw(frame, views->modes.mode, views->modes.changed); avionics.draw(frame, state, world, visual.lighting);
   for(size_t i{0}; i != 256; ++i) frame.image.colours[i] = {world.palette.modified[i * 3], world.palette.modified[i * 3 + 1], world.palette.modified[i * 3 + 2]};
   views->modes.changed = false;
+  if(network) {
+    ending.finish_frame(); crew->outgoing.leaving = ending.quitting;
+    finished = finished || !ending.active || !network->state.active;
+  }
   if(quit_prompt) {
     auto const &prompt{panels.sprite(settings.video_mode ? "END_YN.640" : "END_YN.320")};
     frame.reset_clip(); frame.blit(prompt, settings.video_mode ? 210 : 86, settings.video_mode ? 116 : 54, true); quit_drawn = true;

@@ -4,6 +4,8 @@ The reconstruction follows the January 1998 Windows software engine using data s
 
 The sibling analysis project supplies original-code reference runs and independent numerical tests. C++ comparisons are added as each subsystem is implemented. Passing original-against-original repeatability tests is not counted as C++ acceptance.
 
+The complete game is undergoing final release verification. Single-player campaigns and LAN multiplayer pass original-instruction, deterministic-frame and real-window comparisons in normal and sanitizer builds. The detailed entries below retain the implementation history.
+
 Current implementation:
 
 - Bounded binary readers and case-insensitive resource lookup.
@@ -350,3 +352,18 @@ Shift+M opens the original chat editor. Editing, recall, cancellation, text limi
 Live localhost checks cover all five Apache menu modes, chat delivery, the original help/pause restrictions and departures. An eight-player check verifies continued client updates after the server leaves. Server succession repeats the existing waiting/ready exchange, preserving aircraft and scores. This repairs the original receiver's cleared upload gate after server departure.
 
 Remaining work: final window journeys and release/build verification, followed by CI. The separate MANEDIT and earlier-engine research continues in the analysis checkout.
+
+
+### Final multiplayer window verification
+
+The full six-mode matrix and all-actor Mission 141 comparison pass in both normal and sanitizer builds with identical state digests. Three two-process window journeys also pass in both builds: combat, shared pilot/gunner flight and network combat. They navigate the real menus, take off, deliver chat, switch views and return to the lobby. Tests use private Xvfb displays, temporary saves and localhost-only sockets. Debugger callbacks restrict transport and observe reception; they do not replace simulation or UI input. LeakSanitizer is disabled for these debugger runs because it does not support ptrace; the separate direct sanitizer checks remain enabled.
+
+The final packaging step uses an explicit runtime install list and rejects unexpected staged files. No game data or generated validation assets belong in release packages.
+
+### Optimized build and release packages
+
+A clean Release build with bundled GLFW and static compiler runtimes passes all five CTest targets. Its six-mode original-code comparison repeats the same 48 cases, 3,840 frames and state digest as the normal and sanitizer builds. The packaged executable passes private-window journeys at both original resolutions, including pilot/gunner/external views, pause, the illustrated manual and mission-exit confirmation.
+
+First-launch checks verify all 1,504 reference files (305,373,380 bytes), image extraction, missing-file repair, preserved existing files, remembered paths, checksum checking and temporary download cleanup. These use the existing local reference image and temporary destinations.
+
+Packaging checks exercise tar.gz and zip creation, compare every archive member with the explicit installed list, and reject extra files, hidden files, unexpected directories and file/directory symbolic links. The runtime contains eight files: the executable, setup helper, project documents and dependency licences. Tests and original game data are not included.

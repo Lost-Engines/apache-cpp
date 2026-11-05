@@ -1,0 +1,13 @@
+# Install only this explicit runtime list. Game data and validation captures stay local.
+install(TARGETS apache RUNTIME DESTINATION . COMPONENT Runtime)
+install(FILES README.md NOTICE.md DESTINATION . COMPONENT Runtime)
+install(FILES docs/build-release.md docs/implementation.md DESTINATION docs COMPONENT Runtime)
+if(WIN32)
+  install(PROGRAMS scripts/fetch-assets.bat DESTINATION scripts COMPONENT Runtime)
+else()
+  install(PROGRAMS scripts/fetch-assets.sh DESTINATION scripts COMPONENT Runtime)
+endif()
+install(FILES "${miniaudio_SOURCE_DIR}/LICENSE" DESTINATION licenses/miniaudio COMPONENT Runtime)
+if(DEFINED glfw_SOURCE_DIR AND EXISTS "${glfw_SOURCE_DIR}/LICENSE.md")
+  install(FILES "${glfw_SOURCE_DIR}/LICENSE.md" DESTINATION licenses/glfw COMPONENT Runtime)
+endif()

@@ -23,9 +23,11 @@ uint32_t random_pair(uint32_t &seed) {
 }
 
 }
-void mission_actors::synchronize_models() {
-  for(auto &unit : units) if(!(unit.conditions & 0x400)) {
-    unit.object.relative = unit.object.world; render::maintain_model(unit.object);
+void mission_actors::synchronize_models(bool const maintain_carriers) {
+  for(size_t index{0}; index < units.size(); ++index) {
+    auto &unit{units[index]}; if(unit.conditions & 0x400) continue;
+    unit.object.relative = unit.object.world;
+    if(maintain_carriers || std::ranges::none_of(carriers, [index](auto const &carrier){ return carrier.actor == index; })) render::maintain_model(unit.object);
   }
   for(auto &carrier : carriers) {
     auto &ship{units[carrier.actor].object};
@@ -33,9 +35,13 @@ void mission_actors::synchronize_models() {
       auto &unit{units[*slot.occupant]};
       auto &attached{ship.children[slot.attachment]};
       unit.object.relative = slot.relative;
-      render::maintain_model(unit.object, &ship.world);
+      if(maintain_carriers) render::maintain_model(unit.object, &ship.world);
       if(!attached) attached = std::make_unique<render::model_instance>();
       render::synchronize_model(*attached, unit.object);
+      // The original attachment shares the parked aircraft's world transform.
+      // Keep that cache current when rendering or an explicit maintenance call
+      // visits the carrier, including calls made during collision destruction.
+      attached->maintained = [this, index = *slot.occupant](auto const &object){ render::synchronize_model(units[index].object, object); };
     }
   }
 }

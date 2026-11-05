@@ -6,6 +6,7 @@ namespace apache::render {
 avionics_renderer::avionics_renderer(cockpit const &panels, math::trigonometry const &angles, resources::executable_data const &executable) : trig{angles}, instruments{panels, angles, executable}, screens{panels, executable}, helmet{executable, angles, panels.video_mode()} {}
 void avionics_renderer::multifunction(framebuffer &target, avionics_instruments &state, bool const gunner, landscape &world, sky_lighting const &lighting) const {
   auto const &flight{state.helmet};
+  auto const navigation{state.navigation.value_or(navigation_instruments{flight.heading, flight.airspeed})};
   state.displays.apply_faults(gunner, flight.faults);
   auto const draw_target{[&](rectangle const area){ screens.flir(target, area, world, state.target_model, state.target_camera_aim, flight.aircraft.position, lighting); }};
   for(size_t side{0}; side != 2; ++side) {
@@ -14,11 +15,11 @@ void avionics_renderer::multifunction(framebuffer &target, avionics_instruments 
     switch(state.displays.pages[gunner][side]) {
     case off: screens.off(target, area); break;
     case damaged: screens.damaged(target, area, state.damaged_display_seed); break;
-    case map: screens.moving_map(target, area, world, flight.aircraft.position[0], flight.aircraft.position[1], flight.heading, state.map_range); break;
+    case map: screens.moving_map(target, area, world, flight.aircraft.position[0], flight.aircraft.position[1], navigation.heading, state.map_range); break;
     case radar: screens.radar(target, area, state.radar, state.radar_contacts, trig); break;
     case tactical: screens.radar(target, area, state.tactical, state.tactical_contacts, trig); break;
     case flir: draw_target(area); break;
-    case flight_plan: screens.flight_plan(target, area, state.route, state.waypoint, flight.aircraft.position[0], flight.aircraft.position[1], flight.heading, flight.airspeed, trig); break;
+    case flight_plan: screens.flight_plan(target, area, state.route, state.waypoint, flight.aircraft.position[0], flight.aircraft.position[1], navigation.heading, navigation.airspeed, trig); break;
     case weapons: screens.weapons(target, area, state.stores); break;
     case engines: screens.engines(target, area, state.engines); break;
     case status: screens.status(target, area, flight.faults, state.radar.mode == radar_mode::ground, state.radar.mode == radar_mode::air); break;

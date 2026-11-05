@@ -17,6 +17,7 @@ struct model_instance {
   math::pose world;
   math::vector3 scale{1 << 24, 1 << 24, 1 << 24};
   std::vector<std::unique_ptr<model_instance>> children;
+  std::function<void(model_instance const &)> maintained;
 };
 model_instance construct_model(resources::model_archive const &models, uint32_t id, math::pose const &position, std::span<uint32_t const> variable_children = {});
 model_instance construct_scenery_model(resources::model_archive const &models, uint32_t id, math::pose const &position);

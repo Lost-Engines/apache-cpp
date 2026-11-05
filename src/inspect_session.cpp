@@ -12,16 +12,24 @@ void inspect_session(apache::resources::data_store const &data, int const missio
   auto owner{mission < 0 ? std::make_unique<apache::frontend::mission_session>(data, apache::frontend::mission_session::quick_start(data, -mission), options) : std::make_unique<apache::frontend::mission_session>(data, mission, options)};
   auto &session{*owner};
   std::vector<apache::resources::bytes> incoming;
+  bool packet_mode{false};
   auto const hex{[&](std::span<uint8_t const> bytes){
     for(auto b : bytes) output << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned int>(b);
     output << std::dec << std::setfill(' ');
   }};
   if(session.network) {
     session.network->send = [&](apache::multiplayer::packet const &message){
-      if(message.type() == apache::multiplayer::message_type::crew) { output << "transmit "; hex(message.bytes().subspan(24, 104)); output << '\n'; }
+      if(packet_mode) { output << "send "; hex(message.bytes()); output << '\n'; }
+      else if(message.type() == apache::multiplayer::message_type::crew) { output << "transmit "; hex(message.bytes().subspan(24, 104)); output << '\n'; }
     };
     session.wait_network = [&](){
       for(auto const &bytes : incoming) {
+        if(bytes.size() != 104) {
+          auto const packet{apache::multiplayer::packet::decode(bytes)};
+          if(!packet) throw std::runtime_error{"Invalid incoming APNET fixture"};
+          session.network->receive(*packet, session.runtime.timing.now);
+          continue;
+        }
         auto const message{apache::multiplayer::decode_crew(shared_seat ? apache::multiplayer::crew_role::pilot : apache::multiplayer::crew_role::gunner, bytes)};
         if(!message) throw std::runtime_error{"Invalid incoming crew fixture"};
         session.crew->receive(*message);
@@ -31,10 +39,11 @@ void inspect_session(apache::resources::data_store const &data, int const missio
   }
   std::string command;
   while(input >> command) {
-    if(command == "receive") {
+    if(command == "packet-mode") { packet_mode = true; }
+    else if(command == "receive" || command == "receive-packet") {
       if(!session.crew) throw std::runtime_error{"Shared session required"};
       std::string bytes; input >> bytes;
-      if(bytes.size() != 208) throw std::runtime_error{"Expected 104-byte crew packet"};
+      if(bytes.size() != (command == "receive" ? 208 : 816)) throw std::runtime_error{"Invalid incoming packet length"};
       apache::resources::bytes decoded;
       for(size_t i{0}; i < bytes.size(); i += 2) decoded.push_back(static_cast<uint8_t>(std::stoul(bytes.substr(i, 2), nullptr, 16)));
       incoming.push_back(std::move(decoded));
@@ -59,6 +68,34 @@ void inspect_session(apache::resources::data_store const &data, int const missio
       output << "flight" << std::hex;
       for(auto const value : {d.x, d.y, d.u, d.v, f.dx, f.dy, d.zdot}) output << ' ' << std::bit_cast<uint64_t>(value);
       output << std::dec << ' ' << d.wind_strength << ' ' << d.wind_gust << '\n';
+    }
+    else if(command == "scene-state") {
+      for(size_t index{0}; index < session.runtime.actors.units.size(); ++index) {
+        auto const &actor{session.runtime.actors.units[index]};
+        output << "actor " << index << ' ' << actor.object.id << ' ' << actor.object.status << ' ' << actor.destroyed;
+        for(auto v : actor.object.world.position) output << ' ' << v;
+        for(auto v : actor.object.world.rotation) output << ' ' << v;
+        output << '\n';
+      }
+      for(size_t index{0}; index < session.runtime.debris.pieces.size(); ++index) {
+        auto const &piece{session.runtime.debris.pieces[index]}; if(!piece.active) continue;
+        output << "fragment " << index << " 1 " << piece.model << ' ' << piece.flags;
+        for(auto v : piece.position.position) output << ' ' << static_cast<uint32_t>(v);
+        for(auto v : piece.position.rotation) output << ' ' << static_cast<uint32_t>(v);
+        for(auto v : piece.axis) output << ' ' << static_cast<uint32_t>(v);
+        output << ' ' << static_cast<uint32_t>(piece.spin);
+        for(auto v : piece.velocity) output << ' ' << static_cast<uint32_t>(v);
+        output << '\n';
+      }
+    }
+    else if(command == "projectiles") {
+      auto const &pool{session.runtime.weapons->rounds};
+      for(size_t index{0}; index < pool.entries().size(); ++index) if(pool.entries()[index]) {
+        auto const &r{pool.entries()[index]->state};
+        output << "projectile " << index << ' ' << r.weapon << ' ' << r.launched_at << ' ' << r.random << ' ' << r.body.motion.distance << ' ' << r.body.motion.speed;
+        for(auto v : r.body.pose.position) output << ' ' << v;
+        output << '\n';
+      }
     }
     else if(command == "attachments") {
       auto const visit{[&](auto &&self, apache::render::model_instance const &object) -> void {

@@ -5,9 +5,11 @@
 #include "simulation/mfd_state.h"
 
 namespace apache::render {
+struct navigation_instruments { uint32_t heading; int32_t airspeed; };
 struct avionics_instruments {
   helmet_instruments helmet;
   int32_t clock_time{0};
+  std::optional<navigation_instruments> navigation;
   unsigned int accelerated_time{1};
   std::array<std::string, 3> communications;
   simulation::mfd_state displays;

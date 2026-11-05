@@ -153,6 +153,25 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     network->state.seat = *options.shared_seat; network->state.local = static_cast<uint32_t>(*options.shared_seat);
     network->state.players[network->state.local].name = *options.shared_seat == multiplayer::crew_role::pilot ? "PILOT" : "GUNNER";
     network->lifecycle.mode = multiplayer::game_mode::pilot_gunner;
+    auto const player_index{*runtime.timing.player};
+    runtime.actors.units[player_index].network = static_cast<int32_t>(network->state.local);
+    if(!network->bind(network->state.local, player_index)) throw std::runtime_error{"Cannot bind shared aircraft"};
+    runtime.player_armament->inventory.events.remote_fire = [this](size_t index){
+      if(!network->send) return;
+      auto const *shot{round(index)}; if(!shot) return;
+      auto const &body{runtime.actors.units[*runtime.timing.player].object};
+      auto const &rotation{body.children.at(0)->children.at(0)->world.rotation};
+      network->send(multiplayer::fired(network->state.local, network->state.players[network->state.local].name,
+        shot->state.weapon, shot->state.random, network->identify(*runtime.player_armament->target), {rotation[3], rotation[4], rotation[5]}));
+    };
+    runtime.weapons->countermeasure_released = [this](unsigned int weapon){
+      if(network->send) network->send(multiplayer::event(weapon == 8 ? multiplayer::message_type::flare : multiplayer::message_type::chaff,
+        network->state.local, network->state.players[network->state.local].name, 0));
+    };
+    runtime.pilot->mobile_collision = [this](){
+      if(network->send) network->send(multiplayer::event(multiplayer::message_type::crashed, network->state.local,
+        network->state.players[network->state.local].name, static_cast<int32_t>(runtime.actors.units[*runtime.timing.player].location.task)));
+    };
     runtime.player_armament->control_mode = static_cast<unsigned int>(*options.shared_seat);
     runtime.player_armament->inventory.helmet_mode = *options.shared_seat == multiplayer::crew_role::pilot ? 2 : 3;
     crew = std::make_unique<simulation::mission_crew>(runtime, *network);
@@ -164,6 +183,8 @@ mission_session::mission_session(resources::data_store const &data, resources::m
     network->lifecycle.events.death = [this](unsigned int cause){ request_end(cause); };
     views->context.network = true; views->context.game_mode = 3;
     world.before_mobile_scan = [this](){
+      network->state.dead = runtime.pilot->death() != 0;
+      network->state.active = network->state.active && !finished;
       if(wait_network) wait_network();
       network->state.begin_frame();
       if(crew->leaving) ending.countdown = 1;
@@ -211,6 +232,11 @@ void mission_session::crash(bool const airborne) {
   runtime.spatial.unplace(*runtime.timing.player);
   auto &object{runtime.actors.units[*runtime.timing.player].object};
   render::fracture_model(object, runtime.debris, runtime.random.global_seed);
+  if(network && network->send) {
+    auto const cause{runtime.pilot->death()}; auto const local{network->state.local}; auto const &name{network->state.players[local].name};
+    if(cause == 2 && runtime.pilot->hit_actor) network->send(multiplayer::event(multiplayer::message_type::collision, local, name, runtime.actors.units[*runtime.pilot->hit_actor].serial, static_cast<int32_t>(runtime.actors.units[*runtime.pilot->hit_actor].location.task)));
+    else if(cause == 3 || cause == 11 || cause == 12) network->send(multiplayer::event(multiplayer::message_type::crashed, local, name, static_cast<int32_t>(runtime.actors.units[*runtime.timing.player].location.task)));
+  }
   if(airborne) {
     resources::reader bytes{runtime.executable.at(0x461510, 12), "crash velocity"};
     runtime.weapons->visuals.add_air_explosion(object.world.position, 0x3200, {bytes.i32(), bytes.i32(), bytes.i32()});
@@ -321,9 +347,12 @@ void mission_session::step(unsigned int const ticks) {
   if(controls.held[0x39]) runtime.fire_player(runtime.timing.now, frame_time, 0x39);
   if(network && crew) {
     network->state.dead = runtime.pilot->death() != 0;
-    if(network->send) network->send(crew->transmit(ticks));
-    if(auto casualties{network->casualties.take_mobile(network->state.local, network->state.players[network->state.local].name)}; casualties && network->send) network->send(*casualties);
-    if(auto casualties{network->casualties.take_scenery(network->state.local, network->state.players[network->state.local].name)}; casualties && network->send) network->send(*casualties);
+    auto const packet{crew->transmit(ticks)};
+    if(network->send) {
+      network->send(packet);
+      if(auto casualties{network->casualties.take_mobile(network->state.local, network->state.players[network->state.local].name)}) network->send(*casualties);
+      if(auto casualties{network->casualties.take_scenery(network->state.local, network->state.players[network->state.local].name)}) network->send(*casualties);
+    }
     runtime.random.global_seed = 1;
   }
   for(unsigned int i{0}; i != accelerated_time; ++i) {

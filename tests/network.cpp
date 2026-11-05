@@ -41,12 +41,12 @@ int main() try {
   auto sent{queue.take_mobile(0, "Pilot")}; require(sent && !queue.take_mobile(0, "Pilot"), "casualties sent once");
   replication replica; replica.local = 0; replica.active = true;
   lifecycle life{replica}; size_t removed{99};
-  life.events.player = [](uint32_t id) -> std::optional<actor_link> { if(id == 2) return actor_link{7, 0, false}; return {}; };
+  life.events.find = [](int32_t serial, int32_t task) -> std::optional<actor_link> { if(serial == 2 && task == 3) return actor_link{7, 0, false}; return {}; };
   life.events.remove = [&](size_t id){ removed = id; };
-  auto collided{event(message_type::collision, 1, "Pilot", 2, INT32_MAX)};
-  require(life.receive(collided) && removed == 7, "collision resolves known player without reading undefined task");
-  collided.word(396, UINT32_MAX); removed = 99;
-  require(life.receive(collided) && removed == 99, "unknown collision participant ignored");
+  auto collided{event(message_type::collision, 1, "Pilot", 2, 3)};
+  require(life.receive(collided) && removed == 7, "collision resolves the transmitted task and drone identity");
+  collided.word(400, INT32_MAX); removed = 99;
+  require(life.receive(collided) && removed == 99, "unknown collision task ignored");
   crew_state shared;
   for(unsigned int i{0}; i < 10; ++i) require(!shared.notify_key(static_cast<uint16_t>(i + 1)), "ten distinct crew actions accepted");
   require(shared.notify_key(1) && shared.notify_key(11) && shared.keys.size() == 10, "duplicate/full crew queue suppressed");

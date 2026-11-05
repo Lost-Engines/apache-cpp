@@ -87,9 +87,7 @@ bool lifecycle::receive(packet const &message) {
         if(message.word(396) == state.local) { if(events.player_killed) events.player_killed(); }
         else {
           notice(message.name() + " collided", 2, 200);
-          // Original senders leave the task word undefined. Use the known
-          // participant instead of interpreting transmitted stack contents.
-          remove(player(message.word(396)));
+          remove(find(std::bit_cast<int32_t>(message.word(396)), std::bit_cast<int32_t>(message.word(400))));
         }
       }
       return true;

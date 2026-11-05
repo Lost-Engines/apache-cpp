@@ -31,7 +31,7 @@ class mission_flight {
   void leave_carrier();
   void synchronize();
 public:
-  std::function<void()> died;
+  std::function<void()> died, mobile_collision;
   uint32_t collision_model{0};
   int32_t model_weight{14058};
   std::optional<size_t> hit_actor;

@@ -54,7 +54,7 @@ public:
   std::vector<carrier_state> carriers;
   uint32_t random_seed{0};
   std::optional<std::array<size_t, 2>> selected_waypoint;
-  void synchronize_models();
+  void synchronize_models(bool maintain_carriers = true);
   mission_actors(resources::mission_definition const &mission, std::span<std::vector<resources::formation_member> const> formations, resources::model_archive const &models, math::trigonometry const &trig, actor_environment const &environment, unsigned int map, uint32_t seed = 1);
 };
 } // namespace apache::simulation

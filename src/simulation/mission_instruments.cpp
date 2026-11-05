@@ -53,6 +53,7 @@ void mission_instruments::update(unsigned int const view, math::pose const &came
   h.heading = display.heading; h.pitch = display.pitch; h.roll = display.roll; h.command_heading = display.command_heading;
   h.barometric_altitude = display.barometric_altitude; h.radar_altitude = display.radar_altitude; h.climb_rate = display.climb_rate; h.airspeed = display.airspeed; h.torque = display.torque;
   h.waypoint_letter = display.waypoint_letter; h.waypoint_distance = display.waypoint_distance; h.waypoint_time = display.waypoint_time; state.clock_time = display.clock_time;
+  state.navigation = render::navigation_instruments{flight.angles[0], flight.airspeed};
   auto const &engine{flight.engines}; state.engines = {engine[0], engine[1], engine[2], engine[3], engine[4], engine[5], engine[6], engine[7]};
   auto const &inventory{arm.inventory}; auto const &slots{inventory.pylons};
   for(size_t i{0}; i != 2; ++i) state.stores.pairs[i] = {slots[i * 2].weapon, {static_cast<unsigned int>(slots[i * 2].ammunition), static_cast<unsigned int>(slots[i * 2 + 1].ammunition)}};

@@ -134,7 +134,7 @@ std::optional<landing_result> mission_flight::collide(math::vector3 const &previ
     if(result.death) request_death(result.death);
     synchronize(); return result;
   }
-  if(!on_carrier()) { request_death(2); if(hit_actor && destroy) destroy(spatial.targets[*hit_actor]->identity); }
+  if(!on_carrier()) { request_death(2); if(mobile_collision) mobile_collision(); if(hit_actor && destroy) destroy(spatial.targets[*hit_actor]->identity); }
   return {};
 }
 } // namespace apache::simulation

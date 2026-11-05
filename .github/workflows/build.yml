@@ -52,7 +52,7 @@ jobs:
               base=$(git hash-object -t tree /dev/null)
             fi
             git cat-file -e "${base}^{tree}"
-            if ! git diff --quiet "$base" "$GITHUB_SHA" -- src CMakeLists.txt cmake scripts .github/workflows/build.yml; then
+            if ! git diff --quiet "$base" "$GITHUB_SHA" -- src tests CMakeLists.txt cmake scripts .github/workflows/build.yml; then
               release=true
             fi
           fi

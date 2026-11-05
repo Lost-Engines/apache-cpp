@@ -87,26 +87,33 @@ int main() try {
   require(!roster.observe(999, noise.address(), 0) && roster.other_count() == 15, "full lobby refuses an extra slot");
   peer_group leader{{.bind{loopback}, .broadcast{false}, .peers{}, .node{100}}, "LEADER"};
   peer_group wingman{{.bind{loopback}, .broadcast{false}, .peers{leader.address()}, .node{200}}, "WINGMAN"};
-  auto pump{[&](uint32_t tick){ for(unsigned int i{0}; i < 8; ++i) { leader.poll(tick); wingman.poll(tick); } }};
-  pump(0);
+  auto pump{[&](uint32_t tick, auto complete){
+    auto const deadline{std::chrono::steady_clock::now() + std::chrono::seconds{2}};
+    do {
+      leader.poll(tick); wingman.poll(tick);
+      if(complete()) return;
+      std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    } while(std::chrono::steady_clock::now() < deadline);
+  }};
+  pump(0, [&](){ return leader.state.players[1].name == "WINGMAN" && wingman.state.players[0].name == "LEADER"; });
   require(leader.members().other_count() == 1 && wingman.members().other_count() == 1, "two independent sockets discover each other");
   require(leader.state.local == 0 && wingman.state.local == 1, "peers agree on connection numbers");
   require(leader.state.server == 0 && wingman.state.server == 0, "peers agree on the initial server");
   require(leader.state.players[1].name == "WINGMAN" && wingman.state.players[0].name == "LEADER", "lobby names delivered");
-  wingman.name("GUNNER"); pump(10);
+  wingman.name("GUNNER"); pump(10, [&](){ return leader.state.players[1].name == "GUNNER"; });
   require(leader.state.players[1].name == "GUNNER", "name changes reach peers");
-  leader.room.preferences = {1, 0, 0, 1, 0}; leader.ready(); pump(20);
+  leader.room.preferences = {1, 0, 0, 1, 0}; leader.ready(); pump(20, [&](){ return wingman.room.preferences == leader.room.preferences; });
   require(wingman.room.preferences == leader.room.preferences && !leader.all_ready(), "preferences arrive before takeoff readiness");
-  wingman.ready(); pump(30);
+  wingman.ready(); pump(30, [&](){ return leader.all_ready() && wingman.all_ready(); });
   require(leader.all_ready() && wingman.all_ready(), "both peers acknowledge readiness");
   unsigned int selections{0};
   wingman.room.events.selection = [&](unsigned int selected, auto const &arguments){ require(selected == 14 && arguments[2] == 3, "remote menu selection payload"); ++selections; };
-  leader.send(menu_selection(0, "LEADER", 14, {0, -1, 3, 0, 0})); pump(40);
+  leader.send(menu_selection(0, "LEADER", 14, {0, -1, 3, 0, 0})); pump(40, [&](){ return selections != 0; });
   require(selections == 1, "remote menu callback delivered once");
   leader.freeze(); wingman.freeze();
   unsigned int flight_packets{0};
   wingman.game_packet = [&](packet const &packet, int32_t tick){ require(packet.type() == message_type::crew && packet.sender() == 0 && tick == 50, "flight callback retains sender and arrival clock"); ++flight_packets; };
-  leader.send(crew(0, "LEADER", std::array<uint8_t, 104>{})); pump(50);
+  leader.send(crew(0, "LEADER", std::array<uint8_t, 104>{})); pump(50, [&](){ return flight_packets != 0; });
   require(flight_packets == 1, "same sockets deliver live crew records after lobby freeze");
   leader.state.players[0].flags |= 0x20000;
   unsigned int sync_packets{0}, server_packets{0};
@@ -114,13 +121,14 @@ int main() try {
     if(message.type() == message_type::synchronise) ++sync_packets;
     else if(message.type() == message_type::server_state) ++server_packets;
   };
+  wingman.send(server_state(std::array<aircraft_state, 16>{}));
   wingman.send(identification(message_type::synchronise, 1, "GUNNER", 64));
-  wingman.send(server_state(std::array<aircraft_state, 16>{})); pump(55);
+  pump(55, [&](){ return sync_packets != 0; });
   require(sync_packets == 1 && !(leader.state.players[1].flags & 0x20000), "flight initialization reaches the mission receiver without mutating the lobby copy");
   require(server_packets == 0, "a client cannot supply the server's headerless state packet");
-  leader.resume(); wingman.resume(); pump(60);
+  leader.resume(); wingman.resume(); pump(60, [&](){ return !leader.all_ready() && !wingman.all_ready(); });
   require(!leader.all_ready() && !wingman.all_ready(), "return to lobby clears readiness");
-  wingman.leave(); leader.poll(70);
+  wingman.leave(); pump(70, [&](){ return leader.members().other_count() == 0; });
   require(leader.members().other_count() == 0 && !leader.all_ready(), "departure removes the lobby peer");
   return EXIT_SUCCESS;
 } catch(std::exception const &error) { std::cerr << error.what() << '\n'; return EXIT_FAILURE; }

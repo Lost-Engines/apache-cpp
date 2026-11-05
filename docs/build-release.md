@@ -22,3 +22,9 @@ cmake -DPACKAGE_ROOT="$PWD/package" -DOUTPUT_DIR="$PWD/dist" -DPLATFORM=linux-x8
 The other platform names are `windows-x86_64` and `macos-arm64`. The install step copies the executable, setup helper, documentation and dependency licences from an explicit list. Packaging rejects unexpected files and symbolic links. Game resources, original executables, saves, inspector tools, captures and test caches are excluded.
 
 The extensive original-code comparisons live in the sibling analysis workspace. CTest runs the self-contained resource, scene, profile, packet and localhost transport tests. Headless window checks use a private X server; they never send input to the desktop.
+
+## Continuous builds
+
+GitHub Actions builds Debug and Release configurations on Linux x86-64, Windows x86-64 and macOS Apple Silicon. Every job runs the asset-independent CTest suite and checks the installed executable before uploading its package. Compiler caches are bounded to 500 MB per configuration; build artifacts expire after seven days.
+
+Changes to game code, build definitions or setup scripts on `master` publish the three tested Release packages and `SHA256SUMS` after all six jobs succeed. Pull requests run the same build checks without publishing. A manual run can also publish from `master` by selecting its `publish` option. Game assets are neither downloaded nor uploaded by CI.

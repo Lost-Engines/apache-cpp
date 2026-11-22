@@ -42,7 +42,7 @@ int cross_sign(vertex3 const &a, vertex3 const &b, vertex3 const &c) {
   int64_t const cross{int64_t{a.screen.x - b.screen.x} * (b.screen.y - c.screen.y) - int64_t{b.screen.x - c.screen.x} * (a.screen.y - b.screen.y)};
   return static_cast<int>(cross >> 32);
 }
-} // namespace
+} // anonymous namespace
 uint8_t outcode(math::vector3 const &point) {
   std::array<uint8_t, 18> constexpr codes{0, 8, 4, 2, 10, 6, 1, 9, 5, 0x8f, 0x8b, 0x87, 0x8e, 0x8a, 0x86, 0x8d, 0x89, 0x85};
   unsigned int index{point[1] < 1 ? 9u : 0u};
@@ -91,7 +91,7 @@ vertex3 projection::prepare(math::vector3 eye, int32_t const u, int32_t const v,
 std::optional<screen_vertex> projection::project_unclipped(math::vector3 eye) const {
   if(eye[1] <= 0) return {};
   eye[2] = std::bit_cast<int32_t>(static_cast<uint32_t>((math::product_bits(eye[2], vertical_scale) + (1ull << 26)) >> 27));
-  auto const coordinate{[&](int32_t const side, int const extent) -> std::optional<int32_t> {
+  auto const coordinate{[&](int32_t const side, int const extent)->std::optional<int32_t> {
     int64_t const product{int64_t{math::add(side, eye[1])} * extent};
     if((static_cast<uint64_t>(std::abs(product)) >> 32) >= static_cast<uint32_t>(eye[1])) return {};
     int64_t const result{(product >> 1) / eye[1]};

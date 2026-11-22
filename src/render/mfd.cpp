@@ -1,8 +1,8 @@
 #include "mfd.h"
-#include "landscape.h"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include "landscape.h"
 
 namespace apache::render {
 mfd_renderer::mfd_renderer(cockpit const &artwork, resources::executable_data const &executable) : panels{artwork}, font{executable, artwork.video_mode() != 0}, high{artwork.video_mode() != 0} {}

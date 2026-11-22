@@ -42,5 +42,8 @@ void settings::save() const {
   { std::ofstream output{temporary, std::ios::binary | std::ios::trunc}; auto const text{values.serialise()}; if(!output || !output.write(text.data(), static_cast<std::streamsize>(text.size())) || !output.flush()) throw std::runtime_error{"Cannot save preferences: " + filename.string()}; }
   std::filesystem::rename(temporary, filename);
 }
-void settings::set(std::string_view const key, int const value) { values.set(key, value); apply(); }
+void settings::set(std::string_view const key, int const value) {
+  values.set(key, value);
+  apply();
+}
 } // namespace apache::configuration

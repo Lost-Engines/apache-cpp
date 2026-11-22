@@ -53,8 +53,12 @@ void framebuffer::blit(resources::indexed_image const &source, int const x, int 
     auto const to{image.pixels.begin() + static_cast<ptrdiff_t>(yy) * image.width + area.left};
     auto const count{area.right - area.left + 1};
     if(transparent) {
-      for(int i{0}; i != count; ++i) if(from[i]) to[i] = from[i];
-    } else std::copy_n(from, count, to);
+      for(int i{0}; i != count; ++i) {
+        if(from[i]) to[i] = from[i];
+      }
+    } else {
+      std::copy_n(from, count, to);
+    }
   }
 }
 std::vector<rgba> framebuffer::colour_pixels() const {

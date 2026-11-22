@@ -1,5 +1,6 @@
-#include <charconv>
 #include <algorithm>
+#include <bit>
+#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -8,21 +9,20 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <vector>
-#include <utility>
 #include <thread>
-#include <bit>
-#include "frontend/mission_frontend.h"
-#include "frontend/mission_link.h"
-#include "audio/engine.h"
+#include <utility>
+#include <vector>
 #include "platform/audio_output.h"
-#include "frontend/mission_session.h"
 #include "platform/key_map.h"
 #include "platform/window.h"
+#include "audio/engine.h"
+#include "frontend/mission_frontend.h"
+#include "frontend/mission_link.h"
+#include "frontend/mission_session.h"
+#include "frontend/presentation.h"
+#include "resources/animation.h"
 #include "resources/data_store.h"
 #include "resources/installation.h"
-#include "resources/animation.h"
-#include "frontend/presentation.h"
 
 namespace {
 unsigned int number(std::string_view const text) {
@@ -40,7 +40,7 @@ struct events {
 // Playback uses the original 16-tick frame interval (200 Hz clock). Slow
 // presentation holds the current frame instead of dropping authored deltas.
 bool play_clip(apache::resources::data_store const &data, apache::frontend::presentation_clip const &clip, apache::platform::window &window, events &input) {
-  auto const interrupted{[&](){
+  auto const interrupted{[&]{
     bool const skip{std::ranges::any_of(input.keys, [](auto const &k){ return k.down && !k.character; }) || std::ranges::any_of(input.clicks, [](auto const &c){ return c.down; })};
     input.keys.clear(); input.clicks.clear(); return skip;
   }};
@@ -108,7 +108,7 @@ void play_goodbye(apache::resources::data_store const &data, apache::platform::w
     if(remaining > 0) glfwWaitEventsTimeout(remaining);
   }
 }
-} // namespace
+} // anonymous namespace
 
 int main(int const argc, char const *const argv[]) try {
   std::optional<std::filesystem::path> directory;
@@ -168,10 +168,7 @@ int main(int const argc, char const *const argv[]) try {
     else if(key == "--no-audio") no_audio = true;
     else if(key == "--quick") quick = true;
     else if(key == "--mission") mission_id = static_cast<int>(number(value()));
-    else if(key == "--realistic") { mission_options.arcade = false; override_model = true; }
-    else if(key == "--detail") { mission_options.detail = number(value()); override_detail = true; }
-    else if(key == "--video-mode") { mission_options.video_mode = number(value()); override_video = true; }
-    else throw std::runtime_error{"Unknown option: " + std::string{key}};
+    else if(key == "--realistic") { mission_options.arcade = false; override_model = true; } else if(key == "--detail") { mission_options.detail = number(value()); override_detail = true; } else if(key == "--video-mode") { mission_options.video_mode = number(value()); override_video = true; } else throw std::runtime_error{"Unknown option: " + std::string{key}};
   }
   if(asset_directory) { std::cout << apache::resources::default_game_directory().string() << '\n'; return EXIT_SUCCESS; }
   if(!cd_image.empty()) {
@@ -231,10 +228,10 @@ int main(int const argc, char const *const argv[]) try {
       if(!pending_movie.empty()) pending_speech = {kind, flow, zone, level, id};
       else sound->speech(kind, flow, zone, level, id);
     };
-    frontend.stop_speech = [&](){ sound->stop_speech(); };
-    frontend.speech_playing = [&](){ return sound->speaking(); };
+    frontend.stop_speech = [&]{ sound->stop_speech(); };
+    frontend.speech_playing = [&]{ return sound->speaking(); };
   }
-  auto const connect_audio{[&](){
+  auto const connect_audio{[&]{
     if(mission && mission->chat) {
       mission->chat->language = static_cast<unsigned int>(std::clamp(frontend.settings.values.integer("Product Language").value_or(1), 0, 8));
       mission->chat->change_language = [&](unsigned int language){ frontend.settings.set("Product Language", static_cast<int>(language)); frontend.settings.save(); };
@@ -245,7 +242,7 @@ int main(int const argc, char const *const argv[]) try {
     mission->flight_sound = [&](auto event){ sound->flight(event); };
     mission->runtime.events.sound = [&](auto id, bool cockpit){ sound->voice(id, cockpit); };
     mission->runtime.events.launch_sound = [&](auto type){ sound->play(type + 8, 30); };
-    mission->runtime.events.incoming_sound = [&](){ sound->play(14, 30); };
+    mission->runtime.events.incoming_sound = [&]{ sound->play(14, 30); };
     mission->runtime.events.gun_sound = [&](bool active){ sound->gun(active); };
   }};
   connect_audio();
@@ -269,7 +266,7 @@ int main(int const argc, char const *const argv[]) try {
   if(sound) sound->cinematic(false);
   std::unique_ptr<apache::frontend::mission_link> network_link;
   auto const network_epoch{std::chrono::steady_clock::now()};
-  auto const network_clock{[&](){ return std::bit_cast<int32_t>(static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - network_epoch).count() / 5)); }};
+  auto const network_clock{[&]{ return std::bit_cast<int32_t>(static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - network_epoch).count() / 5)); }};
   bool in_flight_help{false};
   unsigned int frames{0};
   auto previous_time{std::chrono::steady_clock::now()};
@@ -380,7 +377,7 @@ int main(int const argc, char const *const argv[]) try {
       mission = std::move(launched); launched_from_menu = true; connect_audio();
       if(mission->network && frontend.network.peers) {
         network_link = std::make_unique<apache::frontend::mission_link>(*frontend.network.peers, *mission, network_clock);
-        network_link->yield = [&](){ std::this_thread::sleep_for(std::chrono::milliseconds{1}); return window.poll(); };
+        network_link->yield = [&]{ std::this_thread::sleep_for(std::chrono::milliseconds{1}); return window.poll(); };
         window.title("Apache C++ | Waiting for other players");
       } else { mission->step(10); mission->draw(); window.title("Apache C++ | " + mission->briefing.title); }
       previous_time = std::chrono::steady_clock::now(); tick_fraction = 0;

@@ -1,8 +1,8 @@
 #pragma once
-#include "cockpit.h"
-#include "instrument_font.h"
 #include "math/geometry.h"
 #include "math/trigonometry.h"
+#include "cockpit.h"
+#include "instrument_font.h"
 #include "projection2.h"
 
 namespace apache::render {
@@ -64,7 +64,7 @@ struct waypoint_mark {
   uint8_t label{0};
 };
 struct multiplayer_scores {
-  std::vector<std::pair<std::string, int32_t>> players; // Local player first, then connection order.
+  std::vector<std::pair<std::string, int32_t>> players;                        // Local player first, then connection order.
   int32_t timer{0};
 };
 class mfd_renderer {

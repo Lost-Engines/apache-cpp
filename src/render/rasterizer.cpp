@@ -6,11 +6,13 @@
 
 namespace apache::render {
 namespace {
-scan_edge edge(screen_vertex const &v) { return {v.x, v.u, v.v, v.intensity}; }
+scan_edge edge(screen_vertex const &v) {
+  return {v.x, v.u, v.v, v.intensity};
+}
 void require_inside(screen_vertex const &v, framebuffer const &target) {
   if(v.x < 0 || v.y < 0 || v.x >= static_cast<int>(target.image.width) || v.y >= static_cast<int>(target.image.height)) throw std::runtime_error{"Raster input must be clipped to the screen"};
 }
-} // namespace
+} // anonymous namespace
 rasterizer::rasterizer(framebuffer &destination) : target{destination}, left(destination.image.height), right(destination.image.height), perspective_left(destination.image.height), perspective_right(destination.image.height) {}
 void rasterizer::line(screen_vertex a, screen_vertex const b, uint8_t const colour) {
   require_inside(a, target);
@@ -154,8 +156,7 @@ void rasterizer::paint_scans(material const &paint) {
         uint8_t previous{target.image.pixels[row + start]};
         for(int x{start}; x <= end; ++x) {
           auto &pixel{target.image.pixels[row + x]};
-          if(shift_right) { auto const old{pixel}; pixel = previous; previous = old; }
-          else pixel = target.image.pixels[std::min(row + static_cast<size_t>(x) + 1, target.image.pixels.size() - 1)];
+          if(shift_right) { auto const old{pixel}; pixel = previous; previous = old; } else pixel = target.image.pixels[std::min(row + static_cast<size_t>(x) + 1, target.image.pixels.size() - 1)];
         }
       }
       if(shift_right) ++y;

@@ -9,8 +9,18 @@ class settings {
   std::filesystem::path filename;
 public:
   preferences values;
-  unsigned int video_mode{1}, detail{0}, model{2}, forces{0}, volume{63}, deadband{0};
-  bool planner{false}, animations{true}, speech{false}, music{true}, effects{true}, minimal_effects{true};
+  unsigned int video_mode{1};
+  unsigned int detail{0};
+  unsigned int model{2};
+  unsigned int forces{0};
+  unsigned int volume{63};
+  unsigned int deadband{0};
+  bool planner{false};
+  bool animations{true};
+  bool speech{false};
+  bool music{true};
+  bool effects{true};
+  bool minimal_effects{true};
   simulation::control_configuration controls;
   std::array<simulation::joystick_axis, 4> axes;
   explicit settings(resources::data_store const &data);

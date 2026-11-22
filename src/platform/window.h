@@ -15,8 +15,8 @@ class glfw_runtime {
 public:
   glfw_runtime();
   ~glfw_runtime();
-  glfw_runtime(glfw_runtime const&) = delete;
-  glfw_runtime &operator=(glfw_runtime const&) = delete;
+  glfw_runtime(glfw_runtime const &) = delete;
+  glfw_runtime &operator=(glfw_runtime const &) = delete;
 };
 class window {
   glfw_runtime runtime;
@@ -28,8 +28,8 @@ class window {
 public:
   window(unsigned int scale);
   ~window();
-  window(window const&) = delete;
-  window &operator=(window const&) = delete;
+  window(window const &) = delete;
+  window &operator=(window const &) = delete;
   GLFWwindow *get() const;
   bool poll();
   bool focused() const;

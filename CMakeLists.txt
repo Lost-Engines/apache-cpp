@@ -302,7 +302,7 @@ add_executable(apache
   src/platform/window.cpp
   src/platform/window.h
 )
-target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL pcm_device)
+target_link_libraries(apache PRIVATE apache_core glfw OpenGL::GL pcm_device Boost::program_options)
 target_compile_options(apache PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
 
 if(WIN32)
